@@ -1,7 +1,10 @@
-"""CLI: python tts.py script.txt -o output/bai10.mp3
+"""CLI tạo âm thanh hội thoại tiếng Nhật.
 
-Đọc kịch bản hội thoại, tổng hợp từng câu bằng engine đã chọn (có cache),
-rồi ghép thành một file âm thanh theo thứ tự.
+Đầu vào: kịch bản .txt (kèm roles.yaml) hoặc project.json đã lưu.
+    python tts.py script.txt -o output/bai10.mp3 [--srt] [--save-project projects/bai10.json]
+    python tts.py --project projects/bai10.json -o output/bai10.mp3
+
+Mỗi câu được tổng hợp song song có cache theo hash, nên sửa một câu chỉ tạo lại đúng câu đó.
 """
 from __future__ import annotations
 
@@ -12,10 +15,12 @@ import sys
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.builder import build, to_srt
-from core.parser import ScriptError, parse_script, roles_used
+from core.models import Config, LineItem, Project, Role, load_config, load_project, save_project
+from core.parser import ScriptError, parse_script
 from providers.base import SynthRequest, TTSProvider
 from providers.edge import EdgeProvider
 
@@ -26,70 +31,55 @@ MAX_CONCURRENCY = 3
 PROVIDERS: dict[str, type[TTSProvider]] = {EdgeProvider.name: EdgeProvider}
 
 
-def load_config(path: Path) -> dict:
-    with path.open(encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-    cfg.setdefault("engine", "edge")
-    cfg.setdefault("roles", {})
-    cfg.setdefault("timing", {})
-    return cfg
-
-
-def resolve(item: dict, cfg: dict) -> SynthRequest:
+def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
     """Gộp cấu hình vai với thuộc tính ghi riêng ở câu (câu thắng)."""
-    role_cfg = cfg["roles"][item["role"]]
-    merged = {k: role_cfg.get(k) for k in ROLE_FIELDS}
-    merged.update({k: v for k, v in item["attrs"].items() if k in ROLE_FIELDS})
+    role = roles[item.role]
+    merged = {k: getattr(role, k) for k in ROLE_FIELDS}
+    for k, v in item.attrs.items():
+        if k in ROLE_FIELDS:
+            merged[k] = v
     return SynthRequest(
-        text=item["tts_text"],
+        text=item.tts_text,
         voice=str(merged["voice"]),
-        emotion=str(merged["emotion"] or "neutral"),
-        speed=str(merged["speed"] or "normal"),
-        pitch=int(merged["pitch"] or 0),
+        emotion=str(merged["emotion"]),
+        speed=str(merged["speed"]),
+        pitch=int(merged["pitch"]),
     )
 
 
 def cache_key(engine: str, req: SynthRequest) -> str:
-    raw = "|".join(
-        [engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text]
-    )
+    raw = "|".join([engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
-def check_roles(items: list[dict], cfg: dict) -> None:
-    missing = sorted(roles_used(items) - set(cfg["roles"]))
-    if missing:
-        raise ScriptError(
-            "Vai chưa được cấu hình trong roles file: " + ", ".join(missing)
-        )
-    for role in roles_used(items):
-        if not cfg["roles"][role].get("voice"):
-            raise ScriptError(f"Vai {role} chưa có 'voice' trong roles file")
-
-
 async def synth_all(
-    items: list[dict],
-    cfg: dict,
+    project: Project,
     provider: TTSProvider,
     cache_dir: Path,
+    *,
+    max_concurrency: int = MAX_CONCURRENCY,
+    attempts: int = 3,
+    wait_min: float = 1,
+    wait_max: float = 4,
 ) -> list[str]:
     """Tổng hợp mọi câu song song có giới hạn. Trả về danh sách lỗi (rỗng nếu ổn)."""
-    sem = asyncio.Semaphore(MAX_CONCURRENCY)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sem = asyncio.Semaphore(max_concurrency)
     errors: list[str] = []
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=4),
+        stop=stop_after_attempt(attempts),
+        wait=wait_exponential(multiplier=1, min=wait_min, max=wait_max),
         reraise=True,
     )
     async def call(req: SynthRequest, out: Path) -> None:
         await provider.synthesize(req, str(out))
 
-    async def one(item: dict) -> None:
-        req = resolve(item, cfg)
+    async def one(item: LineItem) -> None:
+        req = resolve(item, project.roles)
         key = cache_key(provider.name, req)
         out = cache_dir / f"{key}.mp3"
-        item["cache_key"] = key
+        item.cache_key = key
         if not out.exists() or out.stat().st_size == 0:
             async with sem:
                 tmp = out.with_suffix(".part")
@@ -98,68 +88,95 @@ async def synth_all(
                     tmp.replace(out)
                 except Exception as exc:  # noqa: BLE001 - báo lỗi theo câu, không dừng batch
                     tmp.unlink(missing_ok=True)
-                    errors.append(f"{item['id']} (dòng {item['src_line']}): {exc}")
+                    errors.append(f"{item.id} (dòng {item.src_line}): {exc}")
+                    item.audio = None
                     return
-        item["audio"] = str(out)
+        item.audio = str(out)
 
-    await asyncio.gather(*(one(it) for it in items if it["type"] == "line"))
+    await asyncio.gather(*(one(it) for it in project.items if isinstance(it, LineItem)))
     return errors
 
 
-def dry_run(items: list[dict], cfg: dict) -> None:
-    for it in items:
-        if it["type"] == "pause":
-            print(f"{it['id']}  [pause {it['ms']} ms]")
+def dry_run(project: Project) -> None:
+    for it in project.items:
+        if not isinstance(it, LineItem):
+            print(f"{it.id}  [pause {it.ms} ms]")
             continue
-        req = resolve(it, cfg)
+        req = resolve(it, project.roles)
         print(
-            f"{it['id']}  vai={it['role']} voice={req.voice} "
+            f"{it.id}  vai={it.role} voice={req.voice} "
             f"emotion={req.emotion} speed={req.speed} pitch={req.pitch:+d}  "
-            f"| {it['display']}"
+            f"| {it.display}"
         )
-        if it["display"] != it["tts_text"]:
-            print(f"        đọc: {it['tts_text']}")
+        if it.display != it.tts_text:
+            print(f"        đọc: {it.tts_text}")
+
+
+def project_from_script(script: Path, cfg: Config) -> Project:
+    items = [
+        {k: v for k, v in it.items() if k != "text"}  # "text" thô đã có tts_text/display/plain
+        for it in parse_script(script.read_text(encoding="utf-8"))
+    ]
+    return Project.model_validate(
+        {
+            "title": script.stem,
+            "engine": cfg.engine,
+            "timing": cfg.timing.model_dump(),
+            "roles": {k: v.model_dump() for k, v in cfg.roles.items()},
+            "items": items,
+        }
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="TTS hội thoại tiếng Nhật")
-    ap.add_argument("script", type=Path, help="file kịch bản .txt")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("script", nargs="?", type=Path, help="file kịch bản .txt")
+    src.add_argument("--project", type=Path, help="đọc project.json đã lưu")
     ap.add_argument("-o", "--output", type=Path, help="file đầu ra (.mp3 hoặc .wav)")
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
+    ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
     ap.add_argument("--dry-run", action="store_true", help="chỉ in kế hoạch, không gọi API")
     args = ap.parse_args(argv)
 
     try:
-        cfg = load_config(args.roles)
-        items = parse_script(args.script.read_text(encoding="utf-8"))
-        check_roles(items, cfg)
-    except (ScriptError, KeyError, yaml.YAMLError, OSError) as exc:
+        if args.project:
+            project = load_project(args.project)
+        else:
+            project = project_from_script(args.script, load_config(args.roles))
+    except (ScriptError, ValidationError, yaml.YAMLError, OSError, ValueError) as exc:
         print(f"Lỗi: {exc}", file=sys.stderr)
         return 2
 
+    if args.save_project:
+        save_project(project, args.save_project)
+        print(f"Đã lưu {args.save_project}")
+
     if args.dry_run or not args.output:
-        dry_run(items, cfg)
-        if not args.dry_run:
+        dry_run(project)
+        if not args.dry_run and not args.save_project:
             print("\n(Thêm -o <file> để tạo âm thanh.)")
         return 0
 
-    engine = cfg["engine"]
-    if engine not in PROVIDERS:
-        print(f"Engine không hỗ trợ: {engine}", file=sys.stderr)
+    if project.engine not in PROVIDERS:
+        print(f"Engine không hỗ trợ: {project.engine}", file=sys.stderr)
         return 2
-    provider = PROVIDERS[engine]()
+    provider = PROVIDERS[project.engine]()
 
-    args.cache_dir.mkdir(parents=True, exist_ok=True)
-    errors = asyncio.run(synth_all(items, cfg, provider, args.cache_dir))
+    errors = asyncio.run(synth_all(project, provider, args.cache_dir))
+    if args.save_project:
+        save_project(project, args.save_project)
     if errors:
         print("Các câu lỗi, chưa xuất file:", file=sys.stderr)
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 1
 
-    audio, placed = build(items, cfg["timing"])
+    audio, placed = build(
+        [it.model_dump() for it in project.items], project.timing.model_dump()
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fmt = args.output.suffix.lstrip(".").lower() or "mp3"
     audio.export(args.output, format=fmt)
