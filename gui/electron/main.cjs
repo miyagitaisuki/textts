@@ -80,6 +80,27 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
 });
 
+// Gợi ý cách đọc kanji cho nhiều câu cùng lúc: core.normalize đọc JSON từ stdin.
+ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, ["-m", "core.normalize"], { cwd: REPO_ROOT });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => (err += c));
+    child.on("error", (e) => resolve({ ok: false, error: String(e) }));
+    child.on("close", (code) => {
+      if (code !== 0) return resolve({ ok: false, error: err.trim() });
+      try {
+        resolve({ ok: true, items: JSON.parse(out) });
+      } catch (e) {
+        resolve({ ok: false, error: String(e) });
+      }
+    });
+    child.stdin.end(JSON.stringify(texts));
+  });
+});
+
 app.whenReady().then(() => {
   createWindow();
   app.on("activate", () => {

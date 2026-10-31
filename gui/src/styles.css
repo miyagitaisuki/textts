@@ -31,3 +31,6 @@ button.ghost { background: #2a2f3a; color: #e6e8eb; padding: 4px 8px; border: 0;
 button.ghost:disabled { opacity: 0.4; cursor: default; }
 button.danger { background: #5a2a2a; }
 audio { width: 100%; }
+.reading { font-size: 14px; }
+.muted { opacity: 0.55; }
+.suggest { display: inline-flex; align-items: center; gap: 6px; }

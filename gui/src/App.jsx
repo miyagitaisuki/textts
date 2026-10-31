@@ -15,6 +15,7 @@ export default function App() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [log, setLog] = useState("");
   const [busy, setBusy] = useState(false);
+  const [suggestions, setSuggestions] = useState({});
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -26,6 +27,20 @@ export default function App() {
     setDirty(true);
   }
 
+  // Gợi ý cách đọc chỉ là tham khảo: lỗi ở đây không chặn việc soạn thảo.
+  async function refreshSuggestions(proj) {
+    const lines = (proj?.items ?? []).filter((it) => it.type === "line");
+    if (lines.length === 0) return setSuggestions({});
+    const res = await window.textts.suggestReadings(lines.map((it) => it.display));
+    if (!res.ok) {
+      setLog((prev) => prev + `\n[gợi ý cách đọc lỗi]\n${res.error}\n`);
+      return;
+    }
+    const map = {};
+    lines.forEach((it, i) => (map[it.id] = res.items[i]));
+    setSuggestions(map);
+  }
+
   async function openProject() {
     const res = await window.textts.openProject();
     if (!res) return;
@@ -35,13 +50,20 @@ export default function App() {
     setSelectedId(null);
     setPreviewUrl(null);
     setLog("");
+    refreshSuggestions(res.data);
   }
 
   async function save() {
     if (!filePath || !project) return false;
     await window.textts.saveProject(filePath, project);
     setDirty(false);
+    refreshSuggestions(project);
     return true;
+  }
+
+  function applySuggestion(id) {
+    const sug = suggestions[id];
+    if (sug) patchItem(id, { display: sug.annotated });
   }
 
   function patchItem(id, patch) {
@@ -143,6 +165,8 @@ export default function App() {
               onMove={moveItem}
               onDelete={deleteItem}
               onPreview={preview}
+              suggestions={suggestions}
+              onApply={applySuggestion}
               disabled={busy}
             />
           </section>
