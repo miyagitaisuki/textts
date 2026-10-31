@@ -51,8 +51,32 @@ core/parser.py    phân tích kịch bản → danh sách câu
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
 providers/        TTSProvider (base) và EdgeProvider
 examples/         kịch bản mẫu
+docs/ui/          ảnh mockup giao diện tham khảo
 tests/            unit test cho parser
 ```
+
+## Định hướng giao diện (mockup)
+
+Ảnh tham khảo: [`docs/ui/mockup-speechvox-pro.png`](docs/ui/mockup-speechvox-pro.png).
+Đây là ảnh minh họa bố cục mong muốn, **chưa phải giao diện đã làm**. Chữ trong ảnh do AI tạo nên có chỗ sai, nên chỉ dùng để tham khảo cách sắp xếp, không dùng làm nguồn nội dung.
+
+| Vùng trong ảnh | Chức năng dự kiến | Giai đoạn |
+| --- | --- | --- |
+| Thanh bên: Dự án / Kịch bản / Thư viện / Cài đặt | Mở, lưu `project.json`; soạn kịch bản; kho giọng và mẫu; cấu hình engine, khoảng nghỉ | 3 |
+| Khung "Script & Dialogue" | Ô nhập kịch bản `[n]`, tô màu theo vai | 3 |
+| Tab Role 1 / 2 / 3 | Mỗi vai một thẻ: chọn giọng, cảm xúc (Vui/Buồn/Giận), tốc độ (Nhanh/Chậm), cao độ | 1–3 |
+| Nút Preview | Nghe thử một câu hoặc cả đoạn trước khi tạo đầy đủ | 3 |
+| Nút Record | Ghi âm giọng thật của giáo viên để làm mẫu | Chưa xác định |
+| Nút Generate Speech / Generate All | Tổng hợp các câu (đã có cache) | 1 (CLI), 3 (giao diện) |
+| Nút Export MP3/WAV | Xuất file, kèm `.srt` | 1 (CLI) |
+| Timeline với sóng âm theo từng vai | Xem và chỉnh thời lượng từng câu | 4 |
+| Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai, chuẩn hóa LUFS | 4 |
+| Settings (bật/tắt tùy chọn) | Bật `.srt`, bản chậm, chuẩn hóa âm lượng... | 2–4 |
+
+Ghi chú khi triển khai:
+- Giai đoạn 3 chỉ cần bảng câu thoại và các khối vai, theo Phần 3 của kế hoạch. Timeline sóng âm và mixer chỉ làm ở giai đoạn 4.
+- Nút Record không nằm trong kế hoạch ban đầu. Cần quyết định có làm hay không trước khi thiết kế.
+- Các nhãn tiếng Việt trong ảnh là nháp, sẽ đổi khi làm thật.
 
 ## Lưu ý
 
