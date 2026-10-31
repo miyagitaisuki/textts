@@ -13,3 +13,21 @@ body { margin: 0; background: #14171c; color: #e6e8eb; }
 .role-1 { color: #4ade80; } .role-2 { color: #60a5fa; } .role-3 { color: #c084fc; }
 .empty { opacity: 0.6; text-align: center; }
 .log { background: #0e1014; border-radius: 6px; padding: 12px; min-height: 120px; white-space: pre-wrap; font-size: 12px; }
+.empty-state { align-items: center; justify-content: center; opacity: 0.6; }
+.roles h2, section h2 { font-size: 15px; margin: 0 0 8px; opacity: 0.85; }
+.section-head { display: flex; justify-content: space-between; align-items: center; }
+.role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.role-card { background: #1c2029; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; border-left: 3px solid #3a3f4a; }
+.role-card.role-1 { border-color: #4ade80; } .role-card.role-2 { border-color: #60a5fa; } .role-card.role-3 { border-color: #c084fc; }
+.role-card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; opacity: 0.9; }
+.role-title { font-weight: 600; }
+select, input { background: #0e1014; color: #e6e8eb; border: 1px solid #2a2f3a; border-radius: 4px; padding: 4px; }
+.lines input.text { width: 100%; font-family: "Noto Sans JP", sans-serif; font-size: 16px; box-sizing: border-box; }
+.lines tr.selected { background: #232833; }
+.lines tr { cursor: pointer; }
+.lines td { white-space: nowrap; }
+.lines td:nth-child(3) { width: 100%; }
+button.ghost { background: #2a2f3a; color: #e6e8eb; padding: 4px 8px; border: 0; border-radius: 4px; cursor: pointer; margin-left: 2px; }
+button.ghost:disabled { opacity: 0.4; cursor: default; }
+button.danger { background: #5a2a2a; }
+audio { width: 100%; }

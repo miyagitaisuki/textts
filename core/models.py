@@ -7,6 +7,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from core.parser import RUBY_RE
+
 Emotion = Literal["neutral", "happy", "sad", "angry", "surprised"]
 Speed = Literal["slow", "normal", "fast"]
 SCHEMA_VERSION = 1
@@ -59,6 +61,13 @@ class LineItem(BaseModel):
     cache_key: str | None = None
     audio: str | None = None
 
+    @model_validator(mode="after")
+    def _derive_reading(self) -> "LineItem":
+        # Cách đọc luôn suy ra từ chữ hiển thị, để sửa display là đủ.
+        self.tts_text = RUBY_RE.sub(r"\2", self.display)
+        self.plain = RUBY_RE.sub(r"\1", self.display)
+        return self
+
 
 class PauseItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -90,6 +99,14 @@ class Project(BaseModel):
             raise ValueError("Vai chưa được cấu hình: " + ", ".join(missing))
         if not any(isinstance(it, LineItem) for it in self.items):
             raise ValueError("Project không có câu thoại nào")
+        return self
+
+    @model_validator(mode="after")
+    def _ids_unique(self) -> "Project":
+        ids = [it.id for it in self.items]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError("Trùng mã câu: " + ", ".join(dup))
         return self
 
     @model_validator(mode="after")

@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { spawn } = require("child_process");
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -57,6 +58,26 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath }) => {
     child.on("error", (err) => resolve({ code: -1, log: String(err) }));
     child.on("close", (code) => resolve({ code, log }));
   });
+});
+
+// Nghe thử một câu: chạy tts.py --preview <ID> rồi trả về audio dạng data URL.
+ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
+  const outPath = path.join(os.tmpdir(), `textts-preview-${lineId}-${Date.now()}.mp3`);
+  const args = [TTS_CLI, "--project", projectPath, "--preview", lineId, "-o", outPath];
+  const result = await new Promise((resolve) => {
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
+    let log = "";
+    child.stdout.on("data", (c) => (log += c));
+    child.stderr.on("data", (c) => (log += c));
+    child.on("error", (err) => resolve({ code: -1, log: String(err) }));
+    child.on("close", (code) => resolve({ code, log }));
+  });
+  if (result.code !== 0 || !fs.existsSync(outPath)) {
+    return { ok: false, error: result.log.trim() || "Không tạo được bản nghe thử" };
+  }
+  const b64 = fs.readFileSync(outPath).toString("base64");
+  fs.rmSync(outPath, { force: true });
+  return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
 });
 
 app.whenReady().then(() => {

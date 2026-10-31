@@ -6,7 +6,7 @@ có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
 
 - **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
-- **Giai đoạn 3 (đang làm):** giao diện **Electron + React** trong thư mục `gui/`, gọi CLI Python ở bên dưới. Xem mục "Giao diện" bên dưới.
+- **Giai đoạn 3 (đang làm):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Đã có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh. Chưa có: cột cách đọc kana dự đoán (`normalize.py`).
 
 **Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
 
@@ -49,6 +49,12 @@ Kiến trúc:
 - **Main process (Electron):** đọc/ghi `project.json`, chạy `tts.py` như tiến trình con, chuyển tiến trình và lỗi về giao diện.
 - Logic tạo âm thanh chỉ nằm ở Python, giao diện không gọi API TTS trực tiếp.
 
+Các thao tác chính:
+- **Vai:** chọn giọng, cảm xúc mặc định, tốc độ, cao độ cho từng vai.
+- **Câu thoại:** sửa chữ (dùng `漢字{かな}` để ép cách đọc), chọn vai, cảm xúc/tốc độ riêng. Chọn `theo vai` để dùng giá trị của vai.
+- **Nghe thử:** `▶ Nghe` tổng hợp đúng một câu (dùng cache) và phát ngay. Trước khi nghe thử hoặc tạo âm thanh, giao diện tự lưu file.
+- **Tạo âm thanh:** chạy `tts.py --project`, xuất `.mp3` cạnh file project, log hiển thị bên dưới.
+
 Chạy phát triển:
 
 ```bash
@@ -73,7 +79,7 @@ Thuộc tính: `voice`, `emotion` (`neutral`/`happy`/`sad`/`angry`/`surprised`),
 ## Cấu trúc
 
 ```
-tts.py            CLI (nguồn sự thật cho việc tạo âm thanh)
+tts.py            CLI (nguồn sự thật cho việc tạo âm thanh; --preview ID để nghe thử một câu)
 roles.yaml        engine, giọng và cấu hình vai, khoảng nghỉ
 gui/              giao diện Electron + React (giai đoạn 3)
 core/parser.py    phân tích kịch bản → danh sách câu
