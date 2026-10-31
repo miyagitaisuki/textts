@@ -1,0 +1,9 @@
+# Ví dụ: hội thoại hỏi đường (Minna no Nihongo, bài 10 — mẫu tự soạn)
+# Cú pháp: [vai]{thuộc tính} lời thoại   |   漢字{かな}: ép cách đọc   |   [pause=ms]
+[1] すみません、駅{えき}はどこですか。
+[2]{emotion=happy, speed=slow} あ、駅ですか。この道をまっすぐ行ってください。
+[1] ありがとうございます。
+[pause=1500]
+[3]{emotion=surprised} えっ、田中{たなか}さん！
+    久しぶりですね。
+[1] 本当に久しぶりですね。

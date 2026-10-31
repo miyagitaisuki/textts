@@ -1,0 +1,29 @@
+# Cấu hình engine và vai nhân vật.
+# Giá trị ở câu (ví dụ [2]{emotion=happy}) luôn đè lên giá trị ở đây.
+engine: edge
+
+timing:
+  lead_in_ms: 300
+  turn_gap_ms: 450
+  same_speaker_gap_ms: 200
+  tail_ms: 500
+
+roles:
+  "1":
+    name: 学生
+    voice: ja-JP-KeitaNeural
+    emotion: neutral
+    speed: normal
+    pitch: 0
+  "2":
+    name: 駅員
+    voice: ja-JP-NanamiNeural
+    emotion: neutral
+    speed: normal
+    pitch: 0
+  "3":
+    name: 田中
+    voice: ja-JP-NanamiNeural   # Edge chỉ có 2 giọng ja-JP; vai 3 tạm đổi pitch
+    emotion: neutral
+    speed: normal
+    pitch: -8
