@@ -107,3 +107,30 @@ def test_permanent_error_reported_per_line_without_stopping_batch(tmp_path):
     ok = [it for it in proj.items if getattr(it, "audio", None)]
     assert len(ok) == 2
     assert not list(tmp_path.glob("*.part"))
+
+
+def test_only_ids_synthesizes_just_that_line(tmp_path):
+    p = FakeProvider()
+    proj = _project("[1] はい。\n[2] いいえ。\n[1] ありがとう。")
+    assert _run(proj, p, tmp_path, only_ids={"L002"}) == []
+    assert p.calls == ["いいえ。"]
+    assert [getattr(it, "audio", None) is not None for it in proj.items if hasattr(it, "role")] == [False, True, False]
+
+
+def test_edited_display_changes_reading(tmp_path):
+    from core.models import LineItem
+    it = LineItem(id="L001", src_line=1, role="1", display="駅{えき}です", tts_text="", plain="")
+    assert it.tts_text == "えきです" and it.plain == "駅です"
+    it.display = "田中{たなか}さん"
+    it2 = LineItem.model_validate(it.model_dump())
+    assert it2.tts_text == "たなかさん"
+
+
+def test_duplicate_ids_rejected():
+    import pytest
+    from pydantic import ValidationError
+    from core.models import Project
+    with pytest.raises(ValidationError, match="Trùng mã câu"):
+        Project.model_validate({"engine": "e", "roles": ROLES, "items": [
+            {"id": "L001", "type": "line", "src_line": 1, "role": "1", "display": "はい", "tts_text": "", "plain": ""},
+            {"id": "L001", "type": "line", "src_line": 2, "role": "1", "display": "いいえ", "tts_text": "", "plain": ""}]})

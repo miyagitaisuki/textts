@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from pydub import AudioSegment
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -61,6 +62,7 @@ async def synth_all(
     attempts: int = 3,
     wait_min: float = 1,
     wait_max: float = 4,
+    only_ids: set[str] | None = None,
 ) -> list[str]:
     """Tổng hợp mọi câu song song có giới hạn. Trả về danh sách lỗi (rỗng nếu ổn)."""
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -76,6 +78,8 @@ async def synth_all(
         await provider.synthesize(req, str(out))
 
     async def one(item: LineItem) -> None:
+        if only_ids is not None and item.id not in only_ids:
+            return
         req = resolve(item, project.roles)
         key = cache_key(provider.name, req)
         out = cache_dir / f"{key}.mp3"
@@ -138,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
     ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
+    ap.add_argument("--preview", metavar="ID", help="chỉ tổng hợp câu có mã ID (ví dụ L002) để nghe thử")
     ap.add_argument("--dry-run", action="store_true", help="chỉ in kế hoạch, không gọi API")
     args = ap.parse_args(argv)
 
@@ -165,7 +170,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     provider = PROVIDERS[project.engine]()
 
-    errors = asyncio.run(synth_all(project, provider, args.cache_dir))
+    if args.preview:
+        known = {it.id for it in project.items if isinstance(it, LineItem)}
+        if args.preview not in known:
+            print(f"Không có câu thoại mã {args.preview}", file=sys.stderr)
+            return 2
+        only = {args.preview}
+    else:
+        only = None
+    errors = asyncio.run(synth_all(project, provider, args.cache_dir, only_ids=only))
     if args.save_project:
         save_project(project, args.save_project)
     if errors:
@@ -173,6 +186,15 @@ def main(argv: list[str] | None = None) -> int:
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 1
+
+    if args.preview:
+        item = next(it for it in project.items if it.id == args.preview)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        AudioSegment.from_file(item.audio).export(
+            args.output, format=args.output.suffix.lstrip(".").lower() or "mp3"
+        )
+        print(f"Đã xuất câu {args.preview} ra {args.output}")
+        return 0
 
     audio, placed = build(
         [it.model_dump() for it in project.items], project.timing.model_dump()
