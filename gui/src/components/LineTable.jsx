@@ -4,7 +4,7 @@ import { EMOTIONS, SPEEDS } from "./RolePanel.jsx";
 const ROLE_IDS = ["1", "2", "3"];
 
 export default function LineTable({
-  items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, disabled,
+  items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, suggestions, onApply, disabled,
 }) {
   return (
     <table className="lines">
@@ -13,6 +13,7 @@ export default function LineTable({
           <th>ID</th>
           <th>Vai</th>
           <th>Câu thoại (漢字{"{かな}"} để ép cách đọc)</th>
+          <th>Gợi ý đọc</th>
           <th>Cảm xúc</th>
           <th>Tốc độ</th>
           <th></th>
@@ -28,7 +29,7 @@ export default function LineTable({
                 <input type="number" min={0} value={it.ms} disabled={disabled}
                   onChange={(e) => onPatch(it.id, { ms: Number(e.target.value) })} /> ms
               </td>
-              <td colSpan={3}>
+              <td colSpan={4}>
                 <RowActions idx={idx} total={items.length} id={it.id}
                   onMove={onMove} onDelete={onDelete} disabled={disabled} />
               </td>
@@ -46,6 +47,13 @@ export default function LineTable({
               <td>
                 <input className="text" value={it.display} disabled={disabled}
                   onChange={(e) => onPatch(it.id, { display: e.target.value })} />
+              </td>
+              <td className="reading">
+                <SuggestionCell
+                  suggestion={suggestions?.[it.id]}
+                  display={it.display}
+                  disabled={disabled}
+                  onApply={() => onApply(it.id)} />
               </td>
               <td>
                 <select value={it.attrs?.emotion ?? ""} disabled={disabled}
@@ -72,6 +80,21 @@ export default function LineTable({
         )}
       </tbody>
     </table>
+  );
+}
+
+function SuggestionCell({ suggestion, display, disabled, onApply }) {
+  if (!suggestion) return <span className="muted">—</span>;
+  const canApply = suggestion.annotated !== display;
+  return (
+    <span className="suggest" onClick={(e) => e.stopPropagation()}>
+      <span className="muted">{suggestion.reading}</span>
+      {canApply && (
+        <button className="ghost" disabled={disabled} onClick={onApply} title={suggestion.annotated}>
+          Áp dụng
+        </button>
+      )}
+    </span>
   );
 }
 

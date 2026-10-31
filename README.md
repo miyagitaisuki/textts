@@ -6,7 +6,7 @@ có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
 
 - **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
-- **Giai đoạn 3 (đang làm):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Đã có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh. Chưa có: cột cách đọc kana dự đoán (`normalize.py`).
+- **Giai đoạn 3 (xong):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh, và cột **gợi ý cách đọc** kèm nút "Áp dụng" để ghi `漢字{かな}`.
 
 **Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
 
@@ -52,6 +52,7 @@ Kiến trúc:
 Các thao tác chính:
 - **Vai:** chọn giọng, cảm xúc mặc định, tốc độ, cao độ cho từng vai.
 - **Câu thoại:** sửa chữ (dùng `漢字{かな}` để ép cách đọc), chọn vai, cảm xúc/tốc độ riêng. Chọn `theo vai` để dùng giá trị của vai.
+- **Gợi ý đọc:** cột "Gợi ý đọc" hiển thị cách đọc hiragana dự đoán của câu, để giáo viên đối chiếu trước khi tạo âm thanh. "Áp dụng" ghi chú âm `{かな}` cho các từ toàn chữ Hán. Từ lẫn Hán-kana (ví dụ `久しぶり`) không tự động, cần sửa tay.
 - **Nghe thử:** `▶ Nghe` tổng hợp đúng một câu (dùng cache) và phát ngay. Trước khi nghe thử hoặc tạo âm thanh, giao diện tự lưu file.
 - **Tạo âm thanh:** chạy `tts.py --project`, xuất `.mp3` cạnh file project, log hiển thị bên dưới.
 
@@ -84,6 +85,7 @@ roles.yaml        engine, giọng và cấu hình vai, khoảng nghỉ
 gui/              giao diện Electron + React (giai đoạn 3)
 core/parser.py    phân tích kịch bản → danh sách câu
 core/models.py    mô hình pydantic: Config (roles.yaml), Project (project.json)
+core/normalize.py gợi ý cách đọc kanji (pyopenjtalk, MIT, offline)
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
 providers/        TTSProvider (base) và EdgeProvider
 examples/         kịch bản mẫu

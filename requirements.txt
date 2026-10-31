@@ -4,4 +4,5 @@ audioop-lts>=0.2.1; python_version >= "3.13"
 pydantic>=2.0
 tenacity>=8.2
 pyyaml>=6.0
+pyopenjtalk>=0.4.0   # gợi ý cách đọc kanji (MIT, offline)
 pytest>=8.0
