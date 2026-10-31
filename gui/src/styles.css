@@ -1,0 +1,15 @@
+:root { color-scheme: dark; font-family: system-ui, "Noto Sans JP", sans-serif; }
+body { margin: 0; background: #14171c; color: #e6e8eb; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+.toolbar { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #1c2029; }
+.toolbar button { padding: 8px 14px; border: 0; border-radius: 6px; background: #2f7d5b; color: #fff; cursor: pointer; }
+.toolbar button:disabled { background: #3a3f4a; cursor: default; }
+.path { opacity: 0.7; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.content { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.lines { width: 100%; border-collapse: collapse; }
+.lines th, .lines td { border-bottom: 1px solid #2a2f3a; padding: 8px; text-align: left; vertical-align: top; }
+.lines .text { font-family: "Noto Sans JP", sans-serif; font-size: 18px; }
+.lines .pause td { opacity: 0.6; font-style: italic; }
+.role-1 { color: #4ade80; } .role-2 { color: #60a5fa; } .role-3 { color: #c084fc; }
+.empty { opacity: 0.6; text-align: center; }
+.log { background: #0e1014; border-radius: 6px; padding: 12px; min-height: 120px; white-space: pre-wrap; font-size: 12px; }

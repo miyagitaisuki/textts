@@ -3,7 +3,12 @@
 Biến kịch bản hội thoại (`[1] ...`, `[2] ...`) thành một file âm thanh liền mạch,
 có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 
-Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại: **giai đoạn 1 (MVP dòng lệnh)** và **giai đoạn 2 (kiến trúc)**: cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
+Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
+
+- **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
+- **Giai đoạn 3 (đang làm):** giao diện **Electron + React** trong thư mục `gui/`, gọi CLI Python ở bên dưới. Xem mục "Giao diện" bên dưới.
+
+**Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
 
 ## Cài đặt
 
@@ -35,6 +40,23 @@ Kết quả tổng hợp được cache trong `cache/` theo hash. Sửa một c�
 
 `project.json` là file lưu dự án: cấu hình vai, khoảng nghỉ và danh sách câu đã phân tích, kèm `version` để kiểm tra tương thích. Có thể sửa tay file này rồi chạy lại với `--project`.
 
+## Giao diện (Electron + React)
+
+Quyết định: **Electron + React**, thay cho Streamlit trong bản kế hoạch ban đầu. Lý do: bố cục giống mockup (bảng câu thoại, thẻ vai, timeline sóng âm ở giai đoạn 4) khó làm với Streamlit, và Electron cho một ứng dụng desktop đóng gói được.
+
+Kiến trúc:
+- **Renderer (React):** soạn kịch bản, bảng câu thoại, thẻ vai, nút hành động.
+- **Main process (Electron):** đọc/ghi `project.json`, chạy `tts.py` như tiến trình con, chuyển tiến trình và lỗi về giao diện.
+- Logic tạo âm thanh chỉ nằm ở Python, giao diện không gọi API TTS trực tiếp.
+
+Chạy phát triển:
+
+```bash
+cd gui
+npm install
+npm run dev
+```
+
 ## Cú pháp kịch bản
 
 | Cú pháp | Ý nghĩa |
@@ -51,8 +73,9 @@ Thuộc tính: `voice`, `emotion` (`neutral`/`happy`/`sad`/`angry`/`surprised`),
 ## Cấu trúc
 
 ```
-tts.py            CLI
+tts.py            CLI (nguồn sự thật cho việc tạo âm thanh)
 roles.yaml        engine, giọng và cấu hình vai, khoảng nghỉ
+gui/              giao diện Electron + React (giai đoạn 3)
 core/parser.py    phân tích kịch bản → danh sách câu
 core/models.py    mô hình pydantic: Config (roles.yaml), Project (project.json)
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
@@ -73,8 +96,8 @@ tests/            unit test: parser, mô hình dữ liệu, cache và thử lạ
 | Khung "Script & Dialogue" | Ô nhập kịch bản `[n]`, tô màu theo vai | 3 |
 | Tab Role 1 / 2 / 3 | Mỗi vai một thẻ: chọn giọng, cảm xúc (Vui/Buồn/Giận), tốc độ (Nhanh/Chậm), cao độ | 1–3 |
 | Nút Preview | Nghe thử một câu hoặc cả đoạn trước khi tạo đầy đủ | 3 |
-| Nút Record | Ghi âm giọng thật của giáo viên để làm mẫu | Chưa xác định |
-| Nút Generate Speech / Generate All | Tổng hợp các câu (đã có cache) | 1 (CLI), 3 (giao diện) |
+| Nút Record | Ghi âm giọng thật của giáo viên để làm mẫu | Chưa quyết định |
+| Nút Generate Speech / Generate All | Tổng hợp các câu (đã có cache) | 1 (CLI), 3 (giao diện Electron) |
 | Nút Export MP3/WAV | Xuất file, kèm `.srt` | 1 (CLI) |
 | Timeline với sóng âm theo từng vai | Xem và chỉnh thời lượng từng câu | 4 |
 | Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai, chuẩn hóa LUFS | 4 |
@@ -85,9 +108,20 @@ Ghi chú khi triển khai:
 - Nút Record không nằm trong kế hoạch ban đầu. Cần quyết định có làm hay không trước khi thiết kế.
 - Các nhãn tiếng Việt trong ảnh là nháp, sẽ đổi khi làm thật.
 
+## Engine TTS
+
+Chỉ liệt kê engine miễn phí, mã mở, dùng không kinh doanh.
+
+| Engine | Trạng thái | Ghi chú |
+| --- | --- | --- |
+| Edge-TTS | Đã cài (mặc định) | Miễn phí, không cần key. Dịch vụ của Microsoft không chính thức, không có SLA, có thể ngừng bất cứ lúc nào. Thư viện `edge-tts` là mã mở. |
+| VOICEVOX | Dự kiến, giai đoạn 4 | Chạy trên máy, không cần mạng. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. |
+
+Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phép của mã và của model giọng, và có giọng tiếng Nhật hay không. Khi thêm engine mới, chỉ cần viết một lớp mới kế thừa `TTSProvider` trong `providers/`.
+
 ## Lưu ý
 
-- Edge-TTS là dịch vụ không chính thức, không có SLA. Giao diện `TTSProvider` cho phép thay bằng Gemini/OpenAI/VOICEVOX sau này.
 - Edge chỉ có 2 giọng ja-JP. Vai 3 trong mẫu dùng chung giọng vai 2 với pitch thấp hơn.
 - Cảm xúc trên Edge chỉ là mô phỏng bằng pitch/rate.
+- Thư mục `docs/ui/` chỉ chứa ảnh tham khảo, không phải giao diện đã làm.
 - Luôn nghe duyệt từng câu trước khi phát cho lớp, đặc biệt các chữ Hán đọc nhiều cách.
