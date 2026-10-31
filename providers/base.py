@@ -18,6 +18,7 @@ class TTSProvider(ABC):
     """Mỗi engine implement `name` và `synthesize_mp3`/`synthesize`."""
 
     name: str = "base"
+    ext: str = "mp3"  # đuôi file engine trả về, dùng để đặt tên cache
 
     @abstractmethod
     async def synthesize(self, req: SynthRequest, out_path: str) -> None:

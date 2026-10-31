@@ -6,6 +6,7 @@ có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
 
 - **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
+- **Giai đoạn 4 (một phần):** VOICEVOX offline, bản chậm 0.8×, xuất từng câu riêng, chuẩn hóa LUFS. Chưa làm: nhạc nền/hiệu ứng, waveform trong giao diện.
 - **Giai đoạn 3 (xong):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh, và cột **gợi ý cách đọc** kèm nút "Áp dụng" để ghi `漢字{かな}`.
 
 **Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
@@ -64,6 +65,18 @@ npm install
 npm run dev
 ```
 
+## Đầu ra cho lớp học
+
+```bash
+# Chuẩn hóa độ to về -16 LUFS, xuất thêm bản chậm 0.8× (giữ cao độ), phụ đề, và từng câu riêng
+python tts.py --project projects/bai10.json -o output/bai10.mp3 \
+  --lufs -16 --slow --srt --export-lines output/bai10_cau/
+```
+
+- `--lufs`: chuẩn hóa độ to tích hợp. Đoạn im lặng hoàn toàn được giữ nguyên.
+- `--slow`: tạo `bai10_slow.mp3` và `bai10_slow.srt` (thời gian đã co giãn theo tốc độ).
+- `--export-lines DIR`: mỗi câu một file, tên `L001_vai1.mp3`, để luyện nghe và nói theo.
+
 ## Cú pháp kịch bản
 
 | Cú pháp | Ý nghĩa |
@@ -87,7 +100,8 @@ core/parser.py    phân tích kịch bản → danh sách câu
 core/models.py    mô hình pydantic: Config (roles.yaml), Project (project.json)
 core/normalize.py gợi ý cách đọc kanji (pyopenjtalk, MIT, offline)
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
-providers/        TTSProvider (base) và EdgeProvider
+providers/        TTSProvider (base), EdgeProvider, VoicevoxProvider
+core/audio.py     đổi tốc độ không đổi cao độ (ffmpeg atempo), chuẩn hóa LUFS
 examples/         kịch bản mẫu
 docs/ui/          ảnh mockup giao diện tham khảo
 tests/            unit test: parser, mô hình dữ liệu, cache và thử lại
@@ -107,9 +121,9 @@ tests/            unit test: parser, mô hình dữ liệu, cache và thử lạ
 | Nút Record | Ghi âm giọng thật của giáo viên để làm mẫu | Chưa quyết định |
 | Nút Generate Speech / Generate All | Tổng hợp các câu (đã có cache) | 1 (CLI), 3 (giao diện Electron) |
 | Nút Export MP3/WAV | Xuất file, kèm `.srt` | 1 (CLI) |
-| Timeline với sóng âm theo từng vai | Xem và chỉnh thời lượng từng câu | 4 |
-| Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai, chuẩn hóa LUFS | 4 |
-| Settings (bật/tắt tùy chọn) | Bật `.srt`, bản chậm, chuẩn hóa âm lượng... | 2–4 |
+| Timeline với sóng âm theo từng vai | Xem và chỉnh thời lượng từng câu | 4 (chưa làm) |
+| Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai | 4 (chưa làm; LUFS đã có trong CLI) |
+| Settings (bật/tắt tùy chọn) | Bật `.srt`, bản chậm, chuẩn hóa âm lượng... | 2–4 (đã có qua CLI) |
 
 Ghi chú khi triển khai:
 - Giai đoạn 3 chỉ cần bảng câu thoại và các khối vai, theo Phần 3 của kế hoạch. Timeline sóng âm và mixer chỉ làm ở giai đoạn 4.
@@ -123,7 +137,7 @@ Chỉ liệt kê engine miễn phí, mã mở, dùng không kinh doanh.
 | Engine | Trạng thái | Ghi chú |
 | --- | --- | --- |
 | Edge-TTS | Đã cài (mặc định) | Miễn phí, không cần key. Dịch vụ của Microsoft không chính thức, không có SLA, có thể ngừng bất cứ lúc nào. Thư viện `edge-tts` là mã mở. |
-| VOICEVOX | Dự kiến, giai đoạn 4 | Chạy trên máy, không cần mạng. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. |
+| VOICEVOX | Đã cài, chạy offline | Cần chạy VOICEVOX Engine trước (mặc định `http://127.0.0.1:50021`, đổi bằng `VOICEVOX_URL`). Trường `voice` là mã nhân vật, ví dụ `3`. Không có cảm xúc tách riêng; `emotion` bị bỏ qua. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. Chưa kiểm chứng với engine thật trong môi trường phát triển (chỉ test bằng server giả). |
 
 Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phép của mã và của model giọng, và có giọng tiếng Nhật hay không. Khi thêm engine mới, chỉ cần viết một lớp mới kế thừa `TTSProvider` trong `providers/`.
 
