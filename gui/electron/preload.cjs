@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("textts", {
   saveProject: (filePath, data) => ipcRenderer.invoke("project:save", { filePath, data }),
   generate: (projectPath, outputPath) =>
     ipcRenderer.invoke("tts:generate", { projectPath, outputPath }),
+  preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
   onLog: (callback) => {
     const listener = (_evt, text) => callback(text);
     ipcRenderer.on("tts:log", listener);
