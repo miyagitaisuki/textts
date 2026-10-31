@@ -3,7 +3,7 @@
 Biến kịch bản hội thoại (`[1] ...`, `[2] ...`) thành một file âm thanh liền mạch,
 có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 
-Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại: **giai đoạn 1 (MVP dòng lệnh)** + một phần giai đoạn 2 (cache, phụ đề, thử lại, cú pháp `漢字{かな}` và `[pause=ms]`).
+Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại: **giai đoạn 1 (MVP dòng lệnh)** và **giai đoạn 2 (kiến trúc)**: cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
 
 ## Cài đặt
 
@@ -22,12 +22,18 @@ python tts.py examples/minna_bai10_hoi_duong.txt --dry-run
 # Tạo MP3 + phụ đề
 python tts.py examples/minna_bai10_hoi_duong.txt -o output/bai10.mp3 --srt
 
-# Chạy kiểm thử parser
+# Lưu kết quả phân tích ra project.json, rồi tạo âm thanh từ file đó
+python tts.py examples/minna_bai10_hoi_duong.txt --save-project projects/bai10.json
+python tts.py --project projects/bai10.json -o output/bai10.mp3
+
+# Chạy kiểm thử
 python -m pytest -q
 ```
 
 Câu nào lỗi sẽ được báo kèm số dòng và **không** xuất file, để tránh nghe nửa vời.
-Kết quả tổng hợp được cache trong `cache/` theo hash, nên chạy lại chỉ tạo các câu đã sửa.
+Kết quả tổng hợp được cache trong `cache/` theo hash. Sửa một câu (đổi cảm xúc, tốc độ, cách đọc...) chỉ tạo lại đúng câu đó. Lỗi tạm thời được thử lại tối đa 3 lần.
+
+`project.json` là file lưu dự án: cấu hình vai, khoảng nghỉ và danh sách câu đã phân tích, kèm `version` để kiểm tra tương thích. Có thể sửa tay file này rồi chạy lại với `--project`.
 
 ## Cú pháp kịch bản
 
@@ -48,11 +54,12 @@ Thuộc tính: `voice`, `emotion` (`neutral`/`happy`/`sad`/`angry`/`surprised`),
 tts.py            CLI
 roles.yaml        engine, giọng và cấu hình vai, khoảng nghỉ
 core/parser.py    phân tích kịch bản → danh sách câu
+core/models.py    mô hình pydantic: Config (roles.yaml), Project (project.json)
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
 providers/        TTSProvider (base) và EdgeProvider
 examples/         kịch bản mẫu
 docs/ui/          ảnh mockup giao diện tham khảo
-tests/            unit test cho parser
+tests/            unit test: parser, mô hình dữ liệu, cache và thử lại
 ```
 
 ## Định hướng giao diện (mockup)
