@@ -19,17 +19,22 @@ from pydub import AudioSegment
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from core.audio import loudness_normalize, time_stretch
 from core.builder import build, to_srt
 from core.models import Config, LineItem, Project, Role, load_config, load_project, save_project
 from core.parser import ScriptError, parse_script
 from providers.base import SynthRequest, TTSProvider
 from providers.edge import EdgeProvider
+from providers.voicevox import VoicevoxProvider
 
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
 MAX_CONCURRENCY = 3
 
-PROVIDERS: dict[str, type[TTSProvider]] = {EdgeProvider.name: EdgeProvider}
+PROVIDERS: dict[str, type[TTSProvider]] = {
+    EdgeProvider.name: EdgeProvider,
+    VoicevoxProvider.name: VoicevoxProvider,
+}
 
 
 def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
@@ -82,7 +87,7 @@ async def synth_all(
             return
         req = resolve(item, project.roles)
         key = cache_key(provider.name, req)
-        out = cache_dir / f"{key}.mp3"
+        out = cache_dir / f"{key}.{provider.ext}"
         item.cache_key = key
         if not out.exists() or out.stat().st_size == 0:
             async with sem:
@@ -144,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
     ap.add_argument("--preview", metavar="ID", help="chỉ tổng hợp câu có mã ID (ví dụ L002) để nghe thử")
     ap.add_argument("--dry-run", action="store_true", help="chỉ in kế hoạch, không gọi API")
+    ap.add_argument("--lufs", type=float, metavar="LUFS", help="chuẩn hóa độ to về mức LUFS, ví dụ -16")
+    ap.add_argument("--slow", action="store_true",
+                    help="xuất thêm bản chậm 0.8× (giữ cao độ), tên <tên>_slow.<đuôi>")
+    ap.add_argument("--export-lines", type=Path, metavar="DIR",
+                    help="xuất từng câu thành file riêng để luyện tập")
     args = ap.parse_args(argv)
 
     try:
@@ -199,16 +209,54 @@ def main(argv: list[str] | None = None) -> int:
     audio, placed = build(
         [it.model_dump() for it in project.items], project.timing.model_dump()
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    if args.lufs is not None:
+        audio = loudness_normalize(audio, args.lufs)
+
     fmt = args.output.suffix.lstrip(".").lower() or "mp3"
-    audio.export(args.output, format=fmt)
+    write_audio(audio, args.output, fmt)
     print(f"Đã xuất {args.output} ({len(audio) / 1000:.1f} s, {len(placed)} câu)")
 
     if args.srt:
         srt_path = args.output.with_suffix(".srt")
         srt_path.write_text(to_srt(placed), encoding="utf-8")
         print(f"Đã xuất phụ đề {srt_path}")
+
+    if args.slow:
+        slow_rate = 0.8
+        slow_audio = time_stretch(audio, slow_rate)
+        slow_path = args.output.with_name(f"{args.output.stem}_slow{args.output.suffix}")
+        write_audio(slow_audio, slow_path, fmt)
+        print(f"Đã xuất bản chậm {slow_path} ({len(slow_audio) / 1000:.1f} s)")
+        if args.srt:
+            scaled = [
+                {**it, "start_ms": round(it["start_ms"] / slow_rate),
+                 "end_ms": round(it["end_ms"] / slow_rate)}
+                for it in placed
+            ]
+            slow_srt = slow_path.with_suffix(".srt")
+            slow_srt.write_text(to_srt(scaled), encoding="utf-8")
+            print(f"Đã xuất phụ đề bản chậm {slow_srt}")
+
+    if args.export_lines:
+        export_lines(project, args.export_lines)
     return 0
+
+
+def write_audio(audio, path: Path, fmt: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    audio.export(path, format=fmt)
+
+
+def export_lines(project: Project, out_dir: Path) -> None:
+    """Mỗi câu một file: <mã>_vai<số>.mp3, dùng cho luyện nghe và nói theo."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for it in project.items:
+        if isinstance(it, LineItem) and it.audio:
+            name = f"{it.id}_vai{it.role}.mp3"
+            AudioSegment.from_file(it.audio).export(out_dir / name, format="mp3")
+            count += 1
+    print(f"Đã xuất {count} câu riêng vào {out_dir}")
 
 
 if __name__ == "__main__":
