@@ -111,6 +111,24 @@ ipcMain.handle("voices:list", async (_evt, { engine }) => {
   });
 });
 
+// Kiểm tra kịch bản đã lưu (tts.py --lint): trả về [{id, level, message}].
+ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, [TTS_CLI, "--project", proj, "--lint"], { cwd: REPO_ROOT });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", () => resolve([]));
+    child.on("close", () => {
+      try {
+        resolve(JSON.parse(out));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
+
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   const target = assertAllowed(filePath, new Set([".json"]));
   fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");

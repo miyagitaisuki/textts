@@ -86,6 +86,7 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 - `--list-voices {edge,voicevox}`: in danh sách giọng dạng JSON (giao diện dùng để điền danh sách chọn).
 - `--batch DIR --outdir DIR`: xử lý mọi `.txt` trong thư mục, mỗi file ra `<tên>.mp3`. Các tùy chọn khác (`--lufs`, `--srt`, `--bgm`...) áp dụng cho từng file. Một file lỗi không dừng batch.
 - `--cache-info` / `--clear-cache`: xem hoặc xóa thư mục `cache/`.
+- `--lint`: in JSON các lỗi (chặn tạo âm thanh) và cảnh báo (chữ Hán chưa có `{かな}`). Giao diện hiển thị ở cột ghi chú của từng dòng. Vai chưa khai báo bị chặn ngay khi nạp project, nên không nằm trong lint.
 - `--bgm FILE --bgm-db -18`: trộn nhạc nền lặp lại dưới lời thoại, có fade vào và ra. Nhạc nền do giáo viên cung cấp, dự án không đính kèm.
 - Mỗi lần xuất còn ghi `<tên>.timeline.json` (vị trí từng câu và dữ liệu sóng). Giao diện đọc file này để vẽ timeline sau khi tạo âm thanh.
 
@@ -188,7 +189,7 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 12. [x] Từ điển cách đọc do người dùng quản lý, lưu theo dự án hoặc dùng chung.
 13. [x] Lệnh xem và xóa cache (`--clear-cache`).
 14. [x] Xử lý hàng loạt: một thư mục kịch bản, xuất hết vào một thư mục đầu ra.
-15. [ ] Lint kịch bản trong giao diện: vai chưa khai báo, chữ Hán thiếu cách đọc, file sfx không tồn tại.
+15. [x] Lint kịch bản trong giao diện: vai chưa khai báo, chữ Hán thiếu cách đọc, file sfx không tồn tại.
 
 **Theo mockup, chưa làm**
 16. [ ] Ghi âm giọng thật làm mẫu (nút Record).

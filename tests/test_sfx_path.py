@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tts import sfx_path
+from core.paths import sfx_path
 
 
 def test_relative_sfx_resolves_against_base_dir(tmp_path):

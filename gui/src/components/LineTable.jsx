@@ -5,8 +5,15 @@ const ROLE_IDS = ["1", "2", "3"];
 
 export default function LineTable({
   items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, suggestions, onApply, disabled,
-  errorIds = [],
+  errorIds = [], issues = [],
 }) {
+  // Gộp các cảnh báo/lỗi kiểm tra theo mã câu: mức nặng nhất thắng.
+  const issueOf = {};
+  for (const i of issues) {
+    const prev = issueOf[i.id];
+    if (!prev || i.level === "error") issueOf[i.id] = i;
+    else if (prev.level === "warning" && i.level === "warning") issueOf[i.id] = { ...prev, message: `${prev.message}; ${i.message}` };
+  }
   return (
     <table className="lines">
       <thead>
@@ -45,8 +52,12 @@ export default function LineTable({
               </td>
             </tr>
           ) : (
-            <tr key={it.id} id={`row-${it.id}`}
-              className={[selectedId === it.id ? "selected" : "", errorIds.includes(it.id) ? "error" : ""].join(" ").trim()}
+            <tr key={it.id} id={`row-${it.id}`} title={issueOf[it.id]?.message ?? ""}
+              className={[
+                selectedId === it.id ? "selected" : "",
+                errorIds.includes(it.id) || issueOf[it.id]?.level === "error" ? "error" : "",
+                !errorIds.includes(it.id) && issueOf[it.id]?.level === "warning" ? "warn" : "",
+              ].join(" ").trim()}
               onClick={() => onSelect(it.id)}>
               <td>{it.id}</td>
               <td>

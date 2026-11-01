@@ -21,6 +21,8 @@ from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
+from core.lint import lint_project
+from core.paths import sfx_path
 from core.readings import load_readings
 from core.builder import build, practice_items, to_srt
 from core.models import (
@@ -48,12 +50,6 @@ PROVIDERS: dict[str, type[TTSProvider]] = {
     EdgeProvider.name: EdgeProvider,
     VoicevoxProvider.name: VoicevoxProvider,
 }
-
-
-def sfx_path(path: str, base: Path) -> Path:
-    """Đường dẫn sfx tương đối được tính từ thư mục chứa kịch bản/project.json."""
-    p = Path(path)
-    return p if p.is_absolute() else base / p
 
 
 def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
@@ -223,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch", type=Path, metavar="DIR",
                     help="xử lý mọi file .txt trong thư mục (cần --outdir)")
     ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
+    ap.add_argument("--lint", action="store_true",
+                    help="kiểm tra kịch bản/project, in JSON các lỗi và cảnh báo rồi thoát")
     ap.add_argument("--cache-info", action="store_true", help="in số file và dung lượng thư mục cache rồi thoát")
     ap.add_argument("--clear-cache", action="store_true", help="xóa thư mục cache rồi thoát")
     ap.add_argument("--readings", type=Path, default=ROOT / "readings.yaml",
@@ -282,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.save_project:
         save_project(project, args.save_project)
         print(f"Đã lưu {args.save_project}")
+
+    if args.lint:
+        issues = lint_project(project, (args.script or args.project).resolve().parent)
+        print(json.dumps(issues, ensure_ascii=False))
+        return 1 if any(i["level"] == "error" for i in issues) else 0
 
     if args.worksheet:
         args.worksheet.parent.mkdir(parents=True, exist_ok=True)

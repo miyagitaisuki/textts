@@ -52,3 +52,4 @@ audio { width: 100%; }
 .vu-fill { width: 100%; transition: height 60ms linear; }
 
 .lines tr.error td { background: #4a1d1d; }
+.lines tr.warn td { background: #3d3517; }

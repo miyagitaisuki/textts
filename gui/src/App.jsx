@@ -26,6 +26,7 @@ export default function App() {
   const [outputStale, setOutputStale] = useState(false);
   const [errorIds, setErrorIds] = useState([]);
   const [voices, setVoices] = useState([]);
+  const [issues, setIssues] = useState([]);
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -128,6 +129,7 @@ export default function App() {
     history.current = { past: [], future: [] };
     setProject(res.data);
     window.textts.listVoices(res.data.engine).then(setVoices);
+    window.textts.lint(res.filePath).then(setIssues);
     setFilePath(res.filePath);
     setDirty(false);
     setSelectedId(null);
@@ -143,6 +145,7 @@ export default function App() {
     if (!filePath || !project) return false;
     await window.textts.saveProject(filePath, project);
     setDirty(false);
+    window.textts.lint(filePath).then(setIssues);
     refreshSuggestions(project);
     return true;
   }
@@ -285,6 +288,7 @@ export default function App() {
               onApply={applySuggestion}
               disabled={busy}
               errorIds={errorIds}
+              issues={issues}
             />
           </section>
 
