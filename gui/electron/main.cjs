@@ -26,6 +26,30 @@ function createWindow() {
   }
 }
 
+// Chỉ cho phép đọc/ghi trong thư mục của các project đã mở qua hộp thoại.
+// Renderer không được chỉ định đường dẫn tùy ý.
+const allowedDirs = new Set();
+const AUDIO_EXTS = new Set([".mp3", ".wav"]);
+
+function allowDirOf(filePath) {
+  allowedDirs.add(path.dirname(path.resolve(filePath)));
+}
+
+function isAllowed(filePath, exts) {
+  if (typeof filePath !== "string" || !filePath) return false;
+  const resolved = path.resolve(filePath);
+  if (exts && !exts.has(path.extname(resolved).toLowerCase())) return false;
+  const dir = path.dirname(resolved);
+  return allowedDirs.has(dir);
+}
+
+function assertAllowed(filePath, exts) {
+  if (!isAllowed(filePath, exts)) {
+    throw new Error(`Đường dẫn không được phép: ${filePath}`);
+  }
+  return path.resolve(filePath);
+}
+
 ipcMain.handle("project:open", async () => {
   const res = await dialog.showOpenDialog({
     title: "Mở project.json",
@@ -34,18 +58,22 @@ ipcMain.handle("project:open", async () => {
   });
   if (res.canceled || res.filePaths.length === 0) return null;
   const filePath = res.filePaths[0];
+  allowDirOf(filePath);
   return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 });
 
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
+  const target = assertAllowed(filePath, new Set([".json"]));
+  fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");
   return true;
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.
 ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const out = assertAllowed(outputPath, AUDIO_EXTS);
   return new Promise((resolve) => {
-    const args = [TTS_CLI, "--project", projectPath, "-o", outputPath];
+    const args = [TTS_CLI, "--project", proj, "-o", out];
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
     let log = "";
     const send = (chunk) => {
@@ -62,8 +90,10 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath }) => {
 
 // Nghe thử một câu: chạy tts.py --preview <ID> rồi trả về audio dạng data URL.
 ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  if (!/^L\d+$/.test(String(lineId))) throw new Error(`Mã câu không hợp lệ: ${lineId}`);
   const outPath = path.join(os.tmpdir(), `textts-preview-${lineId}-${Date.now()}.mp3`);
-  const args = [TTS_CLI, "--project", projectPath, "--preview", lineId, "-o", outPath];
+  const args = [TTS_CLI, "--project", proj, "--preview", lineId, "-o", outPath];
   const result = await new Promise((resolve) => {
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
     let log = "";
@@ -103,7 +133,8 @@ ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
 
 // Đọc kết quả sau khi tạo âm thanh: file audio (data URL) và timeline cạnh nó.
 ipcMain.handle("output:load", async (_evt, { audioPath }) => {
-  if (!audioPath || !fs.existsSync(audioPath)) return null;
+  assertAllowed(audioPath, AUDIO_EXTS);
+  if (!fs.existsSync(audioPath)) return null;
   const base = audioPath.replace(/\.[^./\\]+$/, "");
   const timelinePath = `${base}.timeline.json`;
   if (!fs.existsSync(timelinePath)) return null;

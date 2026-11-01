@@ -164,7 +164,7 @@ Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là t
 1. [ ] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (đang ở PR #10).
 2. [ ] CI chạy `pytest` trên GitHub Actions (đang ở PR #10).
 3. [x] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
-4. [ ] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
+4. [x] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
 
 **Giao diện biên tập**
 5. [ ] Mở kịch bản `.txt` trực tiếp trong giao diện.
