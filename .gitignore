@@ -9,3 +9,4 @@ gui/node_modules/
 gui/dist/
 recordings/
 gui/release/
+gui/python-runtime/

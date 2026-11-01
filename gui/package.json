@@ -12,7 +12,8 @@
     "dist": "vite build && electron-builder",
     "test": "node --test test/*.test.cjs && vitest run",
     "test:watch": "vitest",
-    "dist:win": "vite build && electron-builder --win nsis --publish never"
+    "dist:win": "npm run bundle:python && vite build && electron-builder --win nsis --publish never",
+    "bundle:python": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bundle-python.ps1"
   },
   "dependencies": {
     "electron-updater": "^6.8.11",
@@ -53,6 +54,21 @@
           "roles.yaml",
           "readings.example.yaml",
           "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "python-runtime/python",
+        "to": "python",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "python-runtime/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "ffmpeg.exe"
         ]
       }
     ],
