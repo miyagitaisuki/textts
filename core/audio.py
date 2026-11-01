@@ -74,3 +74,44 @@ def peaks(seg: AudioSegment, bins: int = 600) -> list[float]:
     values = [float(c.max()) if len(c) else 0.0 for c in chunks]
     top = max(values) or 1.0
     return [round(v / top, 3) for v in values]
+
+
+def role_levels(
+    audio: AudioSegment,
+    placed: list[dict],
+    bins: int = 600,
+    floor_db: float = -60.0,
+) -> dict[str, list[float]]:
+    """Mức âm lượng (0..1, thang dB từ floor_db đến 0 dBFS) của từng vai theo thời gian.
+
+    Chỉ tính các đoạn thuộc về vai đó, nên VU meter của từng vai chạy độc lập.
+    """
+    mono = audio.set_channels(1)
+    scale = float(1 << (8 * mono.sample_width - 1))
+    x = np.array(mono.get_array_of_samples(), dtype=np.float64) / scale
+    n = len(x)
+    if n == 0 or bins <= 0:
+        return {}
+    rate = mono.frame_rate
+    edges = np.linspace(0, n, bins + 1).astype(int)
+    result: dict[str, list[float]] = {}
+    for role in sorted({it["role"] for it in placed}):
+        mask = np.zeros(n, dtype=np.float64)
+        for it in placed:
+            if it["role"] != role:
+                continue
+            a = min(n, int(it["start_ms"] * rate / 1000))
+            b = min(n, int(it["end_ms"] * rate / 1000))
+            mask[a:b] = 1.0
+        sq = (x * mask) ** 2
+        levels = []
+        for i in range(bins):
+            lo, hi = edges[i], edges[i + 1]
+            if hi <= lo:
+                levels.append(0.0)
+                continue
+            rms = float(np.sqrt(sq[lo:hi].mean()))
+            db = 20 * np.log10(rms) if rms > 0 else floor_db
+            levels.append(round(float(np.clip((db - floor_db) / -floor_db, 0.0, 1.0)), 3))
+        result[role] = levels
+    return result
