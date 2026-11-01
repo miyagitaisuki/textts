@@ -8,3 +8,4 @@ output/
 gui/node_modules/
 gui/dist/
 recordings/
+gui/release/

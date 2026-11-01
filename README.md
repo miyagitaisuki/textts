@@ -197,5 +197,5 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 18. [x] Nút "Generate All" và xuất MP3/WAV trong giao diện.
 
 **Hạ tầng bổ sung**
-19. [ ] Cấu hình đóng gói Electron (`electron-builder`).
+19. [x] Cấu hình đóng gói Electron (`electron-builder`).
 20. [ ] Test cho renderer và IPC.

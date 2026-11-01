@@ -5,7 +5,10 @@ const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
 
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
+// Khi đóng gói, tts.py và core/ nằm trong resources/engine (xem "build.extraResources" trong package.json).
+const REPO_ROOT = app.isPackaged
+  ? path.join(process.resourcesPath, "engine")
+  : path.resolve(__dirname, "..", "..");
 const TTS_CLI = path.join(REPO_ROOT, "tts.py");
 const PYTHON = process.env.TEXTTS_PYTHON || "python3";
 
