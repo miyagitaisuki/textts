@@ -23,7 +23,7 @@ export default function Recorder({ projectPath, roleId, disabled }) {
       rec.start();
       recorderRef.current = rec;
       setRecording(true);
-      setStatus("Đang ghi...");
+      setStatus("Đang ghi…");
     } catch (err) {
       setStatus(`Không mở được micro: ${err.message}`);
     }

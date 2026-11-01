@@ -4,6 +4,25 @@ import { useState } from "react";
 export const VOICES = ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"];
 export const EMOTIONS = ["neutral", "happy", "sad", "angry", "surprised"];
 export const SPEEDS = ["slow", "normal", "fast"];
+export const EMOTION_LABELS = { neutral: "Trung tính", happy: "Vui", sad: "Buồn", angry: "Giận", surprised: "Ngạc nhiên" };
+export const SPEED_LABELS = { slow: "Chậm", normal: "Thường", fast: "Nhanh" };
+
+// Nhóm nút chọn một giá trị (thay cho dropdown): dễ bấm, thấy ngay lựa chọn hiện tại.
+function Segmented({ label, options, labels, value, disabled, onChange }) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      <span className="segmented-label">{label}</span>
+      <div className="segmented-buttons">
+        {options.map((v) => (
+          <button key={v} type="button" aria-pressed={value === v} disabled={disabled}
+            className={value === v ? "on" : ""} onClick={() => onChange(v)}>
+            {labels[v]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Khối thư viện mẫu của một vai: áp mẫu có sẵn, hoặc lưu cấu hình hiện tại thành mẫu mới.
 function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled }) {
@@ -62,24 +81,17 @@ export default function RolePanel({ roles, onChange, disabled, voices = [], reco
                 {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
-            <label>
-              Cảm xúc
-              <select value={role.emotion} disabled={disabled}
-                onChange={(e) => onChange(id, { emotion: e.target.value })}>
-                {EMOTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
-            <label>
-              Tốc độ
-              <select value={role.speed} disabled={disabled}
-                onChange={(e) => onChange(id, { speed: e.target.value })}>
-                {SPEEDS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
+            <Segmented label="Cảm xúc" options={EMOTIONS} labels={EMOTION_LABELS} value={role.emotion}
+              disabled={disabled} onChange={(v) => onChange(id, { emotion: v })} />
+            <Segmented label="Tốc độ" options={SPEEDS} labels={SPEED_LABELS} value={role.speed}
+              disabled={disabled} onChange={(v) => onChange(id, { speed: v })} />
             {recorder?.(id)}
             {library && (
-              <PresetBar roleId={id} role={role} presets={library.presets} disabled={disabled}
-                onApply={library.onApply} onSave={library.onSave} onRemove={library.onRemove} />
+              <details className="preset-details">
+                <summary>Mẫu cấu hình</summary>
+                <PresetBar roleId={id} role={role} presets={library.presets} disabled={disabled}
+                  onApply={library.onApply} onSave={library.onSave} onRemove={library.onRemove} />
+              </details>
             )}
             <label>
               Cao độ: {role.pitch} Hz

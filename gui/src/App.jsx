@@ -5,6 +5,7 @@ import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
 import Mixer from "./components/Mixer.jsx";
+import ExportDialog from "./components/ExportDialog.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -34,6 +35,13 @@ export default function App() {
   const [presets, setPresets] = useState([]);
   const [pasting, setPasting] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [showExport, setShowExport] = useState(false);
+  // Đọc từ ref khi render; mỗi thay đổi đều đi kèm setState nên giao diện luôn cập nhật.
+  const canUndo = history.current.past.length > 0;
+  const canRedo = history.current.future.length > 0;
+  // Dòng cuối của nhật ký cho biết bước hiện tại; nhật ký mở sẵn khi có lỗi.
+  const lastLogLine = log.trim().split("\n").filter(Boolean).pop() ?? "";
+  const logHasError = /lỗi|không|\[thoát với mã [^0]/i.test(log);
 
   useEffect(() => {
     saveSettings(window.localStorage, exportOpts);
@@ -129,7 +137,7 @@ export default function App() {
     if (lines.length === 0) return setSuggestions({});
     const res = await window.textts.suggestReadings(lines.map((it) => it.display));
     if (!res.ok) {
-      setLog((prev) => prev + `\n[gợi ý cách đọc lỗi]\n${res.error}\n`);
+      setLog((prev) => prev + `\nLỗi khi lấy gợi ý cách đọc:\n${res.error}\n`);
       return;
     }
     const map = {};
@@ -289,7 +297,7 @@ export default function App() {
     const res = await window.textts.preview(filePath, id);
     setBusy(false);
     if (res.ok) setPreviewUrl(res.dataUrl);
-    else setLog((prev) => prev + `\n[nghe thử lỗi]\n${res.error}\n`);
+    else setLog((prev) => prev + `\nLỗi khi nghe thử:\n${res.error}\n`);
   }
 
   async function generate() {
@@ -302,7 +310,7 @@ export default function App() {
     const res = await window.textts.generate(filePath, outputPath, {
       lufs, slow: exportOpts.slow, srt: exportOpts.srt,
     });
-    setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
+    setLog((prev) => prev + `\n${res.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res.code})`);
     // Dòng lỗi có dạng "  - L002 (dòng 5): ...": đánh dấu và cuộn tới câu lỗi đầu tiên.
     const failed = [...res.log.matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
     setErrorIds(failed);
@@ -319,42 +327,15 @@ export default function App() {
   return (
     <div className="app">
       <header className="toolbar">
-        <button onClick={openProject} disabled={busy}>Mở project.json</button>
+        <button onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
-        <button onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
-        <span className="out-root" title={outputRoot}>
-          Thư mục xuất: {outputRoot || "chưa chọn"}
-        </span>
-        <button className="ghost" onClick={chooseOutputRoot} disabled={busy}>Đổi…</button>
-        <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
-        <details className="export-opts">
-          <summary>Tùy chọn xuất (nhớ làm mặc định)</summary>
-          <label>Định dạng
-            <select value={exportOpts.format} disabled={busy}
-              onChange={(e) => setExportOpts({ ...exportOpts, format: e.target.value })}>
-              <option value="mp3">MP3</option>
-              <option value="wav">WAV</option>
-            </select>
-          </label>
-          <label>LUFS (để trống = không chuẩn hóa)
-            <input type="number" step="0.5" value={exportOpts.lufs} disabled={busy}
-              placeholder="-16"
-              onChange={(e) => setExportOpts({ ...exportOpts, lufs: e.target.value })} />
-          </label>
-          <label><input type="checkbox" checked={exportOpts.slow} disabled={busy}
-            onChange={(e) => setExportOpts({ ...exportOpts, slow: e.target.checked })} /> Bản chậm 0.8×</label>
-          <label><input type="checkbox" checked={exportOpts.srt} disabled={busy}
-            onChange={(e) => setExportOpts({ ...exportOpts, srt: e.target.checked })} /> Phụ đề .srt</label>
-        </details>
-        <button onClick={generate} disabled={busy || !project || lineCount === 0}>
-          {busy ? "Đang xử lý..." : "Tạo âm thanh"}
-        </button>
-        {outputStale && output && <span className="stale">cần tạo lại</span>}
-        <span className="path">
-          {filePath || "Chưa mở project"}{dirty ? " • chưa lưu" : ""}
-        </span>
+        <button className="ghost" onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
+        <span className="toolbar-spacer" />
+        <button className="ghost" onClick={undo} disabled={busy || !canUndo} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button>
+        <button className="ghost" onClick={redo} disabled={busy || !canRedo} title="Làm lại (Ctrl+Shift+Z)" aria-label="Làm lại">↷</button>
       </header>
+
       {pasting && (
         <section className="paste-panel">
           <p>Mỗi dòng bắt đầu bằng số vai: <code>1 こんにちは</code>, <code>[2] はい</code>.
@@ -369,7 +350,14 @@ export default function App() {
       )}
 
       {!project ? (
-        <main className="content empty-state">Mở một project.json để bắt đầu.</main>
+        <main className="content empty-state">
+          <p>Mở một dự án (project.json), hoặc bắt đầu từ kịch bản.</p>
+          <div className="empty-actions">
+            <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
+            <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán kịch bản</button>
+            <button className="ghost" onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
+          </div>
+        </main>
       ) : (
         <main className="content">
           <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices}
@@ -381,7 +369,7 @@ export default function App() {
             <div className="section-head">
               <h2>Kịch bản</h2>
               <div>
-                <button className="ghost" onClick={addLine} disabled={busy}>+ Câu thoại</button>
+                <button className="ghost" onClick={addLine} disabled={busy} title="Thêm câu (Ctrl+Enter)">+ Câu thoại</button>
                 <button className="ghost" onClick={addPause} disabled={busy}>+ Nghỉ</button>
               </div>
             </div>
@@ -403,7 +391,7 @@ export default function App() {
 
           {output && (
             <section>
-              <h2>Timeline</h2>
+              <h2>Dòng thời gian</h2>
               {outputStale && (
                 <p className="stale">Bản đầu ra đã cũ so với chỉnh sửa. Bấm "Tạo âm thanh" để cập nhật.</p>
               )}
@@ -418,8 +406,41 @@ export default function App() {
             </section>
           )}
 
-          <pre className="log">{log}</pre>
+          <details className="log-wrap" open={logHasError}>
+            <summary>Nhật ký{log ? ` (${log.trim().split("\n").length} dòng)` : ""}</summary>
+            <pre className="log">{log}</pre>
+          </details>
         </main>
+      )}
+
+      <footer className="actionbar">
+        <div className="status">
+          <span className="path" title={filePath}>
+            {filePath || "Chưa mở dự án"}{dirty ? " • chưa lưu" : ""}
+          </span>
+          <span className="out-root" title={outputRoot}>
+            Thư mục xuất: {outputRoot || "chưa chọn"}
+          </span>
+          <button className="ghost" onClick={chooseOutputRoot} disabled={busy}>Đổi…</button>
+        </div>
+        <div className="actions">
+          {busy && (
+            <span className="progress" role="status">
+              <span className="spinner" aria-hidden="true" />
+              {lastLogLine || "Đang chuẩn bị…"}
+            </span>
+          )}
+          <button className="ghost" onClick={() => setShowExport(true)} disabled={busy}>Tùy chọn xuất…</button>
+          <button className="ghost" onClick={save} disabled={busy || !project || !dirty} title="Lưu (Ctrl+S)">Lưu</button>
+          <button className="primary" onClick={generate} disabled={busy || !project || lineCount === 0}>
+            {busy ? "Đang xử lý…" : "Tạo âm thanh"}
+          </button>
+        </div>
+      </footer>
+
+      {showExport && (
+        <ExportDialog opts={exportOpts} onChange={setExportOpts} disabled={busy}
+          onClose={() => setShowExport(false)} />
       )}
     </div>
   );

@@ -145,6 +145,32 @@ Ghi chú khi triển khai:
 - Nút Record không nằm trong kế hoạch ban đầu. Cần quyết định có làm hay không trước khi thiết kế.
 - Các nhãn tiếng Việt trong ảnh là nháp, sẽ đổi khi làm thật.
 
+## Hướng sửa giao diện (đợt tinh chỉnh)
+
+Danh sách việc cần sửa sau khi rà soát `gui/src`. Đánh dấu `[x]` khi xong.
+
+**Ưu tiên cao: bố cục**
+- [x] 1. Thanh công cụ quá tải: chuyển "Tùy chọn xuất" vào hộp thoại; đưa đường dẫn thư mục xuất xuống thanh trạng thái; thêm nút Hoàn tác/Làm lại.
+- [x] 2. Hành động chính: thanh hành động cố định ở đáy (Nghe thử / Tạo âm thanh / Xuất), theo mockup.
+- [x] 3. Trạng thái trùng: chỉ hiện "cần tạo lại" ở một chỗ.
+- [x] 4. Màn hình trống: hai nút lớn "Mở kịch bản .txt" và "Dán kịch bản".
+- [x] 5. Bảng câu thoại: cho phép xuống dòng ở cột văn bản; ẩn cột ID; rút gọn tiêu đề; tăng vùng bấm của ↑ ↓ ✕; cột cảm xúc/tốc độ hiện chữ "theo vai" khi không ghi đè.
+- [x] 6. Thẻ vai: cảm xúc và tốc độ dùng nút chọn dạng nhóm; thư viện mẫu thu vào mục mở rộng.
+
+**Ưu tiên trung bình**
+- [x] 7. Mixer: thêm vạch chia dB.
+- [x] 8. Timeline: thêm thước thời gian; canvas theo `devicePixelRatio`.
+- [x] 9. Nhật ký: thu gọn được.
+- [x] 10. Tiến trình khi xử lý: thanh tiến trình/spinner và bước hiện tại.
+
+**Ưu tiên thấp: đọc và truy cập**
+- [x] 11. Tăng độ tương phản cho `.muted` và `.hint`.
+- [x] 12. Lỗi/cảnh báo không chỉ dựa vào màu: thêm biểu tượng.
+- [x] 13. Viền focus rõ cho nút và ô nhập (`:focus-visible`).
+- [x] 14. Ghi phím tắt vào tooltip của nút tương ứng.
+
+Thứ tự làm: 1–4, rồi 5–6, rồi 7–14. Mỗi đợt có kiểm thử chạy được bằng `npm test` trong `gui/`.
+
 ## Engine TTS
 
 Chỉ liệt kê engine miễn phí, mã mở, dùng không kinh doanh.

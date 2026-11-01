@@ -4,6 +4,24 @@ import { useEffect, useRef, useState } from "react";
 
 const ROLE_COLORS = { "1": "#4ade80", "2": "#60a5fa", "3": "#c084fc" };
 const DRAG_THRESHOLD_PX = 4;
+const CANVAS_CSS_HEIGHT = 120;
+
+// Thước thời gian: vạch mỗi 2, 10 hoặc 30 giây tùy độ dài.
+function Ruler({ durationMs }) {
+  const totalS = durationMs / 1000;
+  const step = totalS <= 20 ? 2 : totalS <= 120 ? 10 : 30;
+  const ticks = [];
+  for (let s = 0; s <= totalS; s += step) ticks.push(s);
+  return (
+    <div className="ruler" aria-hidden="true">
+      {ticks.map((s) => (
+        <span key={s} style={{ left: `${(s / totalS) * 100}%` }}>
+          {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // Thanh VU: mức của từng vai tại vị trí phát hiện tại.
 function VuMeters({ levels, nowMs, durationMs }) {
@@ -44,6 +62,13 @@ export default function Timeline({ output, onShift, disabled }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    // Bộ nhớ điểm ảnh theo mật độ màn hình (HiDPI) để sóng không bị mờ; kích thước hiển thị do CSS quyết định.
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || 1200;
+    const pxW = Math.round(cssW * dpr);
+    const pxH = Math.round(CANVAS_CSS_HEIGHT * dpr);
+    if (canvas.width !== pxW) canvas.width = pxW;
+    if (canvas.height !== pxH) canvas.height = pxH;
     const { width, height } = canvas;
     ctx.clearRect(0, 0, width, height);
     const toX = (ms) => (ms / duration_ms) * width;
@@ -142,10 +167,11 @@ export default function Timeline({ output, onShift, disabled }) {
         onSeeked={(e) => setNow(e.currentTarget.currentTime * 1000)}
         onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)} />
       <VuMeters levels={role_levels} nowMs={now} durationMs={duration_ms} />
+      <Ruler durationMs={duration_ms} />
       <canvas
         ref={canvasRef}
         width={1200}
-        height={120}
+        height={CANVAS_CSS_HEIGHT}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

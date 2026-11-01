@@ -38,8 +38,8 @@ const AUDIO_EXTS = new Set([".mp3", ".wav"]);
 
 ipcMain.handle("project:open", async () => {
   const res = await dialog.showOpenDialog({
-    title: "Mở project.json",
-    filters: [{ name: "Project", extensions: ["json"] }],
+    title: "Mở dự án (project.json)",
+    filters: [{ name: "Dự án", extensions: ["json"] }],
     properties: ["openFile"],
   });
   if (res.canceled || res.filePaths.length === 0) return null;
@@ -92,7 +92,7 @@ async function createProjectFromScript({ scriptPath, text }) {
     let log = "";
     child.stdout.on("data", (c) => (log += c));
     child.stderr.on("data", (c) => (log += c));
-    child.on("error", (err) => resolve({ code: -1, log: String(err) }));
+    child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
     child.on("close", (code) => resolve({ code, log }));
   });
   if (result.code !== 0) {
@@ -169,7 +169,7 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
     };
     child.stdout.on("data", send);
     child.stderr.on("data", send);
-    child.on("error", (err) => resolve({ code: -1, log: String(err) }));
+    child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
     child.on("close", (code) => resolve({ code, log }));
   });
 });
@@ -185,7 +185,7 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
     let log = "";
     child.stdout.on("data", (c) => (log += c));
     child.stderr.on("data", (c) => (log += c));
-    child.on("error", (err) => resolve({ code: -1, log: String(err) }));
+    child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
     child.on("close", (code) => resolve({ code, log }));
   });
   if (result.code !== 0 || !fs.existsSync(outPath)) {
@@ -196,6 +196,14 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
 });
 
+// Lỗi khi không chạy được tiến trình Python: hiển thị bằng tiếng Việt thay vì thông báo gốc của Node.
+function spawnErrorText(err) {
+  if (err && err.code === "ENOENT") {
+    return `Không tìm thấy Python (${PYTHON}). Hãy cài Python hoặc đặt biến môi trường TEXTTS_PYTHON.`;
+  }
+  return `Không chạy được tiến trình xử lý: ${err?.message ?? err}`;
+}
+
 // Gợi ý cách đọc kanji cho nhiều câu cùng lúc: core.normalize đọc JSON từ stdin.
 ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
   return new Promise((resolve) => {
@@ -204,13 +212,13 @@ ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
     let err = "";
     child.stdout.on("data", (c) => (out += c));
     child.stderr.on("data", (c) => (err += c));
-    child.on("error", (e) => resolve({ ok: false, error: String(e) }));
+    child.on("error", (e) => resolve({ ok: false, error: spawnErrorText(e) }));
     child.on("close", (code) => {
       if (code !== 0) return resolve({ ok: false, error: err.trim() });
       try {
         resolve({ ok: true, items: JSON.parse(out) });
       } catch (e) {
-        resolve({ ok: false, error: String(e) });
+        resolve({ ok: false, error: "Không đọc được kết quả gợi ý cách đọc." });
       }
     });
     child.stdin.end(JSON.stringify(texts));

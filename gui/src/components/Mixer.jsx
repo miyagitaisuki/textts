@@ -1,10 +1,21 @@
 // Mixer: fader dọc cho từng vai (độ lệch dB). Áp dụng khi tạo âm thanh.
 // project.json cũ có thể chưa có gain_db: coi như 0 dB.
+const FADER_MIN = -30;
+const FADER_MAX = 12;
+const DB_TICKS = [12, 0, -10, -20, -30];
+
 export default function Mixer({ roles, onChange, disabled }) {
   return (
     <section className="mixer">
-      <h2>Mixer</h2>
+      <h2>Âm lượng</h2>
       <div className="faders">
+        <div className="fader-scale" aria-hidden="true">
+          {DB_TICKS.map((v) => (
+            <span key={v} style={{ top: `${((FADER_MAX - v) / (FADER_MAX - FADER_MIN)) * 100}%` }}>
+              {v > 0 ? "+" : ""}{v}
+            </span>
+          ))}
+        </div>
         {Object.entries(roles).map(([id, role]) => {
           const gain = role.gain_db ?? 0;
           return (
@@ -13,8 +24,8 @@ export default function Mixer({ roles, onChange, disabled }) {
             <input
               type="range"
               className="vertical"
-              min={-30}
-              max={12}
+              min={FADER_MIN}
+              max={FADER_MAX}
               step={0.5}
               value={gain}
               disabled={disabled}
