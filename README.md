@@ -168,8 +168,8 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là thứ tự thực hiện. Trạng thái cập nhật khi làm xong.
 
 **Sửa lỗi và hạ tầng**
-1. [ ] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (đang ở PR #10).
-2. [ ] CI chạy `pytest` trên GitHub Actions (đang ở PR #10).
+1. [x] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (PR #10, chưa merge).
+2. [x] CI chạy `pytest` trên GitHub Actions (PR #10, chưa merge).
 3. [x] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
 4. [x] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
 
@@ -189,7 +189,7 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 12. [x] Từ điển cách đọc do người dùng quản lý, lưu theo dự án hoặc dùng chung.
 13. [x] Lệnh xem và xóa cache (`--clear-cache`).
 14. [x] Xử lý hàng loạt: một thư mục kịch bản, xuất hết vào một thư mục đầu ra.
-15. [x] Lint kịch bản trong giao diện: vai chưa khai báo, chữ Hán thiếu cách đọc, file sfx không tồn tại.
+15. [x] Lint kịch bản trong giao diện: file sfx không tồn tại, câu trống, chữ Hán thiếu cách đọc (vai chưa khai báo đã bị chặn khi nạp project).
 
 **Theo mockup, chưa làm**
 16. [x] Ghi âm giọng thật làm mẫu (nút Record).
