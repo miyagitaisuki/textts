@@ -1,6 +1,7 @@
 // Tiến trình chính Electron: đọc/ghi project.json và chạy tts.py như tiến trình con.
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
+const { createPathGuard } = require("./guard.cjs");
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
@@ -30,28 +31,9 @@ function createWindow() {
 }
 
 // Chỉ cho phép đọc/ghi trong thư mục của các project đã mở qua hộp thoại.
-// Renderer không được chỉ định đường dẫn tùy ý.
-const allowedDirs = new Set();
+// Renderer không được chỉ định đường dẫn tùy ý (xem electron/guard.cjs).
+const { allowDirOf, assertAllowed } = createPathGuard();
 const AUDIO_EXTS = new Set([".mp3", ".wav"]);
-
-function allowDirOf(filePath) {
-  allowedDirs.add(path.dirname(path.resolve(filePath)));
-}
-
-function isAllowed(filePath, exts) {
-  if (typeof filePath !== "string" || !filePath) return false;
-  const resolved = path.resolve(filePath);
-  if (exts && !exts.has(path.extname(resolved).toLowerCase())) return false;
-  const dir = path.dirname(resolved);
-  return allowedDirs.has(dir);
-}
-
-function assertAllowed(filePath, exts) {
-  if (!isAllowed(filePath, exts)) {
-    throw new Error(`Đường dẫn không được phép: ${filePath}`);
-  }
-  return path.resolve(filePath);
-}
 
 ipcMain.handle("project:open", async () => {
   const res = await dialog.showOpenDialog({

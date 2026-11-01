@@ -1,0 +1,32 @@
+name: GUI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Cài dependency
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+      - name: Kiểm thử guard của Electron
+        run: npm test
+
+      - name: Build renderer
+        run: npm run build

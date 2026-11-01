@@ -198,4 +198,4 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 
 **Hạ tầng bổ sung**
 19. [x] Cấu hình đóng gói Electron (`electron-builder`).
-20. [ ] Test cho renderer và IPC.
+20. [~] Test cho renderer và IPC (đã có test guard IPC và workflow GUI; chưa có test renderer).
