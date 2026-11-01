@@ -1,0 +1,43 @@
+name: Windows build
+
+# Build bộ cài Windows (textts-<phiên bản>-setup.exe) trên runner Windows.
+# Chạy thủ công: Actions → Windows build → Run workflow. File cài đặt nằm trong Artifacts.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: gui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Cài dependency
+        run: npm ci
+
+      - name: Build bộ cài (đóng gói Python, ffmpeg, NSIS)
+        run: npm run dist:win
+
+      - name: Tải lên bộ cài
+        uses: actions/upload-artifact@v4
+        with:
+          name: textts-windows-setup
+          path: |
+            gui/release/*.exe
+            gui/release/*.blockmap
+            gui/release/latest.yml
+          if-no-files-found: error
+          retention-days: 14
