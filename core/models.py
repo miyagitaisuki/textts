@@ -77,7 +77,17 @@ class PauseItem(BaseModel):
     ms: int = Field(ge=0)
 
 
-Item = Annotated[Union[LineItem, PauseItem], Field(discriminator="type")]
+class SfxItem(BaseModel):
+    """Hiệu ứng âm thanh chèn vào đúng vị trí: [sfx=đường/dẫn.wav]."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    type: Literal["sfx"] = "sfx"
+    src_line: int
+    path: str = Field(min_length=1)
+
+
+Item = Annotated[Union[LineItem, PauseItem, SfxItem], Field(discriminator="type")]
 
 
 class Project(BaseModel):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -19,9 +20,18 @@ from pydub import AudioSegment
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from core.audio import loudness_normalize, time_stretch
+from core.audio import add_background, loudness_normalize, peaks, time_stretch
 from core.builder import build, to_srt
-from core.models import Config, LineItem, Project, Role, load_config, load_project, save_project
+from core.models import (
+    Config,
+    LineItem,
+    Project,
+    Role,
+    SfxItem,
+    load_config,
+    load_project,
+    save_project,
+)
 from core.parser import ScriptError, parse_script
 from providers.base import SynthRequest, TTSProvider
 from providers.edge import EdgeProvider
@@ -108,6 +118,9 @@ async def synth_all(
 
 def dry_run(project: Project) -> None:
     for it in project.items:
+        if isinstance(it, SfxItem):
+            print(f"{it.id}  [sfx {it.path}]")
+            continue
         if not isinstance(it, LineItem):
             print(f"{it.id}  [pause {it.ms} ms]")
             continue
@@ -154,6 +167,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="xuất thêm bản chậm 0.8× (giữ cao độ), tên <tên>_slow.<đuôi>")
     ap.add_argument("--export-lines", type=Path, metavar="DIR",
                     help="xuất từng câu thành file riêng để luyện tập")
+    ap.add_argument("--bgm", type=Path, metavar="FILE",
+                    help="nhạc nền lặp lại, trộn dưới lời thoại (mp3/wav/...)")
+    ap.add_argument("--bgm-db", type=float, default=-18.0,
+                    help="độ nhỏ của nhạc nền so với lời thoại, dB (mặc định -18)")
     args = ap.parse_args(argv)
 
     try:
@@ -177,6 +194,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if project.engine not in PROVIDERS:
         print(f"Engine không hỗ trợ: {project.engine}", file=sys.stderr)
+        return 2
+    missing_files = [
+        it.path for it in project.items
+        if isinstance(it, SfxItem) and not Path(it.path).is_file()
+    ]
+    if args.bgm and not args.bgm.is_file():
+        missing_files.append(str(args.bgm))
+    if missing_files:
+        print("Không tìm thấy file âm thanh: " + ", ".join(missing_files), file=sys.stderr)
         return 2
     provider = PROVIDERS[project.engine]()
 
@@ -209,12 +235,18 @@ def main(argv: list[str] | None = None) -> int:
     audio, placed = build(
         [it.model_dump() for it in project.items], project.timing.model_dump()
     )
+    if args.bgm:
+        bgm = AudioSegment.from_file(args.bgm)
+        audio = add_background(audio, bgm, gain_db=args.bgm_db)
     if args.lufs is not None:
         audio = loudness_normalize(audio, args.lufs)
 
     fmt = args.output.suffix.lstrip(".").lower() or "mp3"
     write_audio(audio, args.output, fmt)
     print(f"Đã xuất {args.output} ({len(audio) / 1000:.1f} s, {len(placed)} câu)")
+    timeline_path = args.output.with_name(f"{args.output.stem}.timeline.json")
+    write_timeline(audio, placed, timeline_path)
+    print(f"Đã xuất dữ liệu timeline {timeline_path}")
 
     if args.srt:
         srt_path = args.output.with_suffix(".srt")
@@ -245,6 +277,19 @@ def main(argv: list[str] | None = None) -> int:
 def write_audio(audio, path: Path, fmt: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     audio.export(path, format=fmt)
+
+
+def write_timeline(audio, placed: list[dict], path: Path) -> None:
+    """Vị trí từng câu và dữ liệu sóng, để giao diện vẽ timeline."""
+    data = {
+        "duration_ms": len(audio),
+        "peaks": peaks(audio, bins=600),
+        "items": [
+            {"id": it["id"], "role": it["role"], "start_ms": it["start_ms"], "end_ms": it["end_ms"]}
+            for it in placed
+        ],
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def export_lines(project: Project, out_dir: Path) -> None:

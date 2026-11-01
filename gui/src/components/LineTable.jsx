@@ -21,7 +21,16 @@ export default function LineTable({
       </thead>
       <tbody>
         {items.map((it, idx) =>
-          it.type === "pause" ? (
+          it.type === "sfx" ? (
+            <tr key={it.id} className="sfx">
+              <td>{it.id}</td>
+              <td colSpan={5}>Hiệu ứng: <code>{it.path}</code></td>
+              <td>
+                <RowActions idx={idx} total={items.length} id={it.id}
+                  onMove={onMove} onDelete={onDelete} disabled={disabled} />
+              </td>
+            </tr>
+          ) : it.type === "pause" ? (
             <tr key={it.id} className="pause">
               <td>{it.id}</td>
               <td colSpan={2}>

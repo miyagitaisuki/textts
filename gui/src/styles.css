@@ -34,3 +34,8 @@ audio { width: 100%; }
 .reading { font-size: 14px; }
 .muted { opacity: 0.55; }
 .suggest { display: inline-flex; align-items: center; gap: 6px; }
+.sfx td { opacity: 0.75; }
+.sfx code { font-size: 12px; }
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.timeline canvas { width: 100%; height: 120px; background: #0e1014; border-radius: 6px; cursor: pointer; }
+.legend { display: flex; gap: 10px; font-size: 12px; flex-wrap: wrap; }

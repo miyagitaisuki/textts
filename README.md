@@ -6,7 +6,7 @@ có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
 
 - **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
-- **Giai đoạn 4 (một phần):** VOICEVOX offline, bản chậm 0.8×, xuất từng câu riêng, chuẩn hóa LUFS. Chưa làm: nhạc nền/hiệu ứng, waveform trong giao diện.
+- **Giai đoạn 4 (xong, trừ mixer):** VOICEVOX offline, bản chậm 0.8×, xuất từng câu riêng, chuẩn hóa LUFS, nhạc nền, hiệu ứng `[sfx=...]`, timeline có sóng âm trong giao diện. Chưa làm: fader/VU meter theo vai (mixer).
 - **Giai đoạn 3 (xong):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh, và cột **gợi ý cách đọc** kèm nút "Áp dụng" để ghi `漢字{かな}`.
 
 **Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
@@ -76,6 +76,8 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 - `--lufs`: chuẩn hóa độ to tích hợp. Đoạn im lặng hoàn toàn được giữ nguyên.
 - `--slow`: tạo `bai10_slow.mp3` và `bai10_slow.srt` (thời gian đã co giãn theo tốc độ).
 - `--export-lines DIR`: mỗi câu một file, tên `L001_vai1.mp3`, để luyện nghe và nói theo.
+- `--bgm FILE --bgm-db -18`: trộn nhạc nền lặp lại dưới lời thoại, có fade vào và ra. Nhạc nền do giáo viên cung cấp, dự án không đính kèm.
+- Mỗi lần xuất còn ghi `<tên>.timeline.json` (vị trí từng câu và dữ liệu sóng). Giao diện đọc file này để vẽ timeline sau khi tạo âm thanh.
 
 ## Cú pháp kịch bản
 
@@ -85,6 +87,7 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 | `[2]{emotion=happy, speed=slow} 文` | Ghi đè thuộc tính cho riêng câu này |
 | `漢字{かな}` | Ép cách đọc: hiển thị `漢字`, đọc `かな` |
 | `[pause=1500]` | Khoảng lặng 1500 ms (chuyển cảnh) |
+| `[sfx=sounds/bell.wav]` | Chèn một file hiệu ứng vào đúng vị trí. Đường dẫn tính từ thư mục chạy lệnh |
 | `# ...` | Ghi chú, bỏ qua |
 | Dòng thụt đầu | Nối tiếp vào câu trước |
 
@@ -121,8 +124,8 @@ tests/            unit test: parser, mô hình dữ liệu, cache và thử lạ
 | Nút Record | Ghi âm giọng thật của giáo viên để làm mẫu | Chưa quyết định |
 | Nút Generate Speech / Generate All | Tổng hợp các câu (đã có cache) | 1 (CLI), 3 (giao diện Electron) |
 | Nút Export MP3/WAV | Xuất file, kèm `.srt` | 1 (CLI) |
-| Timeline với sóng âm theo từng vai | Xem và chỉnh thời lượng từng câu | 4 (chưa làm) |
-| Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai | 4 (chưa làm; LUFS đã có trong CLI) |
+| Timeline với sóng âm theo từng vai | Xem vị trí và sóng từng câu, click để tua (chỉ xem, chưa chỉnh) | 4 (đã có) |
+| Mixing (fader theo vai, VU meter) | Chỉnh âm lượng từng vai | Chưa làm (LUFS toàn bài đã có trong CLI) |
 | Settings (bật/tắt tùy chọn) | Bật `.srt`, bản chậm, chuẩn hóa âm lượng... | 2–4 (đã có qua CLI) |
 
 Ghi chú khi triển khai:
@@ -146,4 +149,5 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 - Edge chỉ có 2 giọng ja-JP. Vai 3 trong mẫu dùng chung giọng vai 2 với pitch thấp hơn.
 - Cảm xúc trên Edge chỉ là mô phỏng bằng pitch/rate.
 - Thư mục `docs/ui/` chỉ chứa ảnh tham khảo, không phải giao diện đã làm.
+- `--lufs` có thể làm cắt đỉnh (clipping) khi bài quá nhỏ hoặc nhạc nền quá to. Nếu thấy cảnh báo `Possible clipped samples`, giảm `--bgm-db` hoặc chọn LUFS thấp hơn.
 - Luôn nghe duyệt từng câu trước khi phát cho lớp, đặc biệt các chữ Hán đọc nhiều cách.
