@@ -78,6 +78,11 @@
         "owner": "miyagitaisuki",
         "repo": "textts"
       }
-    ]
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "textts-${version}-setup.${ext}"
+    }
   }
 }
