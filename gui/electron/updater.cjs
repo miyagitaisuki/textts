@@ -11,28 +11,14 @@ const path = require("path");
 const https = require("https");
 const { spawn } = require("child_process");
 
+const { updateErrorText, compareVersions, writeSwapScript } = require("./update-utils.cjs");
+
 const REPO = { owner: "miyagitaisuki", repo: "textts" };
 const RELEASES_URL = `https://github.com/${REPO.owner}/${REPO.repo}/releases`;
 
 // Chuyển lỗi kỹ thuật thành câu tiếng Việt cho người dùng cuối.
-function updateErrorText(err) {
-  const msg = err?.message ?? String(err);
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|net::|network/i.test(msg)) {
-    return "Không kết nối được tới GitHub. Kiểm tra mạng rồi thử lại.";
-  }
-  return `Không kiểm tra được cập nhật: ${msg}`;
-}
 
 // So sánh phiên bản theo số chính, phụ, vá: "newer" | "same" | "older".
-function compareVersions(a, b) {
-  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) > (pb[i] ?? 0)) return "newer";
-    if ((pa[i] ?? 0) < (pb[i] ?? 0)) return "older";
-  }
-  return "same";
-}
 
 // Tải file theo chuyển hướng của GitHub (302 tới objects.githubusercontent.com).
 function download(url, dest, onProgress, redirects = 5) {
@@ -68,20 +54,6 @@ function download(url, dest, onProgress, redirects = 5) {
 }
 
 // Script .bat: đợi tiến trình hiện tại thoát, chép đè exe, mở lại, rồi tự xóa.
-function writeSwapScript(newExe, targetExe, pid) {
-  const script = path.join(os.tmpdir(), `textts-update-${pid}.bat`);
-  fs.writeFileSync(script, [
-    "@echo off",
-    ":wait",
-    `tasklist /FI "PID eq ${pid}" 2>nul | find "${pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)`,
-    ":copy",
-    `copy /Y "${newExe}" "${targetExe}" >nul 2>&1 || (timeout /t 1 /nobreak >nul & goto copy)`,
-    `start "" "${targetExe}"`,
-    `del "${newExe}" >nul 2>&1`,
-    `del "%~f0" >nul 2>&1`,
-  ].join("\r\n"));
-  return script;
-}
 
 let pendingUpdate = null; // {version, url, file} sau khi đã tải xong
 let busy = false;
@@ -156,4 +128,4 @@ function setupUpdater(win, log = () => {}) {
   });
 }
 
-module.exports = { setupUpdater, checkNow, compareVersions, updateErrorText, writeSwapScript };
+module.exports = { setupUpdater, checkNow };

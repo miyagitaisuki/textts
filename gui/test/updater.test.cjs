@@ -1,7 +1,7 @@
 // Kiểm thử hàm thuần của bộ tự cập nhật (không cần Electron chạy thật).
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { compareVersions, updateErrorText } = require("../electron/updater.cjs");
+const { compareVersions, updateErrorText } = require("../electron/update-utils.cjs");
 
 test("so sánh phiên bản theo số chính, phụ, vá", () => {
   assert.equal(compareVersions("0.2.0", "0.1.9"), "newer");
@@ -18,7 +18,7 @@ test("lỗi mạng hiển thị bằng tiếng Việt", () => {
 
 test("script thay exe đợi tiến trình cũ thoát rồi chép đè và mở lại", () => {
   const fs = require("node:fs");
-  const { writeSwapScript } = require("../electron/updater.cjs");
+  const { writeSwapScript } = require("../electron/update-utils.cjs");
   const script = writeSwapScript("C:\\tmp\\new.exe", "C:\\apps\\textts.exe", 4242);
   const text = fs.readFileSync(script, "utf-8");
   fs.rmSync(script, { force: true });
