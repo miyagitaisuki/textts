@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
-from core.builder import build, to_srt
+from core.builder import build, practice_items, to_srt
 from core.models import (
     Config,
     LineItem,
@@ -33,6 +33,7 @@ from core.models import (
     save_project,
 )
 from core.parser import ScriptError, parse_script
+from core.worksheet import worksheet_html
 from providers.base import SynthRequest, TTSProvider
 from providers.edge import VOICES as EDGE_VOICES
 from providers.edge import EdgeProvider
@@ -174,6 +175,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lufs", type=float, metavar="LUFS", help="chuẩn hóa độ to về mức LUFS, ví dụ -16")
     ap.add_argument("--slow", action="store_true",
                     help="xuất thêm bản chậm 0.8× (giữ cao độ), tên <tên>_slow.<đuôi>")
+    ap.add_argument("--role-play", metavar="VAI",
+                    help="bản luyện nói: chỉ giữ lời vai này, các vai khác thành khoảng lặng")
+    ap.add_argument("--shadow", action="store_true",
+                    help="bản shadowing: sau mỗi câu luyện tập chèn khoảng lặng để nhắc lại")
+    ap.add_argument("--shadow-gap", type=int, default=1500, metavar="MS",
+                    help="khoảng lặng thêm sau mỗi câu khi dùng --shadow (mặc định 1500 ms)")
+    ap.add_argument("--worksheet", type=Path, metavar="FILE.html",
+                    help="xuất phiếu học tập HTML có furigana (không cần tạo âm thanh)")
     ap.add_argument("--export-lines", type=Path, metavar="DIR",
                     help="xuất từng câu thành file riêng để luyện tập")
     ap.add_argument("--bgm", type=Path, metavar="FILE",
@@ -204,6 +213,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.save_project:
         save_project(project, args.save_project)
         print(f"Đã lưu {args.save_project}")
+
+    if args.worksheet:
+        args.worksheet.parent.mkdir(parents=True, exist_ok=True)
+        args.worksheet.write_text(
+            worksheet_html(project.title, [it.model_dump() for it in project.items]),
+            encoding="utf-8",
+        )
+        print(f"Đã xuất phiếu học tập {args.worksheet}")
+        if args.dry_run or not args.output:
+            return 0
 
     if args.dry_run or not args.output:
         dry_run(project)
@@ -257,11 +276,20 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(it, SfxItem) else it.model_dump()
         for it in project.items
     ]
-    audio, placed = build(
-        build_items,
-        project.timing.model_dump(),
-        role_gains={k: r.gain_db for k, r in project.roles.items()},
-    )
+    gains = {k: r.gain_db for k, r in project.roles.items()}
+    timing = project.timing.model_dump()
+    audio, placed = build(build_items, timing, role_gains=gains)
+    if args.role_play or args.shadow:
+        if args.role_play and args.role_play not in project.roles:
+            print(f"Không có vai {args.role_play} trong project", file=sys.stderr)
+            return 2
+        shadow_gap = args.shadow_gap if args.shadow else None
+        audio, placed = build(
+            practice_items(build_items, placed,
+                           practice_role=args.role_play, shadow_gap_ms=shadow_gap),
+            timing,
+            role_gains=gains,
+        )
     if args.bgm:
         bgm = AudioSegment.from_file(args.bgm)
         audio = add_background(audio, bgm, gain_db=args.bgm_db)

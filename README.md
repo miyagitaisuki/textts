@@ -80,6 +80,10 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 - Mixer: mỗi vai có `gain_db` trong `roles.yaml`/`project.json` (từ -30 đến +12 dB), áp dụng khi tạo âm thanh. Lưu ý: nghe thử một câu (`▶ Nghe`) không áp dụng mixer, chỉ bản đầu ra mới có.
 - Kéo thả trên timeline: kéo một câu sang phải để dời nó về phía sau, lưu vào `delay_ms` của câu. Câu sau nó cũng dịch theo. Không kéo được về trước; muốn rút ngắn khoảng nghỉ thì giảm `[pause=...]` phía trước. Sau khi kéo, giao diện báo "bản đầu ra đã cũ" cho đến khi bấm "Tạo âm thanh".
 - VU meter: thanh mức của từng vai đặt trên timeline, chạy theo vị trí phát (và cập nhật khi tua). Mức được tính sẵn trong `timeline.json` (`role_levels`) từ bản đầu ra cuối cùng, nên đã gồm mixer, nhạc nền và LUFS. Thang đo từ −60 dB đến 0 dBFS.
+- `--role-play VAI`: bản luyện nói. Chỉ giữ lời vai đó, các vai khác thành khoảng lặng cùng độ dài. Học viên đóng vai và nói theo.
+- `--shadow [--shadow-gap MS]`: bản shadowing. Sau mỗi câu luyện tập chèn khoảng lặng (mặc định 1500 ms) để học viên nhắc lại. Kết hợp được với `--role-play`.
+- `--worksheet FILE.html`: phiếu học tập có furigana (`<ruby>`), mở bằng trình duyệt rồi in. Không cần tạo âm thanh. Chữ Hán có `{かな}` dùng đúng cách đọc đó, phần còn lại chú âm tự động bằng pyopenjtalk.
+- `--list-voices {edge,voicevox}`: in danh sách giọng dạng JSON (giao diện dùng để điền danh sách chọn).
 - `--bgm FILE --bgm-db -18`: trộn nhạc nền lặp lại dưới lời thoại, có fade vào và ra. Nhạc nền do giáo viên cung cấp, dự án không đính kèm.
 - Mỗi lần xuất còn ghi `<tên>.timeline.json` (vị trí từng câu và dữ liệu sóng). Giao diện đọc file này để vẽ timeline sau khi tạo âm thanh.
 
@@ -173,9 +177,9 @@ Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là t
 8. [x] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
 
 **Đầu ra cho lớp học**
-9. [ ] Chế độ luyện nói theo vai (role-play): chỉ vai người học có tiếng, vai còn lại thành khoảng lặng.
-10. [ ] Chế độ shadowing: sau mỗi câu chèn khoảng lặng để học viên nhắc lại.
-11. [ ] Xuất phiếu học tập HTML có furigana (`<ruby>`).
+9. [x] Chế độ luyện nói theo vai (role-play): chỉ vai người học có tiếng, vai còn lại thành khoảng lặng.
+10. [x] Chế độ shadowing: sau mỗi câu chèn khoảng lặng để học viên nhắc lại.
+11. [x] Xuất phiếu học tập HTML có furigana (`<ruby>`).
 
 **Tiện ích**
 12. [ ] Từ điển cách đọc do người dùng quản lý, lưu theo dự án hoặc dùng chung.
