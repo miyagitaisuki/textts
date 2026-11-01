@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("textts", {
   openProject: () => ipcRenderer.invoke("project:open"),
   openScript: () => ipcRenderer.invoke("script:open"),
+  listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
   saveProject: (filePath, data) => ipcRenderer.invoke("project:save", { filePath, data }),
   generate: (projectPath, outputPath) =>
     ipcRenderer.invoke("tts:generate", { projectPath, outputPath }),

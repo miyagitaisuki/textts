@@ -34,8 +34,9 @@ from core.models import (
 )
 from core.parser import ScriptError, parse_script
 from providers.base import SynthRequest, TTSProvider
+from providers.edge import VOICES as EDGE_VOICES
 from providers.edge import EdgeProvider
-from providers.voicevox import VoicevoxProvider
+from providers.voicevox import VoicevoxProvider, list_speakers
 
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
@@ -158,11 +159,13 @@ def project_from_script(script: Path, cfg: Config) -> Project:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="TTS hội thoại tiếng Nhật")
-    src = ap.add_mutually_exclusive_group(required=True)
+    src = ap.add_mutually_exclusive_group()
     src.add_argument("script", nargs="?", type=Path, help="file kịch bản .txt")
     src.add_argument("--project", type=Path, help="đọc project.json đã lưu")
     ap.add_argument("-o", "--output", type=Path, help="file đầu ra (.mp3 hoặc .wav)")
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
+    ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
+                    help="in danh sách giọng của engine dạng JSON (edge hoặc voicevox) rồi thoát")
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
     ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
@@ -178,6 +181,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bgm-db", type=float, default=-18.0,
                     help="độ nhỏ của nhạc nền so với lời thoại, dB (mặc định -18)")
     args = ap.parse_args(argv)
+
+    if args.list_voices:
+        if args.list_voices == "voicevox":
+            voices = asyncio.run(list_speakers())
+        else:
+            voices = [{"value": v, "label": v} for v in EDGE_VOICES]
+        print(json.dumps(voices, ensure_ascii=False))
+        return 0
+    if not (args.script or args.project):
+        ap.error("cần truyền kịch bản .txt hoặc --project")
 
     try:
         if args.project:

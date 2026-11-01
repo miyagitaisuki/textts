@@ -21,6 +21,7 @@ export default function App() {
   const [output, setOutput] = useState(null);
   const [outputStale, setOutputStale] = useState(false);
   const [errorIds, setErrorIds] = useState([]);
+  const [voices, setVoices] = useState([]);
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -64,6 +65,7 @@ export default function App() {
 
   function applyProject(res) {
     setProject(res.data);
+    window.textts.listVoices(res.data.engine).then(setVoices);
     setFilePath(res.filePath);
     setDirty(false);
     setSelectedId(null);
@@ -198,7 +200,7 @@ export default function App() {
         <main className="content empty-state">Mở một project.json để bắt đầu.</main>
       ) : (
         <main className="content">
-          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} />
+          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices} />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>

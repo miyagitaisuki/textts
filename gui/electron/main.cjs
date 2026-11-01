@@ -93,6 +93,24 @@ ipcMain.handle("script:open", async () => {
   return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 });
 
+// Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
+ipcMain.handle("voices:list", async (_evt, { engine }) => {
+  if (!["edge", "voicevox"].includes(engine)) return [];
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, [TTS_CLI, "--list-voices", engine], { cwd: REPO_ROOT });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", () => resolve([]));
+    child.on("close", (code) => {
+      try {
+        resolve(code === 0 ? JSON.parse(out) : []);
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
+
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   const target = assertAllowed(filePath, new Set([".json"]));
   fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");

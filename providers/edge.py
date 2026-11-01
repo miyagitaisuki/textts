@@ -8,6 +8,9 @@ import edge_tts
 
 from providers.base import SynthRequest, TTSProvider
 
+# Hai giọng ja-JP của Edge-TTS (dùng cho danh sách chọn giọng trong giao diện).
+VOICES = ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"]
+
 SPEED_PCT = {"slow": -20, "normal": 0, "fast": 15}
 
 # emotion -> (pitch Hz, rate %) cộng thêm vào cấu hình vai
