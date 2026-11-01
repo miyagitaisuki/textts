@@ -47,6 +47,12 @@ PROVIDERS: dict[str, type[TTSProvider]] = {
 }
 
 
+def sfx_path(path: str, base: Path) -> Path:
+    """Đường dẫn sfx tương đối được tính từ thư mục chứa kịch bản/project.json."""
+    p = Path(path)
+    return p if p.is_absolute() else base / p
+
+
 def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
     """Gộp cấu hình vai với thuộc tính ghi riêng ở câu (câu thắng)."""
     role = roles[item.role]
@@ -195,9 +201,10 @@ def main(argv: list[str] | None = None) -> int:
     if project.engine not in PROVIDERS:
         print(f"Engine không hỗ trợ: {project.engine}", file=sys.stderr)
         return 2
+    base = (args.script or args.project).resolve().parent
     missing_files = [
-        it.path for it in project.items
-        if isinstance(it, SfxItem) and not Path(it.path).is_file()
+        str(sfx_path(it.path, base)) for it in project.items
+        if isinstance(it, SfxItem) and not sfx_path(it.path, base).is_file()
     ]
     if args.bgm and not args.bgm.is_file():
         missing_files.append(str(args.bgm))
@@ -232,8 +239,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Đã xuất câu {args.preview} ra {args.output}")
         return 0
 
+    build_items = [
+        {**it.model_dump(), "path": str(sfx_path(it.path, base))}
+        if isinstance(it, SfxItem) else it.model_dump()
+        for it in project.items
+    ]
     audio, placed = build(
-        [it.model_dump() for it in project.items],
+        build_items,
         project.timing.model_dump(),
         role_gains={k: r.gain_db for k, r in project.roles.items()},
     )

@@ -91,7 +91,7 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 | `[2]{emotion=happy, speed=slow} 文` | Ghi đè thuộc tính cho riêng câu này |
 | `漢字{かな}` | Ép cách đọc: hiển thị `漢字`, đọc `かな` |
 | `[pause=1500]` | Khoảng lặng 1500 ms (chuyển cảnh) |
-| `[sfx=sounds/bell.wav]` | Chèn một file hiệu ứng vào đúng vị trí. Đường dẫn tính từ thư mục chạy lệnh |
+| `[sfx=sounds/bell.wav]` | Chèn một file hiệu ứng vào đúng vị trí. Đường dẫn tương đối tính từ thư mục chứa kịch bản (hoặc `project.json`) |
 | `# ...` | Ghi chú, bỏ qua |
 | Dòng thụt đầu | Nối tiếp vào câu trước |
 
@@ -163,7 +163,7 @@ Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là t
 **Sửa lỗi và hạ tầng**
 1. [ ] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (đang ở PR #10).
 2. [ ] CI chạy `pytest` trên GitHub Actions (đang ở PR #10).
-3. [ ] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
+3. [x] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
 4. [ ] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
 
 **Giao diện biên tập**
