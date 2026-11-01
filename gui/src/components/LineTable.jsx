@@ -1,5 +1,5 @@
 // Bảng câu thoại: sửa chữ, vai, cảm xúc/tốc độ riêng của câu; thêm, xóa, đổi thứ tự, nghe thử.
-import { EMOTIONS, SPEEDS } from "./RolePanel.jsx";
+import { EMOTIONS, SPEEDS, EMOTION_LABELS, SPEED_LABELS } from "./RolePanel.jsx";
 import { indexIssues } from "../lib/library.js";
 
 const ROLE_IDS = ["1", "2", "3"];
@@ -79,19 +79,19 @@ export default function LineTable({
                 <select className={it.attrs?.emotion ? "" : "inherit"} value={it.attrs?.emotion ?? ""} disabled={disabled}
                   onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "emotion", e.target.value) })}>
                   <option value="">theo vai</option>
-                  {EMOTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {EMOTIONS.map((v) => <option key={v} value={v}>{EMOTION_LABELS[v]}</option>)}
                 </select>
               </td>
               <td>
                 <select className={it.attrs?.speed ? "" : "inherit"} value={it.attrs?.speed ?? ""} disabled={disabled}
                   onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "speed", e.target.value) })}>
                   <option value="">theo vai</option>
-                  {SPEEDS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {SPEEDS.map((v) => <option key={v} value={v}>{SPEED_LABELS[v]}</option>)}
                 </select>
               </td>
               <td>
                 <button className="ghost" disabled={disabled}
-                  onClick={(e) => { e.stopPropagation(); onPreview(it.id); }}>▶ Nghe</button>
+                  onClick={(e) => { e.stopPropagation(); onPreview(it.id); }}>▶ Nghe thử</button>
                 <RowActions idx={idx} total={items.length} id={it.id}
                   onMove={onMove} onDelete={onDelete} disabled={disabled} />
               </td>

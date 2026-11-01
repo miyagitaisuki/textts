@@ -4,8 +4,8 @@ import { useState } from "react";
 export const VOICES = ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"];
 export const EMOTIONS = ["neutral", "happy", "sad", "angry", "surprised"];
 export const SPEEDS = ["slow", "normal", "fast"];
-const EMOTION_LABELS = { neutral: "Thường", happy: "Vui", sad: "Buồn", angry: "Giận", surprised: "Ngạc nhiên" };
-const SPEED_LABELS = { slow: "Chậm", normal: "Thường", fast: "Nhanh" };
+export const EMOTION_LABELS = { neutral: "Trung tính", happy: "Vui", sad: "Buồn", angry: "Giận", surprised: "Ngạc nhiên" };
+export const SPEED_LABELS = { slow: "Chậm", normal: "Thường", fast: "Nhanh" };
 
 // Nhóm nút chọn một giá trị (thay cho dropdown): dễ bấm, thấy ngay lựa chọn hiện tại.
 function Segmented({ label, options, labels, value, disabled, onChange }) {

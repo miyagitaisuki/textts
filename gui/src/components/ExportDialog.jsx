@@ -23,7 +23,7 @@ export default function ExportDialog({ opts, onChange, disabled, onClose }) {
             <option value="wav">WAV</option>
           </select>
         </label>
-        <label>LUFS (để trống = không chuẩn hóa)
+        <label>Độ to chuẩn hóa LUFS (để trống = không chuẩn hóa)
           <input type="number" step="0.5" value={opts.lufs} disabled={disabled}
             placeholder="-16"
             onChange={(e) => set({ lufs: e.target.value })} />

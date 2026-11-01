@@ -7,7 +7,7 @@ const DB_TICKS = [12, 0, -10, -20, -30];
 export default function Mixer({ roles, onChange, disabled }) {
   return (
     <section className="mixer">
-      <h2>Mixer</h2>
+      <h2>Âm lượng</h2>
       <div className="faders">
         <div className="fader-scale" aria-hidden="true">
           {DB_TICKS.map((v) => (

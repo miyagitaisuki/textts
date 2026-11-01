@@ -137,7 +137,7 @@ export default function App() {
     if (lines.length === 0) return setSuggestions({});
     const res = await window.textts.suggestReadings(lines.map((it) => it.display));
     if (!res.ok) {
-      setLog((prev) => prev + `\n[gợi ý cách đọc lỗi]\n${res.error}\n`);
+      setLog((prev) => prev + `\nLỗi khi lấy gợi ý cách đọc:\n${res.error}\n`);
       return;
     }
     const map = {};
@@ -297,7 +297,7 @@ export default function App() {
     const res = await window.textts.preview(filePath, id);
     setBusy(false);
     if (res.ok) setPreviewUrl(res.dataUrl);
-    else setLog((prev) => prev + `\n[nghe thử lỗi]\n${res.error}\n`);
+    else setLog((prev) => prev + `\nLỗi khi nghe thử:\n${res.error}\n`);
   }
 
   async function generate() {
@@ -310,7 +310,7 @@ export default function App() {
     const res = await window.textts.generate(filePath, outputPath, {
       lufs, slow: exportOpts.slow, srt: exportOpts.srt,
     });
-    setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
+    setLog((prev) => prev + `\n${res.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res.code})`);
     // Dòng lỗi có dạng "  - L002 (dòng 5): ...": đánh dấu và cuộn tới câu lỗi đầu tiên.
     const failed = [...res.log.matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
     setErrorIds(failed);
@@ -391,7 +391,7 @@ export default function App() {
 
           {output && (
             <section>
-              <h2>Timeline</h2>
+              <h2>Dòng thời gian</h2>
               {outputStale && (
                 <p className="stale">Bản đầu ra đã cũ so với chỉnh sửa. Bấm "Tạo âm thanh" để cập nhật.</p>
               )}

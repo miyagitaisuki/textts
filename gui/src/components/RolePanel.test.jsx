@@ -60,7 +60,7 @@ describe("RolePanel segmented controls", () => {
     render(<RolePanel roles={ROLES} onChange={onChange} disabled={false} voices={[]} />);
     const group = screen.getByRole("group", { name: "Cảm xúc" });
     const pressed = () => within(group).getByRole("button", { pressed: true }).textContent;
-    expect(pressed()).toBe("Thường");
+    expect(pressed()).toBe("Trung tính");
     fireEvent.click(within(group).getByRole("button", { name: "Vui" }));
     expect(onChange).toHaveBeenCalledWith("1", { emotion: "happy" });
   });
