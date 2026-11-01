@@ -20,6 +20,8 @@ pip install -r requirements.txt
 ffmpeg -version
 ```
 
+Bản GUI (`textts-<phiên bản>-setup.exe`) đã đi kèm Python embeddable, các thư viện trong `requirements.txt` và `ffmpeg.exe`, nên người dùng chỉ cần chạy bộ cài, không cần cài Python hay pip. Khi build bộ cài trên Windows, `npm run dist:win` tự chạy `gui/scripts/bundle-python.ps1` để chuẩn bị phần này (cần kết nối mạng). Khi chạy dev (`npm run dev`), app dùng Python hệ thống hoặc biến `TEXTTS_PYTHON`.
+
 ## Dùng
 
 ```bash

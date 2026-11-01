@@ -8,6 +8,8 @@ const os = require("os");
 const { spawn } = require("child_process");
 const updater = require("./updater.cjs");
 const logger = require("./logger.cjs");
+const { friendlyPythonError } = require("./python-errors.cjs");
+const { resolvePython, buildChildEnv } = require("./runtime.cjs");
 const { buildMenu } = require("./menu.cjs");
 
 logger.installCrashHandlers();
@@ -17,8 +19,15 @@ const REPO_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, "engine")
   : path.resolve(__dirname, "..", "..");
 const TTS_CLI = path.join(REPO_ROOT, "tts.py");
-// Windows thường có lệnh "python" (không có "python3"); các hệ điều hành khác dùng "python3".
-const PYTHON = process.env.TEXTTS_PYTHON || (process.platform === "win32" ? "python" : "python3");
+// Bản đóng gói trên Windows dùng Python và ffmpeg đi kèm (xem runtime.cjs); chạy dev dùng Python hệ thống.
+const runtimeOpts = {
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  platform: process.platform,
+  exists: fs.existsSync,
+};
+const PYTHON = resolvePython({ env: process.env, ...runtimeOpts });
+const CHILD_ENV = buildChildEnv({ env: process.env, ...runtimeOpts });
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -110,7 +119,7 @@ async function createProjectFromScript({ scriptPath, text }) {
 
   const result = await new Promise((resolve) => {
     const args = [TTS_CLI, source, "--save-project", filePath, "--dry-run", "--resolve-sfx"];
-    const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
     child.stdout.on("data", (c) => (log += c));
     child.stderr.on("data", (c) => (log += c));
@@ -120,7 +129,7 @@ async function createProjectFromScript({ scriptPath, text }) {
   if (result.code !== 0) {
     fs.rmSync(projectDir, { recursive: true, force: true }); // dự án chưa hợp lệ thì bỏ thư mục vừa tạo
     logger.log("ERROR", `Phân tích kịch bản thất bại (mã ${result.code}): ${result.log.trim().slice(0, 2000)}`);
-    return { error: result.log.trim() || "Không phân tích được kịch bản" };
+    return { error: friendlyPythonError(result.log, PYTHON) || "Không phân tích được kịch bản" };
   }
   allowDirOf(filePath);
   return { filePath, projectDir, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
@@ -183,7 +192,7 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
   if (options.slow) args.push("--slow");
   if (options.srt) args.push("--srt");
   return new Promise((resolve) => {
-    const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
     const send = (chunk) => {
       const text = chunk.toString("utf-8");
@@ -208,7 +217,7 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   const outPath = path.join(os.tmpdir(), `textts-preview-${lineId}-${Date.now()}.mp3`);
   const args = [TTS_CLI, "--project", proj, "--preview", lineId, "-o", outPath];
   const result = await new Promise((resolve) => {
-    const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
     child.stdout.on("data", (c) => (log += c));
     child.stderr.on("data", (c) => (log += c));
@@ -236,14 +245,14 @@ function spawnErrorText(err) {
 // Gợi ý cách đọc kanji cho nhiều câu cùng lúc: core.normalize đọc JSON từ stdin.
 ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
   return new Promise((resolve) => {
-    const child = spawn(PYTHON, ["-m", "core.normalize"], { cwd: REPO_ROOT });
+    const child = spawn(PYTHON, ["-m", "core.normalize"], { cwd: REPO_ROOT, env: CHILD_ENV });
     let out = "";
     let err = "";
     child.stdout.on("data", (c) => (out += c));
     child.stderr.on("data", (c) => (err += c));
     child.on("error", (e) => resolve({ ok: false, error: spawnErrorText(e) }));
     child.on("close", (code) => {
-      if (code !== 0) return resolve({ ok: false, error: err.trim() });
+      if (code !== 0) return resolve({ ok: false, error: friendlyPythonError(err, PYTHON) });
       try {
         resolve({ ok: true, items: JSON.parse(out) });
       } catch (e) {
