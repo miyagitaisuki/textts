@@ -7,6 +7,10 @@ const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
 const updater = require("./updater.cjs");
+const logger = require("./logger.cjs");
+const { buildMenu } = require("./menu.cjs");
+
+logger.installCrashHandlers();
 
 // Khi đóng gói, tts.py và core/ nằm trong resources/engine (xem "build.extraResources" trong package.json).
 const REPO_ROOT = app.isPackaged
@@ -26,6 +30,9 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  win.webContents.on("render-process-gone", (_e, details) => {
+    logger.log("ERROR", `Trình kết xuất dừng bất ngờ: ${details.reason} (mã ${details.exitCode})`);
+  });
   if (!app.isPackaged) {
     win.loadURL("http://localhost:5173"); // vite dev server (npm run dev)
   } else {
@@ -35,9 +42,15 @@ function createWindow() {
 }
 
 // Kiểm tra cập nhật bấm tay từ thanh công cụ.
+let mainWindow = null;
+function sendUpdateLog(text) {
+  logger.log("INFO", `[cập nhật] ${text}`);
+  mainWindow?.webContents.send("tts:log", `${text}\n`);
+}
+
 ipcMain.handle("update:check", async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
-  return updater.checkNow(win, (text) => evt.sender.send("tts:log", `${text}\n`));
+  return updater.checkNow(win, (text) => sendUpdateLog(text));
 });
 
 // Chỉ cho phép đọc/ghi trong thư mục của các project đã mở qua hộp thoại.
@@ -106,6 +119,7 @@ async function createProjectFromScript({ scriptPath, text }) {
   });
   if (result.code !== 0) {
     fs.rmSync(projectDir, { recursive: true, force: true }); // dự án chưa hợp lệ thì bỏ thư mục vừa tạo
+    logger.log("ERROR", `Phân tích kịch bản thất bại (mã ${result.code}): ${result.log.trim().slice(0, 2000)}`);
     return { error: result.log.trim() || "Không phân tích được kịch bản" };
   }
   allowDirOf(filePath);
@@ -179,7 +193,11 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
     child.stdout.on("data", send);
     child.stderr.on("data", send);
     child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
-    child.on("close", (code) => resolve({ code, log }));
+    child.on("close", (code) => {
+      logger.log(code === 0 ? "INFO" : "ERROR", `Tạo âm thanh kết thúc (mã ${code}), project: ${path.basename(proj)}`);
+      if (code !== 0) logger.log("ERROR", log.trim().slice(-2000));
+      resolve({ code, log });
+    });
   });
 });
 
@@ -198,6 +216,7 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
     child.on("close", (code) => resolve({ code, log }));
   });
   if (result.code !== 0 || !fs.existsSync(outPath)) {
+    logger.log("ERROR", `Nghe thử ${lineId} thất bại (mã ${result.code}): ${result.log.trim().slice(0, 2000)}`);
     return { ok: false, error: result.log.trim() || "Không tạo được bản nghe thử" };
   }
   const b64 = fs.readFileSync(outPath).toString("base64");
@@ -207,6 +226,7 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
 
 // Lỗi khi không chạy được tiến trình Python: hiển thị bằng tiếng Việt thay vì thông báo gốc của Node.
 function spawnErrorText(err) {
+  logger.log("ERROR", `Không chạy được tiến trình (${PYTHON}): ${err?.code ?? ""} ${err?.message ?? err}`);
   if (err && err.code === "ENOENT") {
     return `Không tìm thấy Python (${PYTHON}). Hãy cài Python hoặc đặt biến môi trường TEXTTS_PYTHON.`;
   }
@@ -249,9 +269,15 @@ ipcMain.handle("output:load", async (_evt, { audioPath }) => {
 });
 
 app.whenReady().then(() => {
+  logger.log("INFO", `Khởi động textts ${app.getVersion()} trên ${process.platform}`);
   const win = createWindow();
+  mainWindow = win;
+  buildMenu({
+    getWindow: () => mainWindow,
+    onCheckUpdates: () => updater.checkNow(mainWindow, (text) => sendUpdateLog(text)).then((r) => sendUpdateLog(r.message)),
+  });
   // Tự kiểm tra bản mới khi mở app; thông báo lỗi (nếu có) đưa vào nhật ký giao diện.
-  updater.setupUpdater(win, (text) => win.webContents.send("tts:log", `${text}\n`));
+  updater.setupUpdater(win, (text) => sendUpdateLog(text));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
