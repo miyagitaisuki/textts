@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("textts", {
   openProject: () => ipcRenderer.invoke("project:open"),
   openScript: () => ipcRenderer.invoke("script:open"),
   listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
+  loadPresets: () => ipcRenderer.invoke("presets:load"),
+  savePresets: (presets) => ipcRenderer.invoke("presets:save", { presets }),
   lint: (projectPath) => ipcRenderer.invoke("lint:check", { projectPath }),
   saveRecording: (projectPath, roleId, base64) =>
     ipcRenderer.invoke("recording:save", { projectPath, roleId, base64 }),

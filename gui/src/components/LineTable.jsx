@@ -1,5 +1,6 @@
 // Bảng câu thoại: sửa chữ, vai, cảm xúc/tốc độ riêng của câu; thêm, xóa, đổi thứ tự, nghe thử.
 import { EMOTIONS, SPEEDS } from "./RolePanel.jsx";
+import { indexIssues } from "../lib/library.js";
 
 const ROLE_IDS = ["1", "2", "3"];
 
@@ -7,13 +8,7 @@ export default function LineTable({
   items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, suggestions, onApply, disabled,
   errorIds = [], issues = [],
 }) {
-  // Gộp các cảnh báo/lỗi kiểm tra theo mã câu: mức nặng nhất thắng.
-  const issueOf = {};
-  for (const i of issues) {
-    const prev = issueOf[i.id];
-    if (!prev || i.level === "error") issueOf[i.id] = i;
-    else if (prev.level === "warning" && i.level === "warning") issueOf[i.id] = { ...prev, message: `${prev.message}; ${i.message}` };
-  }
+  const issueOf = indexIssues(issues);
   return (
     <table className="lines">
       <thead>

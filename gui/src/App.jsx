@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, patchFromPreset, removePreset, upsertPreset } from "./lib/library.js";
 import RolePanel from "./components/RolePanel.jsx";
 import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
@@ -28,7 +29,29 @@ export default function App() {
   const [errorIds, setErrorIds] = useState([]);
   const [voices, setVoices] = useState([]);
   const [issues, setIssues] = useState([]);
-  const [exportOpts, setExportOpts] = useState({ format: "mp3", lufs: "", slow: false, srt: false });
+  // Cài đặt xuất được nhớ trong máy (localStorage) và dùng làm mặc định lần sau.
+  const [exportOpts, setExportOpts] = useState(() => loadSettings(window.localStorage));
+  const [presets, setPresets] = useState([]);
+
+  useEffect(() => {
+    saveSettings(window.localStorage, exportOpts);
+  }, [exportOpts]);
+
+  useEffect(() => {
+    window.textts.loadPresets().then(setPresets);
+  }, []);
+
+  function persistPresets(next) {
+    setPresets(next);
+    window.textts.savePresets(next);
+  }
+
+  const library = {
+    presets,
+    onSave: (name, role) => persistPresets(upsertPreset(presets, name, role)),
+    onRemove: (name) => persistPresets(removePreset(presets, name)),
+    onApply: (roleId, preset) => patchRole(roleId, patchFromPreset(preset)),
+  };
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -259,7 +282,7 @@ export default function App() {
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
         <details className="export-opts">
-          <summary>Tùy chọn xuất</summary>
+          <summary>Tùy chọn xuất (nhớ làm mặc định)</summary>
           <label>Định dạng
             <select value={exportOpts.format} disabled={busy}
               onChange={(e) => setExportOpts({ ...exportOpts, format: e.target.value })}>
@@ -291,7 +314,8 @@ export default function App() {
       ) : (
         <main className="content">
           <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices}
-            recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />} />
+            recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
+            library={library} />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>

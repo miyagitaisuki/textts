@@ -193,9 +193,9 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 
 **Theo mockup, chưa làm**
 16. [x] Ghi âm giọng thật làm mẫu (nút Record).
-17. [~] Thư viện giọng và mẫu, mục Cài đặt chung.
+17. [x] Thư viện mẫu vai (lưu, áp, xóa mẫu, dùng chung giữa các project) và cài đặt chung (tùy chọn xuất được nhớ trong máy). Kho giọng riêng chưa làm: danh sách giọng đã có trong thẻ vai.
 18. [x] Nút "Generate All" và xuất MP3/WAV trong giao diện.
 
 **Hạ tầng bổ sung**
 19. [x] Cấu hình đóng gói Electron (`electron-builder`).
-20. [~] Test cho renderer và IPC (đã có test guard IPC và workflow GUI; chưa có test renderer).
+20. [x] Test cho renderer (Vitest + Testing Library), logic thư viện/cài đặt và guard IPC; chạy bằng `npm test` trong `gui/`.
