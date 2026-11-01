@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import RolePanel from "./components/RolePanel.jsx";
 import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
+import Mixer from "./components/Mixer.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -18,6 +19,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [suggestions, setSuggestions] = useState({});
   const [output, setOutput] = useState(null);
+  const [outputStale, setOutputStale] = useState(false);
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -27,6 +29,7 @@ export default function App() {
   function edit(mutator) {
     setProject((p) => mutator(p));
     setDirty(true);
+    setOutputStale(true);
   }
 
   // Gợi ý cách đọc chỉ là tham khảo: lỗi ở đây không chặn việc soạn thảo.
@@ -53,6 +56,7 @@ export default function App() {
     setPreviewUrl(null);
     setLog("");
     setOutput(null);
+    setOutputStale(false);
     refreshSuggestions(res.data);
     loadOutputFor(res.filePath);
   }
@@ -69,6 +73,17 @@ export default function App() {
   async function loadOutputFor(projectPath) {
     const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, ".mp3"));
     setOutput(res);
+    setOutputStale(false);
+  }
+
+  // Kéo thả: dời câu về phía sau. Không thay đổi câu khác ngoài việc đẩy các câu sau nó.
+  function shiftItem(id, deltaMs) {
+    edit((p) => ({
+      ...p,
+      items: p.items.map((it) =>
+        it.id === id ? { ...it, delay_ms: Math.max(0, (it.delay_ms || 0) + deltaMs) } : it
+      ),
+    }));
   }
 
   function applySuggestion(id) {
@@ -137,7 +152,10 @@ export default function App() {
     const outputPath = filePath.replace(/\.json$/, ".mp3");
     const res = await window.textts.generate(filePath, outputPath);
     setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
-    if (res.code === 0) await loadOutputFor(filePath);
+    if (res.code === 0) {
+      await loadOutputFor(filePath);
+      setOutputStale(false);
+    }
     setBusy(false);
   }
 
@@ -149,6 +167,7 @@ export default function App() {
         <button onClick={generate} disabled={busy || !project || lineCount === 0}>
           {busy ? "Đang xử lý..." : "Tạo âm thanh"}
         </button>
+        {outputStale && output && <span className="stale">cần tạo lại</span>}
         <span className="path">
           {filePath || "Chưa mở project"}{dirty ? " • chưa lưu" : ""}
         </span>
@@ -159,6 +178,7 @@ export default function App() {
       ) : (
         <main className="content">
           <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} />
+          <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>
             <div className="section-head">
@@ -185,7 +205,10 @@ export default function App() {
           {output && (
             <section>
               <h2>Timeline</h2>
-              <Timeline output={output} />
+              {outputStale && (
+                <p className="stale">Bản đầu ra đã cũ so với chỉnh sửa. Bấm "Tạo âm thanh" để cập nhật.</p>
+              )}
+              <Timeline output={output} onShift={shiftItem} disabled={busy} />
             </section>
           )}
 
