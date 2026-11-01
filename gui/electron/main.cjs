@@ -136,11 +136,17 @@ ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.
-ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath }) => {
+ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = {} }) => {
   const proj = assertAllowed(projectPath, new Set([".json"]));
   const out = assertAllowed(outputPath, AUDIO_EXTS);
+  // Tùy chọn xuất từ giao diện; chỉ nhận đúng các cờ đã biết.
+  const args = [TTS_CLI, "--project", proj, "-o", out];
+  if (options.lufs !== null && options.lufs !== undefined && Number.isFinite(Number(options.lufs))) {
+    args.push("--lufs", String(Number(options.lufs)));
+  }
+  if (options.slow) args.push("--slow");
+  if (options.srt) args.push("--srt");
   return new Promise((resolve) => {
-    const args = [TTS_CLI, "--project", proj, "-o", out];
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
     let log = "";
     const send = (chunk) => {

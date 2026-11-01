@@ -53,3 +53,5 @@ audio { width: 100%; }
 
 .lines tr.error td { background: #4a1d1d; }
 .lines tr.warn td { background: #3d3517; }
+.export-opts { display: inline-flex; gap: 12px; align-items: center; margin-right: 8px; }
+.export-opts[open] { display: inline-flex; flex-wrap: wrap; }

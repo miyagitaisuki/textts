@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld("textts", {
   listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
   lint: (projectPath) => ipcRenderer.invoke("lint:check", { projectPath }),
   saveProject: (filePath, data) => ipcRenderer.invoke("project:save", { filePath, data }),
-  generate: (projectPath, outputPath) =>
-    ipcRenderer.invoke("tts:generate", { projectPath, outputPath }),
+  generate: (projectPath, outputPath, options) =>
+    ipcRenderer.invoke("tts:generate", { projectPath, outputPath, options }),
   preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
   suggestReadings: (texts) => ipcRenderer.invoke("reading:suggest", { texts }),
   loadOutput: (audioPath) => ipcRenderer.invoke("output:load", { audioPath }),

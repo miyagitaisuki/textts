@@ -193,8 +193,8 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 
 **Theo mockup, chưa làm**
 16. [ ] Ghi âm giọng thật làm mẫu (nút Record).
-17. [ ] Thư viện giọng và mẫu, mục Cài đặt chung.
-18. [ ] Nút "Generate All" và xuất MP3/WAV trong giao diện.
+17. [~] Thư viện giọng và mẫu, mục Cài đặt chung.
+18. [x] Nút "Generate All" và xuất MP3/WAV trong giao diện.
 
 **Hạ tầng bổ sung**
 19. [ ] Cấu hình đóng gói Electron (`electron-builder`).
