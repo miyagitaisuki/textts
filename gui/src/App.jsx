@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RolePanel from "./components/RolePanel.jsx";
 import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
@@ -10,7 +10,11 @@ const nextId = (items) => {
 };
 
 export default function App() {
-  const [project, setProject] = useState(null);
+  const [project, setProjectState] = useState(null);
+  // Bản hiện tại nằm trong ref để edit() luôn lấy đúng bản mới nhất, kể cả khi gọi liên tiếp.
+  const projectRef = useRef(null);
+  const history = useRef({ past: [], future: [] });
+  const HISTORY_LIMIT = 100;
   const [filePath, setFilePath] = useState("");
   const [dirty, setDirty] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -28,11 +32,68 @@ export default function App() {
   const items = project?.items ?? [];
   const lineCount = useMemo(() => items.filter((it) => it.type === "line").length, [items]);
 
+  function setProject(next) {
+    projectRef.current = next;
+    setProjectState(next);
+  }
+
   function edit(mutator) {
-    setProject((p) => mutator(p));
+    const cur = projectRef.current;
+    const next = mutator(cur);
+    if (next === cur) return;
+    const h = history.current;
+    h.past.push(cur);
+    if (h.past.length > HISTORY_LIMIT) h.past.shift();
+    h.future = [];
+    setProject(next);
     setDirty(true);
     setOutputStale(true);
   }
+
+  function undo() {
+    const h = history.current;
+    if (!h.past.length) return;
+    h.future.push(projectRef.current);
+    setProject(h.past.pop());
+    setDirty(true);
+    setOutputStale(true);
+  }
+
+  function redo() {
+    const h = history.current;
+    if (!h.future.length) return;
+    h.past.push(projectRef.current);
+    setProject(h.future.pop());
+    setDirty(true);
+    setOutputStale(true);
+  }
+
+  // Phím tắt: Ctrl/⌘+Z hoàn tác, Ctrl/⌘+Shift+Z hoặc Ctrl+Y làm lại, Ctrl/⌘+S lưu,
+  // Ctrl/⌘+Enter thêm câu. Bỏ qua khi đang gõ trong ô nhập để không đè lên undo của trình duyệt.
+  useEffect(() => {
+    function onKey(e) {
+      if (busy || !projectRef.current) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
+      if (key === "s") {
+        e.preventDefault();
+        save();
+      } else if (key === "enter") {
+        e.preventDefault();
+        addLine();
+      } else if (!typing && key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (!typing && ((key === "z" && e.shiftKey) || key === "y")) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Gợi ý cách đọc chỉ là tham khảo: lỗi ở đây không chặn việc soạn thảo.
   async function refreshSuggestions(proj) {
@@ -64,6 +125,7 @@ export default function App() {
   }
 
   function applyProject(res) {
+    history.current = { past: [], future: [] };
     setProject(res.data);
     window.textts.listVoices(res.data.engine).then(setVoices);
     setFilePath(res.filePath);

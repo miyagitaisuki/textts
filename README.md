@@ -170,7 +170,7 @@ Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là t
 5. [x] Mở kịch bản `.txt` trực tiếp trong giao diện.
 6. [x] Hiển thị lỗi theo dòng và nhảy tới câu lỗi.
 7. [x] Chọn giọng VOICEVOX từ danh sách lấy từ `/speakers`.
-8. [ ] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
+8. [x] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
 
 **Đầu ra cho lớp học**
 9. [ ] Chế độ luyện nói theo vai (role-play): chỉ vai người học có tiếng, vai còn lại thành khoảng lặng.
