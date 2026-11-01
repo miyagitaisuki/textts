@@ -4,7 +4,7 @@ export const EMOTIONS = ["neutral", "happy", "sad", "angry", "surprised"];
 export const SPEEDS = ["slow", "normal", "fast"];
 
 // voices: [{value, label}] từ engine hiện tại; rỗng thì dùng danh sách Edge mặc định.
-export default function RolePanel({ roles, onChange, disabled, voices = [] }) {
+export default function RolePanel({ roles, onChange, disabled, voices = [], recorder }) {
   const options = voices.length ? voices : VOICES.map((v) => ({ value: v, label: v }));
   return (
     <section className="roles">
@@ -37,6 +37,7 @@ export default function RolePanel({ roles, onChange, disabled, voices = [] }) {
                 {SPEEDS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </label>
+            {recorder?.(id)}
             <label>
               Cao độ: {role.pitch} Hz
               <input type="range" min={-50} max={50} value={role.pitch} disabled={disabled}

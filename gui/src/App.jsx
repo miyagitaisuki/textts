@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import RolePanel from "./components/RolePanel.jsx";
+import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
 import Mixer from "./components/Mixer.jsx";
@@ -289,7 +290,8 @@ export default function App() {
         <main className="content empty-state">Mở một project.json để bắt đầu.</main>
       ) : (
         <main className="content">
-          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices} />
+          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices}
+            recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />} />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>

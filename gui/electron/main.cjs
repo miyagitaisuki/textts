@@ -129,6 +129,22 @@ ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
   });
 });
 
+// Lưu bản ghi âm mẫu của một vai vào recordings/<tên project>/ cạnh project.json.
+ipcMain.handle("recording:save", async (_evt, { projectPath, roleId, base64 }) => {
+  try {
+    const proj = assertAllowed(projectPath, new Set([".json"]));
+    if (!/^\d+$/.test(String(roleId))) throw new Error(`Mã vai không hợp lệ: ${roleId}`);
+    const stem = path.parse(proj).name;
+    const dir = path.join(path.dirname(proj), "recordings", stem);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `role${roleId}-${Date.now()}.webm`);
+    fs.writeFileSync(file, Buffer.from(base64, "base64"));
+    return { ok: true, path: file };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   const target = assertAllowed(filePath, new Set([".json"]));
   fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");

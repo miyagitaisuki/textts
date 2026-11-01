@@ -192,7 +192,7 @@ Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.exam
 15. [x] Lint kịch bản trong giao diện: vai chưa khai báo, chữ Hán thiếu cách đọc, file sfx không tồn tại.
 
 **Theo mockup, chưa làm**
-16. [ ] Ghi âm giọng thật làm mẫu (nút Record).
+16. [x] Ghi âm giọng thật làm mẫu (nút Record).
 17. [~] Thư viện giọng và mẫu, mục Cài đặt chung.
 18. [x] Nút "Generate All" và xuất MP3/WAV trong giao diện.
 

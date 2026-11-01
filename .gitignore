@@ -7,3 +7,4 @@ output/
 *.part
 gui/node_modules/
 gui/dist/
+recordings/
