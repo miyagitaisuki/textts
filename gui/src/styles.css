@@ -2,8 +2,25 @@
 body { margin: 0; background: #14171c; color: #e6e8eb; }
 .app { display: flex; flex-direction: column; height: 100vh; }
 .toolbar { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #1c2029; }
-.toolbar button { padding: 8px 14px; border: 0; border-radius: 6px; background: #2f7d5b; color: #fff; cursor: pointer; }
-.toolbar button:disabled { background: #3a3f4a; cursor: default; }
+.toolbar button, .actionbar button { padding: 8px 14px; border: 0; border-radius: 6px; background: #2f7d5b; color: #fff; cursor: pointer; }
+.toolbar button:disabled, .actionbar button:disabled { background: #3a3f4a; cursor: default; }
+.toolbar button.ghost, .actionbar button.ghost { background: #2a2f3a; }
+.toolbar-spacer { flex: 1; }
+.actionbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: #1c2029; border-top: 1px solid #2a2f3a; }
+.actionbar button.primary { background: #2f7d5b; color: #fff; padding: 10px 20px; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.actionbar .status { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.actionbar .actions { display: flex; gap: 8px; align-items: center; }
+.empty-actions { display: flex; gap: 12px; justify-content: center; }
+.empty-actions button { padding: 12px 20px; border: 0; border-radius: 6px; background: #2f7d5b; color: #fff; cursor: pointer; font-size: 15px; }
+.empty-actions button.ghost { background: #2a2f3a; }
+.empty-state p { margin: 0; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.modal { background: #1c2029; border-radius: 10px; padding: 20px; width: min(420px, 90vw); display: flex; flex-direction: column; gap: 12px; }
+.modal h2 { margin: 0; font-size: 17px; }
+.modal label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.modal label.check { flex-direction: row; align-items: center; gap: 8px; }
+.modal-actions { display: flex; justify-content: flex-end; }
+.modal-actions button { padding: 8px 16px; border: 0; border-radius: 6px; background: #2f7d5b; color: #fff; cursor: pointer; }
 .path { opacity: 0.7; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .content { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .lines { width: 100%; border-collapse: collapse; }
@@ -12,27 +29,37 @@ body { margin: 0; background: #14171c; color: #e6e8eb; }
 .lines .pause td { opacity: 0.6; font-style: italic; }
 .role-1 { color: #4ade80; } .role-2 { color: #60a5fa; } .role-3 { color: #c084fc; }
 .empty { opacity: 0.6; text-align: center; }
-.log { background: #0e1014; border-radius: 6px; padding: 12px; min-height: 120px; white-space: pre-wrap; font-size: 12px; }
+.log { background: #0e1014; border-radius: 6px; padding: 12px; min-height: 60px; white-space: pre-wrap; font-size: 12px; }
+.log-wrap summary { cursor: pointer; font-size: 13px; opacity: 0.85; margin-bottom: 6px; }
 .empty-state { align-items: center; justify-content: center; opacity: 0.6; }
 .roles h2, section h2 { font-size: 15px; margin: 0 0 8px; opacity: 0.85; }
 .section-head { display: flex; justify-content: space-between; align-items: center; }
 .role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .role-card { background: #1c2029; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; border-left: 3px solid #3a3f4a; }
 .role-card.role-1 { border-color: #4ade80; } .role-card.role-2 { border-color: #60a5fa; } .role-card.role-3 { border-color: #c084fc; }
+.segmented { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.segmented-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+.segmented-buttons button { flex: 1; padding: 5px 6px; border: 1px solid #2a2f3a; border-radius: 4px; background: #0e1014; color: #e6e8eb; cursor: pointer; font-size: 12px; }
+.segmented-buttons button.on { background: #2f7d5b; border-color: #2f7d5b; color: #fff; }
+.segmented-buttons button:disabled { opacity: 0.5; cursor: default; }
+.preset-details summary { cursor: pointer; font-size: 12px; opacity: 0.85; }
 .role-card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; opacity: 0.9; }
 .role-title { font-weight: 600; }
 select, input { background: #0e1014; color: #e6e8eb; border: 1px solid #2a2f3a; border-radius: 4px; padding: 4px; }
 .lines input.text { width: 100%; font-family: "Noto Sans JP", sans-serif; font-size: 16px; box-sizing: border-box; }
 .lines tr.selected { background: #232833; }
 .lines tr { cursor: pointer; }
-.lines td { white-space: nowrap; }
-.lines td:nth-child(3) { width: 100%; }
+.lines td.nowrap { white-space: nowrap; }
+.lines td.text-cell { white-space: normal; }
+.lines select.inherit { color: #8b93a1; }
+.row-actions button { padding: 6px 10px; }
+.lines td.text-cell { width: 100%; }
 button.ghost { background: #2a2f3a; color: #e6e8eb; padding: 4px 8px; border: 0; border-radius: 4px; cursor: pointer; margin-left: 2px; }
 button.ghost:disabled { opacity: 0.4; cursor: default; }
 button.danger { background: #5a2a2a; }
 audio { width: 100%; }
 .reading { font-size: 14px; }
-.muted { opacity: 0.55; }
+.muted { color: #9aa3b2; }
 .suggest { display: inline-flex; align-items: center; gap: 6px; }
 .sfx td { opacity: 0.75; }
 .sfx code { font-size: 12px; }
@@ -44,7 +71,7 @@ audio { width: 100%; }
 .fader .db { font-size: 12px; opacity: 0.85; min-width: 64px; text-align: center; }
 .fader input.vertical { writing-mode: vertical-lr; direction: rtl; height: 120px; width: 24px; }
 .fader-label { font-size: 12px; }
-.hint { opacity: 0.6; margin-left: auto; }
+.hint { color: #9aa3b2; margin-left: auto; }
 .stale { color: #fbbf24; font-size: 13px; }
 .vu { display: flex; gap: 18px; align-items: flex-end; }
 .vu-channel { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -53,8 +80,25 @@ audio { width: 100%; }
 
 .lines tr.error td { background: #4a1d1d; }
 .lines tr.warn td { background: #3d3517; }
-.export-opts { display: inline-flex; gap: 12px; align-items: center; margin-right: 8px; }
-.export-opts[open] { display: inline-flex; flex-wrap: wrap; }
 .out-root { font-size: 12px; opacity: 0.8; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .paste-panel { padding: 12px; border-bottom: 1px solid #2a2f3a; }
 .paste-panel textarea { width: 100%; font-family: "Noto Sans JP", sans-serif; font-size: 16px; }
+
+/* Mục 7: thang dB bên trái các fader */
+.fader-scale { position: relative; height: 120px; width: 34px; margin-top: 22px; font-size: 10px; color: #9aa3b2; }
+.fader-scale span { position: absolute; right: 0; transform: translateY(-50%); }
+/* Mục 8: thước thời gian đặt trên timeline */
+.ruler { position: relative; height: 16px; font-size: 11px; color: #9aa3b2; }
+.ruler span { position: absolute; transform: translateX(-50%); }
+/* Mục 10: tiến trình */
+.progress { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spinner { width: 14px; height: 14px; border: 2px solid #3a3f4a; border-top-color: #4ade80; border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Mục 12: biểu tượng lỗi/cảnh báo */
+.flag { font-weight: 700; }
+.error-flag { color: #f87171; }
+.warn-flag { color: #fbbf24; }
+/* Mục 13: viền focus rõ */
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid #7dd3fc; outline-offset: 2px;
+}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import RolePanel from "./RolePanel.jsx";
 
@@ -51,5 +51,17 @@ describe("RolePanel preset library", () => {
     fireEvent.change(select, { target: { value: "Chậm" } });
     fireEvent.click(screen.getByRole("button", { name: "Áp" }));
     expect(onApply).toHaveBeenCalledWith("1", preset);
+  });
+});
+
+describe("RolePanel segmented controls", () => {
+  it("sets emotion from the button group and marks the current value pressed", () => {
+    const onChange = vi.fn();
+    render(<RolePanel roles={ROLES} onChange={onChange} disabled={false} voices={[]} />);
+    const group = screen.getByRole("group", { name: "Cảm xúc" });
+    const pressed = () => within(group).getByRole("button", { pressed: true }).textContent;
+    expect(pressed()).toBe("Thường");
+    fireEvent.click(within(group).getByRole("button", { name: "Vui" }));
+    expect(onChange).toHaveBeenCalledWith("1", { emotion: "happy" });
   });
 });
