@@ -55,3 +55,6 @@ audio { width: 100%; }
 .lines tr.warn td { background: #3d3517; }
 .export-opts { display: inline-flex; gap: 12px; align-items: center; margin-right: 8px; }
 .export-opts[open] { display: inline-flex; flex-wrap: wrap; }
+.out-root { font-size: 12px; opacity: 0.8; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paste-panel { padding: 12px; border-bottom: 1px solid #2a2f3a; }
+.paste-panel textarea { width: 100%; font-family: "Noto Sans JP", sans-serif; font-size: 16px; }

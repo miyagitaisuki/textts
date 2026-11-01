@@ -1,7 +1,8 @@
 // Tiến trình chính Electron: đọc/ghi project.json và chạy tts.py như tiến trình con.
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const { createPathGuard } = require("./guard.cjs");
+const { sanitizeName, timestampName, uniqueName } = require("./projects.cjs");
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
@@ -47,26 +48,25 @@ ipcMain.handle("project:open", async () => {
   return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 });
 
-// Mở kịch bản .txt: tts.py phân tích và lưu thành project.json (chọn nơi lưu bằng hộp thoại).
-ipcMain.handle("script:open", async () => {
-  const picked = await dialog.showOpenDialog({
-    title: "Mở kịch bản .txt",
-    filters: [{ name: "Kịch bản", extensions: ["txt"] }],
-    properties: ["openFile"],
-  });
-  if (picked.canceled || picked.filePaths.length === 0) return null;
-  const scriptPath = path.resolve(picked.filePaths[0]);
-  const saved = await dialog.showSaveDialog({
-    title: "Lưu project.json",
-    defaultPath: path.join(path.dirname(scriptPath), `${path.parse(scriptPath).name}.json`),
-    filters: [{ name: "Project", extensions: ["json"] }],
-  });
-  if (saved.canceled || !saved.filePath) return null;
-  const filePath = path.resolve(saved.filePath);
-  allowDirOf(filePath);
+// Phân tích kịch bản và tạo thư mục dự án mới trong thư mục xuất:
+// <thư mục xuất>/<tên dự án>/<tên dự án>.json (+ các file đầu ra sẽ nằm cạnh đó).
+async function createProjectFromScript({ scriptPath, text, outputRoot }) {
+  if (!outputRoot || !path.isAbsolute(outputRoot) || !fs.existsSync(outputRoot)) {
+    return { error: "Thư mục xuất không hợp lệ. Chọn lại thư mục xuất." };
+  }
+  const base = text !== undefined ? timestampName() : sanitizeName(path.parse(scriptPath).name);
+  const name = uniqueName(base, (n) => fs.existsSync(path.join(outputRoot, n)));
+  const projectDir = path.join(outputRoot, name);
+  fs.mkdirSync(projectDir);
+  const filePath = path.join(projectDir, `${name}.json`);
+  let source = scriptPath;
+  if (text !== undefined) {
+    source = path.join(projectDir, `${name}.txt`);
+    fs.writeFileSync(source, text, "utf-8");
+  }
 
   const result = await new Promise((resolve) => {
-    const args = [TTS_CLI, scriptPath, "--save-project", filePath, "--dry-run"];
+    const args = [TTS_CLI, source, "--save-project", filePath, "--dry-run", "--resolve-sfx"];
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
     let log = "";
     child.stdout.on("data", (c) => (log += c));
@@ -74,81 +74,46 @@ ipcMain.handle("script:open", async () => {
     child.on("error", (err) => resolve({ code: -1, log: String(err) }));
     child.on("close", (code) => resolve({ code, log }));
   });
-  if (result.code !== 0) return { error: result.log.trim() || "Không phân tích được kịch bản" };
-  return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
-});
-
-// Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
-ipcMain.handle("voices:list", async (_evt, { engine }) => {
-  if (!["edge", "voicevox"].includes(engine)) return [];
-  return new Promise((resolve) => {
-    const child = spawn(PYTHON, [TTS_CLI, "--list-voices", engine], { cwd: REPO_ROOT });
-    let out = "";
-    child.stdout.on("data", (c) => (out += c));
-    child.on("error", () => resolve([]));
-    child.on("close", (code) => {
-      try {
-        resolve(code === 0 ? JSON.parse(out) : []);
-      } catch {
-        resolve([]);
-      }
-    });
-  });
-});
-
-// Kiểm tra kịch bản đã lưu (tts.py --lint): trả về [{id, level, message}].
-ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
-  const proj = assertAllowed(projectPath, new Set([".json"]));
-  return new Promise((resolve) => {
-    const child = spawn(PYTHON, [TTS_CLI, "--project", proj, "--lint"], { cwd: REPO_ROOT });
-    let out = "";
-    child.stdout.on("data", (c) => (out += c));
-    child.on("error", () => resolve([]));
-    child.on("close", () => {
-      try {
-        resolve(JSON.parse(out));
-      } catch {
-        resolve([]);
-      }
-    });
-  });
-});
-
-// Lưu bản ghi âm mẫu của một vai vào recordings/<tên project>/ cạnh project.json.
-ipcMain.handle("recording:save", async (_evt, { projectPath, roleId, base64 }) => {
-  try {
-    const proj = assertAllowed(projectPath, new Set([".json"]));
-    if (!/^\d+$/.test(String(roleId))) throw new Error(`Mã vai không hợp lệ: ${roleId}`);
-    const stem = path.parse(proj).name;
-    const dir = path.join(path.dirname(proj), "recordings", stem);
-    fs.mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, `role${roleId}-${Date.now()}.webm`);
-    fs.writeFileSync(file, Buffer.from(base64, "base64"));
-    return { ok: true, path: file };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
+  if (result.code !== 0) {
+    fs.rmSync(projectDir, { recursive: true, force: true }); // dự án chưa hợp lệ thì bỏ thư mục vừa tạo
+    return { error: result.log.trim() || "Không phân tích được kịch bản" };
   }
-});
-
-// Thư viện mẫu vai, lưu trong thư mục dữ liệu của ứng dụng (dùng chung giữa các project).
-function presetsFile() {
-  return path.join(app.getPath("userData"), "presets.json");
+  allowDirOf(filePath);
+  return { filePath, projectDir, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 }
 
-ipcMain.handle("presets:load", async () => {
-  try {
-    const data = JSON.parse(fs.readFileSync(presetsFile(), "utf-8"));
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+// Chọn kịch bản .txt bằng hộp thoại, rồi tạo dự án mới trong thư mục xuất.
+ipcMain.handle("script:open", async (_evt, { outputRoot }) => {
+  const picked = await dialog.showOpenDialog({
+    title: "Mở kịch bản .txt",
+    filters: [{ name: "Kịch bản", extensions: ["txt"] }],
+    properties: ["openFile"],
+  });
+  if (picked.canceled || picked.filePaths.length === 0) return null;
+  return createProjectFromScript({ scriptPath: path.resolve(picked.filePaths[0]), outputRoot });
 });
 
-ipcMain.handle("presets:save", async (_evt, { presets }) => {
-  if (!Array.isArray(presets)) throw new Error("Danh sách mẫu không hợp lệ");
-  fs.mkdirSync(path.dirname(presetsFile()), { recursive: true });
-  fs.writeFileSync(presetsFile(), JSON.stringify(presets, null, 2), "utf-8");
-  return true;
+// Kịch bản dán trực tiếp từ giao diện.
+ipcMain.handle("script:importText", async (_evt, { text, outputRoot }) => {
+  if (typeof text !== "string" || !text.trim()) return { error: "Kịch bản trống" };
+  return createProjectFromScript({ text, outputRoot });
+});
+
+// Chọn thư mục xuất (thư mục gốc chứa các dự án).
+ipcMain.handle("dialog:pickFolder", async () => {
+  const res = await dialog.showOpenDialog({
+    title: "Chọn thư mục xuất",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  return path.resolve(res.filePaths[0]);
+});
+
+// Mở thư mục của dự án trong trình quản lý file.
+ipcMain.handle("folder:open", async (_evt, { projectPath }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const err = await shell.openPath(path.dirname(proj));
+  return err ? { error: err } : { ok: true };
 });
 
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {

@@ -95,6 +95,7 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 | Cú pháp | Ý nghĩa |
 | --- | --- |
 | `[1] 文` | Lời thoại của vai 1 (vai khai báo trong `roles.yaml`) |
+| `1 文` | Dạng rút gọn: số đầu dòng là vai (cũng nhận `1: 文`, `1：文`). Dòng thụt đầu vẫn là nối tiếp |
 | `[2]{emotion=happy, speed=slow} 文` | Ghi đè thuộc tính cho riêng câu này |
 | `漢字{かな}` | Ép cách đọc: hiển thị `漢字`, đọc `かな` |
 | `[pause=1500]` | Khoảng lặng 1500 ms (chuyển cảnh) |
@@ -162,6 +163,13 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 - Thư mục `docs/ui/` chỉ chứa ảnh tham khảo, không phải giao diện đã làm.
 - `--lufs` có thể làm cắt đỉnh (clipping) khi bài quá nhỏ hoặc nhạc nền quá to. Nếu thấy cảnh báo `Possible clipped samples`, giảm `--bgm-db` hoặc chọn LUFS thấp hơn.
 - Luôn nghe duyệt từng câu trước khi phát cho lớp, đặc biệt các chữ Hán đọc nhiều cách.
+
+## Dự án và thư mục xuất
+
+- **Thư mục xuất** là thư mục gốc chứa các dự án. Lần đầu sẽ hỏi chọn; sau đó được nhớ trong máy. Đổi bằng nút "Đổi…".
+- **Mở kịch bản .txt** hoặc **Dán kịch bản** tạo một dự án mới: `<thư mục xuất>/<tên dự án>/<tên dự án>.json`. Tên lấy từ tên file kịch bản (dán thì dùng `bai-moi-YYYYMMDD-HHMMSS`), nếu trùng sẽ thêm `-2`, `-3`...
+- Mọi đầu ra của dự án (mp3, srt, timeline, phiếu, bản ghi âm) nằm trong thư mục đó. Nút "Mở thư mục dự án" mở thư mục này.
+- Đường dẫn `[sfx=...]` được ghi thành tuyệt đối khi nhập kịch bản, nên dự án vẫn tìm được file dù nằm ở thư mục khác.
 
 ## Lộ trình đề xuất
 

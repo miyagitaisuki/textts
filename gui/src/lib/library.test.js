@@ -52,8 +52,9 @@ describe("settings", () => {
 
   it("round-trips saved settings", () => {
     const storage = memoryStorage();
-    saveSettings(storage, { format: "wav", lufs: "-16", slow: true, srt: false });
-    expect(loadSettings(storage)).toEqual({ format: "wav", lufs: "-16", slow: true, srt: false });
+    const saved = { format: "wav", lufs: "-16", slow: true, srt: false, outputRoot: "/home/u/lop" };
+    saveSettings(storage, saved);
+    expect(loadSettings(storage)).toEqual(saved);
   });
 
   it("falls back to defaults when stored data is corrupt", () => {

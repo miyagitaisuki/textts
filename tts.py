@@ -219,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch", type=Path, metavar="DIR",
                     help="xử lý mọi file .txt trong thư mục (cần --outdir)")
     ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
+    ap.add_argument("--resolve-sfx", action="store_true",
+                    help="ghi đường dẫn sfx tuyệt đối khi nhập kịch bản (dùng khi project.json ở thư mục khác)")
     ap.add_argument("--lint", action="store_true",
                     help="kiểm tra kịch bản/project, in JSON các lỗi và cảnh báo rồi thoát")
     ap.add_argument("--cache-info", action="store_true", help="in số file và dung lượng thư mục cache rồi thoát")
@@ -273,6 +275,12 @@ def main(argv: list[str] | None = None) -> int:
         else:
             readings = load_readings(args.readings)
             project = project_from_script(args.script, load_config(args.roles), readings)
+            if args.resolve_sfx:
+                # Đổi đường dẫn sfx tương đối thành tuyệt đối theo thư mục kịch bản gốc,
+                # để project.json đặt ở thư mục khác vẫn tìm được file.
+                for it in project.items:
+                    if isinstance(it, SfxItem):
+                        it.path = str(sfx_path(it.path, args.script.resolve().parent).resolve())
     except (ScriptError, ValidationError, yaml.YAMLError, OSError, ValueError) as exc:
         print(f"Lỗi: {exc}", file=sys.stderr)
         return 2
