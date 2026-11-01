@@ -130,6 +130,27 @@ ipcMain.handle("recording:save", async (_evt, { projectPath, roleId, base64 }) =
   }
 });
 
+// Thư viện mẫu vai, lưu trong thư mục dữ liệu của ứng dụng (dùng chung giữa các project).
+function presetsFile() {
+  return path.join(app.getPath("userData"), "presets.json");
+}
+
+ipcMain.handle("presets:load", async () => {
+  try {
+    const data = JSON.parse(fs.readFileSync(presetsFile(), "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("presets:save", async (_evt, { presets }) => {
+  if (!Array.isArray(presets)) throw new Error("Danh sách mẫu không hợp lệ");
+  fs.mkdirSync(path.dirname(presetsFile()), { recursive: true });
+  fs.writeFileSync(presetsFile(), JSON.stringify(presets, null, 2), "utf-8");
+  return true;
+});
+
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   const target = assertAllowed(filePath, new Set([".json"]));
   fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");
