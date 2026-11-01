@@ -38,7 +38,7 @@ const AUDIO_EXTS = new Set([".mp3", ".wav"]);
 
 ipcMain.handle("project:open", async () => {
   const res = await dialog.showOpenDialog({
-    title: "Mở project.json",
+    title: "Mở dự án (project.json)",
     filters: [{ name: "Dự án", extensions: ["json"] }],
     properties: ["openFile"],
   });

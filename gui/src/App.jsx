@@ -327,7 +327,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="toolbar">
-        <button onClick={openProject} disabled={busy}>Mở project.json</button>
+        <button onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
         <button className="ghost" onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
@@ -351,11 +351,11 @@ export default function App() {
 
       {!project ? (
         <main className="content empty-state">
-          <p>Mở một project.json, hoặc bắt đầu từ kịch bản.</p>
+          <p>Mở một dự án (project.json), hoặc bắt đầu từ kịch bản.</p>
           <div className="empty-actions">
             <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
             <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán kịch bản</button>
-            <button className="ghost" onClick={openProject} disabled={busy}>Mở project.json</button>
+            <button className="ghost" onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
           </div>
         </main>
       ) : (
@@ -416,7 +416,7 @@ export default function App() {
       <footer className="actionbar">
         <div className="status">
           <span className="path" title={filePath}>
-            {filePath || "Chưa mở project"}{dirty ? " • chưa lưu" : ""}
+            {filePath || "Chưa mở dự án"}{dirty ? " • chưa lưu" : ""}
           </span>
           <span className="out-root" title={outputRoot}>
             Thư mục xuất: {outputRoot || "chưa chọn"}
@@ -427,13 +427,13 @@ export default function App() {
           {busy && (
             <span className="progress" role="status">
               <span className="spinner" aria-hidden="true" />
-              {lastLogLine || "Đang chuẩn bị..."}
+              {lastLogLine || "Đang chuẩn bị…"}
             </span>
           )}
           <button className="ghost" onClick={() => setShowExport(true)} disabled={busy}>Tùy chọn xuất…</button>
           <button className="ghost" onClick={save} disabled={busy || !project || !dirty} title="Lưu (Ctrl+S)">Lưu</button>
           <button className="primary" onClick={generate} disabled={busy || !project || lineCount === 0}>
-            {busy ? "Đang xử lý..." : "Tạo âm thanh"}
+            {busy ? "Đang xử lý…" : "Tạo âm thanh"}
           </button>
         </div>
       </footer>

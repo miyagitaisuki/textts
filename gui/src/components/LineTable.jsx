@@ -15,7 +15,7 @@ export default function LineTable({
         <tr>
           <th>Vai</th>
           <th title="Dùng 漢字{かな} để ép cách đọc">Câu thoại</th>
-          <th>Gợi ý đọc</th>
+          <th>Cách đọc gợi ý</th>
           <th>Cảm xúc</th>
           <th>Tốc độ</th>
           <th></th>
