@@ -20,6 +20,8 @@ pip install -r requirements.txt
 ffmpeg -version
 ```
 
+Bản GUI (`textts-<phiên bản>-setup.exe`) không đi kèm Python: app gọi lệnh `python` trên PATH (hoặc biến `TEXTTS_PYTHON`). Hãy cài Python rồi chạy `python -m pip install -r requirements.txt` với đúng Python đó. Nếu thiếu thư viện, app sẽ hiện gợi ý cài đặt thay vì traceback.
+
 ## Dùng
 
 ```bash

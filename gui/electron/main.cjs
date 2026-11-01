@@ -8,6 +8,7 @@ const os = require("os");
 const { spawn } = require("child_process");
 const updater = require("./updater.cjs");
 const logger = require("./logger.cjs");
+const { friendlyPythonError } = require("./python-errors.cjs");
 const { buildMenu } = require("./menu.cjs");
 
 logger.installCrashHandlers();
@@ -120,7 +121,7 @@ async function createProjectFromScript({ scriptPath, text }) {
   if (result.code !== 0) {
     fs.rmSync(projectDir, { recursive: true, force: true }); // dự án chưa hợp lệ thì bỏ thư mục vừa tạo
     logger.log("ERROR", `Phân tích kịch bản thất bại (mã ${result.code}): ${result.log.trim().slice(0, 2000)}`);
-    return { error: result.log.trim() || "Không phân tích được kịch bản" };
+    return { error: friendlyPythonError(result.log, PYTHON) || "Không phân tích được kịch bản" };
   }
   allowDirOf(filePath);
   return { filePath, projectDir, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
@@ -243,7 +244,7 @@ ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
     child.stderr.on("data", (c) => (err += c));
     child.on("error", (e) => resolve({ ok: false, error: spawnErrorText(e) }));
     child.on("close", (code) => {
-      if (code !== 0) return resolve({ ok: false, error: err.trim() });
+      if (code !== 0) return resolve({ ok: false, error: friendlyPythonError(err, PYTHON) });
       try {
         resolve({ ok: true, items: JSON.parse(out) });
       } catch (e) {
