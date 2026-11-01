@@ -35,6 +35,8 @@ export default function App() {
   const [presets, setPresets] = useState([]);
   const [pasting, setPasting] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  // Lỗi tạo dự án từ kịch bản dán: hiện ngay trong khung dán, không phụ thuộc đã mở project hay chưa.
+  const [pasteError, setPasteError] = useState("");
   const [showExport, setShowExport] = useState(false);
   // Đọc từ ref khi render; mỗi thay đổi đều đi kèm setState nên giao diện luôn cập nhật.
   const canUndo = history.current.past.length > 0;
@@ -179,14 +181,18 @@ export default function App() {
   }
 
   async function importPasted() {
+    setPasteError("");
     if (!pasteText.trim()) {
-      setLog("Chưa có nội dung kịch bản để tạo dự án.");
+      setPasteError("Chưa có nội dung kịch bản để tạo dự án.");
       return;
     }
-    if (!(await ensureOutputRoot())) return;
+    if (!(await ensureOutputRoot())) {
+      setPasteError("Chưa chọn thư mục xuất. Bấm \"Đổi…\" để chọn.");
+      return;
+    }
     const res = await window.textts.importText(pasteText);
     if (res.error) {
-      setLog(res.error);
+      setPasteError(res.error);
       return;
     }
     setPasting(false);
@@ -348,6 +354,7 @@ export default function App() {
             Dự án mới sẽ được tạo trong thư mục xuất.</p>
           <textarea rows={8} value={pasteText} disabled={busy}
             onChange={(e) => setPasteText(e.target.value)} />
+          {pasteError && <div className="preset-error" role="alert">{pasteError}</div>}
           <div>
             <button onClick={importPasted} disabled={busy}>Tạo dự án</button>
             <button className="ghost" onClick={() => setPasting(false)}>Hủy</button>
@@ -358,6 +365,7 @@ export default function App() {
       {!project ? (
         <main className="content empty-state">
           <p>Mở một dự án (project.json), hoặc bắt đầu từ kịch bản.</p>
+          {log && <pre className="log">{log}</pre>}
           <div className="empty-actions">
             <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
             <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán kịch bản</button>

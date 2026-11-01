@@ -13,7 +13,8 @@ const REPO_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, "engine")
   : path.resolve(__dirname, "..", "..");
 const TTS_CLI = path.join(REPO_ROOT, "tts.py");
-const PYTHON = process.env.TEXTTS_PYTHON || "python3";
+// Windows thường có lệnh "python" (không có "python3"); các hệ điều hành khác dùng "python3".
+const PYTHON = process.env.TEXTTS_PYTHON || (process.platform === "win32" ? "python" : "python3");
 
 function createWindow() {
   const win = new BrowserWindow({
