@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { sanitizeName, timestampName, uniqueName } = require("../electron/projects.cjs");
+const { sanitizeName, timestampName, uniqueName, validOutputRoot } = require("../electron/projects.cjs");
 
 test("sanitizeName removes characters invalid in paths", () => {
   assert.equal(sanitizeName('bài: 10 / "hỏi" <đường>'), "bài- 10 - -hỏi- -đường");
@@ -30,4 +30,13 @@ test("uniqueName returns the base when free", () => {
 test("uniqueName appends the first free counter", () => {
   const taken = new Set(["bai10", "bai10-2"]);
   assert.equal(uniqueName("bai10", (n) => taken.has(n)), "bai10-3");
+});
+
+test("validOutputRoot accepts only absolute existing directories", () => {
+  const isDir = (p) => p === "/home/u/lop";
+  assert.equal(validOutputRoot("/home/u/lop", isDir), "/home/u/lop");
+  assert.equal(validOutputRoot("lop", isDir), "");
+  assert.equal(validOutputRoot("/home/u/gone", isDir), "");
+  assert.equal(validOutputRoot(42, isDir), "");
+  assert.equal(validOutputRoot(undefined, isDir), "");
 });

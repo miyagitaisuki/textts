@@ -30,4 +30,11 @@ function uniqueName(base, exists) {
   }
 }
 
-module.exports = { sanitizeName, timestampName, uniqueName };
+const path = require("path");
+
+/** Giá trị thư mục xuất đọc từ config hợp lệ: đường dẫn tuyệt đối tới thư mục có thật, nếu không thì "". */
+function validOutputRoot(value, isDirectory) {
+  return typeof value === "string" && path.isAbsolute(value) && isDirectory(value) ? value : "";
+}
+
+module.exports = { sanitizeName, timestampName, uniqueName, validOutputRoot };

@@ -3,9 +3,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("textts", {
   openProject: () => ipcRenderer.invoke("project:open"),
-  openScript: (outputRoot) => ipcRenderer.invoke("script:open", { outputRoot }),
-  importText: (text, outputRoot) => ipcRenderer.invoke("script:importText", { text, outputRoot }),
-  pickFolder: () => ipcRenderer.invoke("dialog:pickFolder"),
+  openScript: () => ipcRenderer.invoke("script:open"),
+  importText: (text) => ipcRenderer.invoke("script:importText", { text }),
+  getOutputRoot: () => ipcRenderer.invoke("outputRoot:get"),
+  pickOutputRoot: () => ipcRenderer.invoke("outputRoot:pick"),
   openFolder: (projectPath) => ipcRenderer.invoke("folder:open", { projectPath }),
   listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
   loadPresets: () => ipcRenderer.invoke("presets:load"),

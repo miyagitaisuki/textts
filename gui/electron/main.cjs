@@ -2,7 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const { createPathGuard } = require("./guard.cjs");
-const { sanitizeName, timestampName, uniqueName } = require("./projects.cjs");
+const { sanitizeName, timestampName, uniqueName, validOutputRoot } = require("./projects.cjs");
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
@@ -48,11 +48,32 @@ ipcMain.handle("project:open", async () => {
   return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 });
 
+// Thư mục xuất do người dùng chọn, lưu trong thư mục dữ liệu của ứng dụng.
+// Main process giữ giá trị này: renderer không gửi đường dẫn thư mục xuất lên nữa.
+function configFile() {
+  return path.join(app.getPath("userData"), "config.json");
+}
+
+function readOutputRoot() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(configFile(), "utf-8")).outputRoot;
+    return validOutputRoot(raw, (p) => fs.existsSync(p) && fs.statSync(p).isDirectory());
+  } catch {
+    return "";
+  }
+}
+
+function writeOutputRoot(root) {
+  fs.mkdirSync(path.dirname(configFile()), { recursive: true });
+  fs.writeFileSync(configFile(), JSON.stringify({ outputRoot: root }, null, 2), "utf-8");
+}
+
 // Phân tích kịch bản và tạo thư mục dự án mới trong thư mục xuất:
 // <thư mục xuất>/<tên dự án>/<tên dự án>.json (+ các file đầu ra sẽ nằm cạnh đó).
-async function createProjectFromScript({ scriptPath, text, outputRoot }) {
-  if (!outputRoot || !path.isAbsolute(outputRoot) || !fs.existsSync(outputRoot)) {
-    return { error: "Thư mục xuất không hợp lệ. Chọn lại thư mục xuất." };
+async function createProjectFromScript({ scriptPath, text }) {
+  const outputRoot = readOutputRoot();
+  if (!outputRoot) {
+    return { error: "Chưa chọn thư mục xuất. Bấm \"Đổi…\" để chọn." };
   }
   const base = text !== undefined ? timestampName() : sanitizeName(path.parse(scriptPath).name);
   const name = uniqueName(base, (n) => fs.existsSync(path.join(outputRoot, n)));
@@ -83,30 +104,35 @@ async function createProjectFromScript({ scriptPath, text, outputRoot }) {
 }
 
 // Chọn kịch bản .txt bằng hộp thoại, rồi tạo dự án mới trong thư mục xuất.
-ipcMain.handle("script:open", async (_evt, { outputRoot }) => {
+ipcMain.handle("script:open", async () => {
   const picked = await dialog.showOpenDialog({
     title: "Mở kịch bản .txt",
     filters: [{ name: "Kịch bản", extensions: ["txt"] }],
     properties: ["openFile"],
   });
   if (picked.canceled || picked.filePaths.length === 0) return null;
-  return createProjectFromScript({ scriptPath: path.resolve(picked.filePaths[0]), outputRoot });
+  return createProjectFromScript({ scriptPath: path.resolve(picked.filePaths[0]) });
 });
 
 // Kịch bản dán trực tiếp từ giao diện.
-ipcMain.handle("script:importText", async (_evt, { text, outputRoot }) => {
+ipcMain.handle("script:importText", async (_evt, { text }) => {
   if (typeof text !== "string" || !text.trim()) return { error: "Kịch bản trống" };
-  return createProjectFromScript({ text, outputRoot });
+  return createProjectFromScript({ text });
 });
 
-// Chọn thư mục xuất (thư mục gốc chứa các dự án).
-ipcMain.handle("dialog:pickFolder", async () => {
+// Thư mục xuất hiện tại ("" nếu chưa chọn).
+ipcMain.handle("outputRoot:get", async () => readOutputRoot());
+
+// Chọn thư mục xuất (thư mục gốc chứa các dự án) và ghi nhớ lại.
+ipcMain.handle("outputRoot:pick", async () => {
   const res = await dialog.showOpenDialog({
     title: "Chọn thư mục xuất",
     properties: ["openDirectory", "createDirectory"],
   });
-  if (res.canceled || res.filePaths.length === 0) return null;
-  return path.resolve(res.filePaths[0]);
+  if (res.canceled || res.filePaths.length === 0) return "";
+  const root = path.resolve(res.filePaths[0]);
+  writeOutputRoot(root);
+  return root;
 });
 
 // Mở thư mục của dự án trong trình quản lý file.

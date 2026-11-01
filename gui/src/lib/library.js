@@ -2,8 +2,7 @@
 
 export const PRESET_FIELDS = ["voice", "emotion", "speed", "pitch"];
 
-// outputRoot: thư mục gốc chứa các dự án; mỗi dự án có thư mục con riêng.
-export const DEFAULT_SETTINGS = { format: "mp3", lufs: "", slow: false, srt: false, outputRoot: "" };
+export const DEFAULT_SETTINGS = { format: "mp3", lufs: "", slow: false, srt: false };
 const SETTINGS_KEY = "textts.settings";
 
 /** Lấy các trường mẫu từ cấu hình một vai. */

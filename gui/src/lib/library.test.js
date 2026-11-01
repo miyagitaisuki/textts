@@ -52,7 +52,7 @@ describe("settings", () => {
 
   it("round-trips saved settings", () => {
     const storage = memoryStorage();
-    const saved = { format: "wav", lufs: "-16", slow: true, srt: false, outputRoot: "/home/u/lop" };
+    const saved = { format: "wav", lufs: "-16", slow: true, srt: false };
     saveSettings(storage, saved);
     expect(loadSettings(storage)).toEqual(saved);
   });

@@ -142,21 +142,26 @@ export default function App() {
     if (res) applyProject(res);
   }
 
-  // Thư mục xuất được nhớ trong cài đặt; lần đầu sẽ hỏi chọn.
+  // Thư mục xuất do main process giữ và ghi nhớ; chọn lại bằng nút "Đổi…".
+  const [outputRoot, setOutputRoot] = useState("");
+
+  useEffect(() => {
+    window.textts.getOutputRoot().then(setOutputRoot);
+  }, []);
+
   async function chooseOutputRoot() {
-    const picked = await window.textts.pickFolder();
-    if (picked) setExportOpts((o) => ({ ...o, outputRoot: picked }));
+    const picked = await window.textts.pickOutputRoot();
+    if (picked) setOutputRoot(picked);
     return picked;
   }
 
   async function ensureOutputRoot() {
-    return exportOpts.outputRoot || (await chooseOutputRoot());
+    return outputRoot || (await chooseOutputRoot());
   }
 
   async function openScript() {
-    const root = await ensureOutputRoot();
-    if (!root) return;
-    const res = await window.textts.openScript(root);
+    if (!(await ensureOutputRoot())) return;
+    const res = await window.textts.openScript();
     if (!res) return;
     if (res.error) {
       setLog(res.error);
@@ -170,9 +175,8 @@ export default function App() {
       setLog("Chưa có nội dung kịch bản để tạo dự án.");
       return;
     }
-    const root = await ensureOutputRoot();
-    if (!root) return;
-    const res = await window.textts.importText(pasteText, root);
+    if (!(await ensureOutputRoot())) return;
+    const res = await window.textts.importText(pasteText);
     if (res.error) {
       setLog(res.error);
       return;
@@ -319,8 +323,8 @@ export default function App() {
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
         <button onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
-        <span className="out-root" title={exportOpts.outputRoot}>
-          Thư mục xuất: {exportOpts.outputRoot || "chưa chọn"}
+        <span className="out-root" title={outputRoot}>
+          Thư mục xuất: {outputRoot || "chưa chọn"}
         </span>
         <button className="ghost" onClick={chooseOutputRoot} disabled={busy}>Đổi…</button>
         <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
