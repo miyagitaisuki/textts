@@ -6,6 +6,10 @@ Cú pháp:
     [2]{emotion=happy, speed=slow} あ、駅ですか。
         (dòng thụt đầu: nối vào câu trước)
     [pause=1500]
+
+Cũng nhận dạng dạng rút gọn không có ngoặc, khi số đứng ngay đầu dòng:
+    1 すみません、駅はどこですか。
+    2: はい、あちらです。
 """
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ import re
 from core.readings import apply_readings
 
 LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
+# Dạng rút gọn: số vai ở đầu dòng (không thụt), sau đó là khoảng trắng hoặc dấu : ： . 、
+BARE_LINE_RE = re.compile(r"^(\d)[ \t:：.、]+(.+)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
 SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
 # 漢字{かな}: giữ chữ Hán để hiển thị, gửi kana cho engine
@@ -54,6 +60,15 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
                 "role": m[1],
                 "attrs": parse_attrs(m[2]),
                 "text": m[3].strip(),
+                "src_line": line_no,
+            }
+            items.append(cur)
+        elif m := BARE_LINE_RE.match(raw):
+            cur = {
+                "type": "line",
+                "role": m[1],
+                "attrs": {},
+                "text": m[2].strip(),
                 "src_line": line_no,
             }
             items.append(cur)

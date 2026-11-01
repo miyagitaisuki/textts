@@ -32,6 +32,8 @@ export default function App() {
   // Cài đặt xuất được nhớ trong máy (localStorage) và dùng làm mặc định lần sau.
   const [exportOpts, setExportOpts] = useState(() => loadSettings(window.localStorage));
   const [presets, setPresets] = useState([]);
+  const [pasting, setPasting] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   useEffect(() => {
     saveSettings(window.localStorage, exportOpts);
@@ -140,7 +142,25 @@ export default function App() {
     if (res) applyProject(res);
   }
 
+  // Thư mục xuất do main process giữ và ghi nhớ; chọn lại bằng nút "Đổi…".
+  const [outputRoot, setOutputRoot] = useState("");
+
+  useEffect(() => {
+    window.textts.getOutputRoot().then(setOutputRoot);
+  }, []);
+
+  async function chooseOutputRoot() {
+    const picked = await window.textts.pickOutputRoot();
+    if (picked) setOutputRoot(picked);
+    return picked;
+  }
+
+  async function ensureOutputRoot() {
+    return outputRoot || (await chooseOutputRoot());
+  }
+
   async function openScript() {
+    if (!(await ensureOutputRoot())) return;
     const res = await window.textts.openScript();
     if (!res) return;
     if (res.error) {
@@ -148,6 +168,27 @@ export default function App() {
       return;
     }
     applyProject(res);
+  }
+
+  async function importPasted() {
+    if (!pasteText.trim()) {
+      setLog("Chưa có nội dung kịch bản để tạo dự án.");
+      return;
+    }
+    if (!(await ensureOutputRoot())) return;
+    const res = await window.textts.importText(pasteText);
+    if (res.error) {
+      setLog(res.error);
+      return;
+    }
+    setPasting(false);
+    setPasteText("");
+    applyProject(res);
+  }
+
+  async function openProjectFolder() {
+    const res = await window.textts.openFolder(filePath);
+    if (res?.error) setLog(`Không mở được thư mục: ${res.error}`);
   }
 
   function applyProject(res) {
@@ -280,6 +321,12 @@ export default function App() {
       <header className="toolbar">
         <button onClick={openProject} disabled={busy}>Mở project.json</button>
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
+        <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
+        <button onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
+        <span className="out-root" title={outputRoot}>
+          Thư mục xuất: {outputRoot || "chưa chọn"}
+        </span>
+        <button className="ghost" onClick={chooseOutputRoot} disabled={busy}>Đổi…</button>
         <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
         <details className="export-opts">
           <summary>Tùy chọn xuất (nhớ làm mặc định)</summary>
@@ -308,6 +355,18 @@ export default function App() {
           {filePath || "Chưa mở project"}{dirty ? " • chưa lưu" : ""}
         </span>
       </header>
+      {pasting && (
+        <section className="paste-panel">
+          <p>Mỗi dòng bắt đầu bằng số vai: <code>1 こんにちは</code>, <code>[2] はい</code>.
+            Dự án mới sẽ được tạo trong thư mục xuất.</p>
+          <textarea rows={8} value={pasteText} disabled={busy}
+            onChange={(e) => setPasteText(e.target.value)} />
+          <div>
+            <button onClick={importPasted} disabled={busy}>Tạo dự án</button>
+            <button className="ghost" onClick={() => setPasting(false)}>Hủy</button>
+          </div>
+        </section>
+      )}
 
       {!project ? (
         <main className="content empty-state">Mở một project.json để bắt đầu.</main>
