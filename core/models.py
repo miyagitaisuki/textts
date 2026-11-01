@@ -29,6 +29,7 @@ class Role(BaseModel):
     emotion: Emotion = "neutral"
     speed: Speed = "normal"
     pitch: int = Field(0, ge=-50, le=50)  # Hz tương đối
+    gain_db: float = Field(0.0, ge=-30.0, le=12.0)  # mixer: âm lượng của vai, dB
 
 
 class Config(BaseModel):
@@ -55,6 +56,7 @@ class LineItem(BaseModel):
     src_line: int
     role: str
     attrs: dict[str, str] = Field(default_factory=dict)
+    delay_ms: int = Field(0, ge=0)  # kéo thả trên timeline: dời câu này về phía sau
     display: str
     tts_text: str
     plain: str

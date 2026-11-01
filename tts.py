@@ -233,7 +233,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     audio, placed = build(
-        [it.model_dump() for it in project.items], project.timing.model_dump()
+        [it.model_dump() for it in project.items],
+        project.timing.model_dump(),
+        role_gains={k: r.gain_db for k, r in project.roles.items()},
     )
     if args.bgm:
         bgm = AudioSegment.from_file(args.bgm)
