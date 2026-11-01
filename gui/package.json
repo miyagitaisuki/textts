@@ -12,7 +12,7 @@
     "dist": "vite build && electron-builder",
     "test": "node --test test/*.test.cjs && vitest run",
     "test:watch": "vitest",
-    "dist:win": "vite build && electron-builder --win portable --publish never && node scripts/write-latest-yml.cjs"
+    "dist:win": "vite build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.8.11",
@@ -58,9 +58,8 @@
     ],
     "win": {
       "target": [
-        "portable"
-      ],
-      "artifactName": "textts-${version}-portable.${ext}"
+        "nsis"
+      ]
     },
     "mac": {
       "target": [

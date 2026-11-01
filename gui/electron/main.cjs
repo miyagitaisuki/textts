@@ -50,7 +50,7 @@ function sendUpdateLog(text) {
 
 ipcMain.handle("update:check", async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
-  return updater.checkNow(win, (text) => sendUpdateLog(text));
+  return updater.checkNow((text) => sendUpdateLog(text));
 });
 
 // Chỉ cho phép đọc/ghi trong thư mục của các project đã mở qua hộp thoại.
@@ -274,7 +274,7 @@ app.whenReady().then(() => {
   mainWindow = win;
   buildMenu({
     getWindow: () => mainWindow,
-    onCheckUpdates: () => updater.checkNow(mainWindow, (text) => sendUpdateLog(text)).then((r) => sendUpdateLog(r.message)),
+    onCheckUpdates: () => updater.checkNow((text) => sendUpdateLog(text)).then((r) => sendUpdateLog(r.message)),
   });
   // Tự kiểm tra bản mới khi mở app; thông báo lỗi (nếu có) đưa vào nhật ký giao diện.
   updater.setupUpdater(win, (text) => sendUpdateLog(text));

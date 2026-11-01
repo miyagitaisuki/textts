@@ -1,97 +1,71 @@
-// Tự cập nhật bản portable từ GitHub Releases.
-// electron-updater chỉ dùng để đọc latest.yml (phiên bản mới nhất). electron-updater không hỗ trợ
-// cài đặt cho bản portable, nên việc tải và thay file exe được làm ở đây:
-//   1. tải exe mới từ GitHub Release về thư mục tạm;
-//   2. sau khi người dùng đồng ý, một script .bat đợi app thoát, chép đè exe, rồi mở lại app.
-// electron-builder đặt biến PORTABLE_EXECUTABLE_FILE trỏ tới file exe đang chạy.
-const { app, dialog, shell } = require("electron");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { spawn } = require("child_process");
+// Tự cập nhật theo luồng chuẩn của electron-updater (bản cài NSIS, phát hành trên GitHub Releases).
+// Khi mở app và khi bấm "Kiểm tra cập nhật": tải bản mới trong nền. Khi tải xong, hỏi người dùng;
+// nếu đồng ý thì quitAndInstall() chạy bộ cài đặt im lặng và mở lại app.
+const { app, dialog } = require("electron");
+const { updateErrorText } = require("./update-utils.cjs");
+const logger = require("./logger.cjs");
 
-const { updateErrorText, compareVersions, writeSwapScript, download } = require("./update-utils.cjs");
+let autoUpdater = null;
+let listening = false;
+let readyToInstall = false;
 
-const REPO = { owner: "miyagitaisuki", repo: "textts" };
-const RELEASES_URL = `https://github.com/${REPO.owner}/${REPO.repo}/releases`;
-
-// Chuyển lỗi kỹ thuật thành câu tiếng Việt cho người dùng cuối.
-
-// So sánh phiên bản theo số chính, phụ, vá: "newer" | "same" | "older".
-
-// Script .bat: đợi tiến trình hiện tại thoát, chép đè exe, mở lại, rồi tự xóa.
-
-let pendingUpdate = null; // {version, url, file} sau khi đã tải xong
-let busy = false;
-
-// Gọi electron-updater để lấy phiên bản mới nhất từ latest.yml trên GitHub.
-async function fetchLatest() {
-  const { autoUpdater } = require("electron-updater");
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-  const result = await autoUpdater.checkForUpdates();
-  const info = result?.updateInfo;
-  if (!info?.version) return null;
-  const file = info.files?.find((f) => f.url.endsWith(".exe")) ?? { url: info.path };
-  const url = `https://github.com/${REPO.owner}/${REPO.repo}/releases/download/v${info.version}/${file.url}`;
-  return { version: info.version, url };
+// Nhật ký của electron-updater đi vào cùng file textts.log.
+function getUpdater() {
+  if (!autoUpdater) {
+    ({ autoUpdater } = require("electron-updater"));
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = false; // chỉ cài khi người dùng đồng ý
+    autoUpdater.logger = {
+      info: (m) => logger.log("INFO", `[updater] ${m}`),
+      warn: (m) => logger.log("WARN", `[updater] ${m}`),
+      error: (m) => logger.log("ERROR", `[updater] ${m}`),
+      debug: () => {},
+    };
+  }
+  return autoUpdater;
 }
 
-// Kiểm tra và (nếu có bản mới) tải trong nền, rồi hỏi người dùng có muốn cài không.
-async function checkNow(win, log = () => {}) {
-  if (!app.isPackaged) {
-    return { ok: false, message: "Chỉ kiểm tra cập nhật trong bản đã đóng gói." };
-  }
-  if (busy) return { ok: true, message: "Đang tải bản cập nhật, vui lòng đợi." };
-  if (pendingUpdate) return askInstall(win);
-  busy = true;
-  try {
-    const latest = await fetchLatest();
-    if (!latest || compareVersions(latest.version, app.getVersion()) !== "newer") {
-      return { ok: true, message: `Đang dùng bản mới nhất (${app.getVersion()}).` };
-    }
-    const dest = path.join(os.tmpdir(), `textts-${latest.version}.exe`);
-    log(`Có bản ${latest.version}, đang tải…`);
-    await download(latest.url, dest, (p) => log(`Đang tải bản cập nhật: ${p}%`));
-    pendingUpdate = { version: latest.version, file: dest };
-    return askInstall(win);
-  } catch (err) {
-    return { ok: false, message: updateErrorText(err) };
-  } finally {
-    busy = false;
-  }
-}
-
-async function askInstall(win) {
-  const { version } = pendingUpdate;
-  const portablePath = process.env.PORTABLE_EXECUTABLE_FILE;
-  if (!portablePath) {
-    // Không phải bản portable (ví dụ bản thư mục): mở trang tải về thay vì tự thay file.
-    shell.openExternal(RELEASES_URL);
-    return { ok: true, message: `Đã mở trang tải bản ${version}.` };
-  }
-  const { response } = await dialog.showMessageBox(win, {
-    type: "info",
-    buttons: ["Cập nhật và mở lại", "Để sau"],
-    defaultId: 0,
-    cancelId: 1,
-    title: "Có bản cập nhật",
-    message: `Đã tải phiên bản ${version}.`,
-    detail: "Ứng dụng sẽ đóng, thay bằng bản mới rồi mở lại. Lưu các thay đổi chưa lưu trước khi tiếp tục.",
-  });
-  if (response !== 0) return { ok: true, message: `Bản ${version} sẽ được cài ở lần mở sau.` };
-  const script = writeSwapScript(pendingUpdate.file, portablePath, process.pid);
-  spawn("cmd.exe", ["/c", script], { detached: true, stdio: "ignore", windowsHide: true }).unref();
-  app.quit();
-  return { ok: true, message: `Đang cập nhật lên ${version}…` };
-}
-
-// Kiểm tra tự động một lần khi mở app (không làm phiền nếu không có mạng).
+// Gắn sự kiện một lần khi khởi động. win: cửa sổ chính để gắn hộp thoại; log: ghi thông báo lên giao diện.
 function setupUpdater(win, log = () => {}) {
   if (!app.isPackaged) return;
-  checkNow(win, log).then((res) => {
-    if (res.message && !res.ok) log(res.message);
-  });
+  const updater = getUpdater();
+  if (!listening) {
+    listening = true;
+    updater.on("update-downloaded", async (info) => {
+      readyToInstall = true;
+      log(`Đã tải xong bản ${info.version}.`);
+      const { response } = await dialog.showMessageBox(win, {
+        type: "info",
+        buttons: ["Khởi động lại và cập nhật", "Để sau"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Có bản cập nhật",
+        message: `Đã tải phiên bản ${info.version}.`,
+        detail: "Ứng dụng sẽ đóng, cài bản mới rồi mở lại. Lưu các thay đổi chưa lưu trước khi tiếp tục.",
+      });
+      if (response === 0) updater.quitAndInstall();
+    });
+    updater.on("error", (err) => log(updateErrorText(err)));
+  }
+  updater.checkForUpdates().catch((err) => log(updateErrorText(err)));
+}
+
+// Kiểm tra bấm tay (menu hoặc nút). Trả về thông báo để hiển thị.
+async function checkNow(log = () => {}) {
+  if (!app.isPackaged) {
+    return { ok: false, message: "Chỉ kiểm tra cập nhật trong bản đã cài đặt." };
+  }
+  if (readyToInstall) return { ok: true, message: "Bản mới đã tải xong. Hãy khởi động lại để cập nhật." };
+  try {
+    const result = await getUpdater().checkForUpdates();
+    if (!result?.isUpdateAvailable) {
+      return { ok: true, message: `Đang dùng bản mới nhất (${app.getVersion()}).` };
+    }
+    log(`Có bản ${result.updateInfo.version}, đang tải…`);
+    return { ok: true, message: `Có bản ${result.updateInfo.version}, đang tải trong nền…` };
+  } catch (err) {
+    return { ok: false, message: updateErrorText(err) };
+  }
 }
 
 module.exports = { setupUpdater, checkNow };

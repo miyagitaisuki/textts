@@ -66,18 +66,19 @@ npm install
 npm run dev
 ```
 
-## Tự cập nhật và phát hành (bản Windows)
+## Tự cập nhật và phát hành (Windows)
 
-Bản portable (`textts-<phiên bản>-portable.exe`) tự kiểm tra bản mới trên GitHub Releases khi mở, và có nút **Kiểm tra cập nhật** trên thanh công cụ.
+Bản phát hành là bộ cài `textts-<phiên bản>-setup.exe` (NSIS, cài theo người dùng, không cần quyền admin). Bản này **không ký số**.
 
-- Khi có bản mới, ứng dụng tải về rồi hỏi người dùng. Nếu đồng ý, app đóng, thay file exe bằng bản mới rồi mở lại.
-- Nguồn cập nhật: `build.publish` trong `gui/package.json` (GitHub `miyagitaisuki/textts`). Mã trong `gui/electron/updater.cjs`.
-- Chỉ hoạt động trong bản đã đóng gói. Khi chạy `npm run dev` nút kiểm tra chỉ báo "chỉ kiểm tra trong bản đã đóng gói".
+- Khi mở app và khi bấm **Trợ giúp → Kiểm tra cập nhật**, app kiểm tra bản mới trên GitHub Releases (`miyagitaisuki/textts`) bằng `electron-updater`.
+- Bản mới được tải trong nền. Khi tải xong, app hỏi có khởi động lại để cập nhật không.
+- Cấu hình nguồn: `build.publish` trong `gui/package.json`. Logic: `gui/electron/updater.cjs`.
+- Chỉ hoạt động khi app đã được cài đặt (không chạy trong `npm run dev`).
 
 Phát hành một bản mới:
 
 1. Tăng `version` trong `gui/package.json` (ví dụ `0.1.0` → `0.1.1`) rồi merge vào `main`.
-2. Build bản portable trên máy Windows (lệnh này cũng tạo `latest.yml`):
+2. Build trên máy Windows (`npm run dist:win` tạo bộ cài và `latest.yml` trong `gui/release/`):
 
 ```bash
 cd gui
@@ -85,9 +86,9 @@ npm ci
 npm run dist:win
 ```
 
-3. Tạo Release trên GitHub với tag `v<phiên bản>` (ví dụ `v0.1.1`), tải lên **cả hai file** trong `gui/release/`: `textts-<phiên bản>-portable.exe` và `latest.yml`. Thiếu `latest.yml` thì app cũ không thấy bản mới.
+3. Tạo Release trên GitHub với tag `v<phiên bản>` (ví dụ `v0.1.1`), tải lên các file trong `gui/release/`: `textts-<phiên bản>-setup.exe`, `textts-<phiên bản>-setup.exe.blockmap` và `latest.yml`. Thiếu `latest.yml` thì app không thấy bản mới.
 
-Người dùng đã có bản cũ sẽ được gợi ý cập nhật ở lần mở sau. Lưu ý: electron-updater không hỗ trợ cài trực tiếp bản portable, nên việc thay file do `updater.cjs` làm.
+Build trên Linux cũng được nhưng cần `wine` và `wine32` (`apt install wine64 wine32:i386`), và phải khởi tạo prefix bằng `wineboot -i`.
 
 ## Đầu ra cho lớp học
 
