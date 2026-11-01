@@ -80,6 +80,13 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 - Mixer: mỗi vai có `gain_db` trong `roles.yaml`/`project.json` (từ -30 đến +12 dB), áp dụng khi tạo âm thanh. Lưu ý: nghe thử một câu (`▶ Nghe`) không áp dụng mixer, chỉ bản đầu ra mới có.
 - Kéo thả trên timeline: kéo một câu sang phải để dời nó về phía sau, lưu vào `delay_ms` của câu. Câu sau nó cũng dịch theo. Không kéo được về trước; muốn rút ngắn khoảng nghỉ thì giảm `[pause=...]` phía trước. Sau khi kéo, giao diện báo "bản đầu ra đã cũ" cho đến khi bấm "Tạo âm thanh".
 - VU meter: thanh mức của từng vai đặt trên timeline, chạy theo vị trí phát (và cập nhật khi tua). Mức được tính sẵn trong `timeline.json` (`role_levels`) từ bản đầu ra cuối cùng, nên đã gồm mixer, nhạc nền và LUFS. Thang đo từ −60 dB đến 0 dBFS.
+- `--role-play VAI`: bản luyện nói. Chỉ giữ lời vai đó, các vai khác thành khoảng lặng cùng độ dài. Học viên đóng vai và nói theo.
+- `--shadow [--shadow-gap MS]`: bản shadowing. Sau mỗi câu luyện tập chèn khoảng lặng (mặc định 1500 ms) để học viên nhắc lại. Kết hợp được với `--role-play`.
+- `--worksheet FILE.html`: phiếu học tập có furigana (`<ruby>`), mở bằng trình duyệt rồi in. Không cần tạo âm thanh. Chữ Hán có `{かな}` dùng đúng cách đọc đó, phần còn lại chú âm tự động bằng pyopenjtalk.
+- `--list-voices {edge,voicevox}`: in danh sách giọng dạng JSON (giao diện dùng để điền danh sách chọn).
+- `--batch DIR --outdir DIR`: xử lý mọi `.txt` trong thư mục, mỗi file ra `<tên>.mp3`. Các tùy chọn khác (`--lufs`, `--srt`, `--bgm`...) áp dụng cho từng file. Một file lỗi không dừng batch.
+- `--cache-info` / `--clear-cache`: xem hoặc xóa thư mục `cache/`.
+- `--lint`: in JSON các lỗi (chặn tạo âm thanh) và cảnh báo (chữ Hán chưa có `{かな}`). Giao diện hiển thị ở cột ghi chú của từng dòng. Vai chưa khai báo bị chặn ngay khi nạp project, nên không nằm trong lint.
 - `--bgm FILE --bgm-db -18`: trộn nhạc nền lặp lại dưới lời thoại, có fade vào và ra. Nhạc nền do giáo viên cung cấp, dự án không đính kèm.
 - Mỗi lần xuất còn ghi `<tên>.timeline.json` (vị trí từng câu và dữ liệu sóng). Giao diện đọc file này để vẽ timeline sau khi tạo âm thanh.
 
@@ -91,7 +98,7 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 | `[2]{emotion=happy, speed=slow} 文` | Ghi đè thuộc tính cho riêng câu này |
 | `漢字{かな}` | Ép cách đọc: hiển thị `漢字`, đọc `かな` |
 | `[pause=1500]` | Khoảng lặng 1500 ms (chuyển cảnh) |
-| `[sfx=sounds/bell.wav]` | Chèn một file hiệu ứng vào đúng vị trí. Đường dẫn tính từ thư mục chạy lệnh |
+| `[sfx=sounds/bell.wav]` | Chèn một file hiệu ứng vào đúng vị trí. Đường dẫn tương đối tính từ thư mục chứa kịch bản (hoặc `project.json`) |
 | `# ...` | Ghi chú, bỏ qua |
 | Dòng thụt đầu | Nối tiếp vào câu trước |
 
@@ -155,3 +162,40 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 - Thư mục `docs/ui/` chỉ chứa ảnh tham khảo, không phải giao diện đã làm.
 - `--lufs` có thể làm cắt đỉnh (clipping) khi bài quá nhỏ hoặc nhạc nền quá to. Nếu thấy cảnh báo `Possible clipped samples`, giảm `--bgm-db` hoặc chọn LUFS thấp hơn.
 - Luôn nghe duyệt từng câu trước khi phát cho lớp, đặc biệt các chữ Hán đọc nhiều cách.
+
+## Lộ trình đề xuất
+
+Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là thứ tự thực hiện. Trạng thái cập nhật khi làm xong.
+
+**Sửa lỗi và hạ tầng**
+1. [x] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (PR #10, chưa merge).
+2. [x] CI chạy `pytest` trên GitHub Actions (PR #10, chưa merge).
+3. [x] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
+4. [x] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
+
+**Giao diện biên tập**
+5. [x] Mở kịch bản `.txt` trực tiếp trong giao diện.
+6. [x] Hiển thị lỗi theo dòng và nhảy tới câu lỗi.
+7. [x] Chọn giọng VOICEVOX từ danh sách lấy từ `/speakers`.
+8. [x] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
+
+**Đầu ra cho lớp học**
+9. [x] Chế độ luyện nói theo vai (role-play): chỉ vai người học có tiếng, vai còn lại thành khoảng lặng.
+10. [x] Chế độ shadowing: sau mỗi câu chèn khoảng lặng để học viên nhắc lại.
+11. [x] Xuất phiếu học tập HTML có furigana (`<ruby>`).
+
+**Tiện ích**
+Từ điển cách đọc: `readings.yaml` ở gốc repo (mẫu: `readings.example.yaml`), tùy chọn `--readings FILE`. Áp dụng khi nhập kịch bản.
+12. [x] Từ điển cách đọc do người dùng quản lý, lưu theo dự án hoặc dùng chung.
+13. [x] Lệnh xem và xóa cache (`--clear-cache`).
+14. [x] Xử lý hàng loạt: một thư mục kịch bản, xuất hết vào một thư mục đầu ra.
+15. [x] Lint kịch bản trong giao diện: file sfx không tồn tại, câu trống, chữ Hán thiếu cách đọc (vai chưa khai báo đã bị chặn khi nạp project).
+
+**Theo mockup, chưa làm**
+16. [x] Ghi âm giọng thật làm mẫu (nút Record).
+17. [~] Thư viện giọng và mẫu, mục Cài đặt chung.
+18. [x] Nút "Generate All" và xuất MP3/WAV trong giao diện.
+
+**Hạ tầng bổ sung**
+19. [x] Cấu hình đóng gói Electron (`electron-builder`).
+20. [~] Test cho renderer và IPC (đã có test guard IPC và workflow GUI; chưa có test renderer).

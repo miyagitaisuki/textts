@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vite build",
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "vite build && electron-builder --dir",
+    "dist": "vite build && electron-builder",
+    "test": "node --test test/*.test.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -18,6 +21,48 @@
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
     "vite": "^5.4.11",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "vn.textts.app",
+    "productName": "textts",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "engine",
+        "filter": [
+          "tts.py",
+          "core/**/*.py",
+          "providers/**/*.py",
+          "roles.yaml",
+          "readings.example.yaml",
+          "!**/__pycache__/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "dir"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dir"
+      ]
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    }
   }
 }

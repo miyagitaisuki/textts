@@ -21,7 +21,10 @@ from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
-from core.builder import build, to_srt
+from core.lint import lint_project
+from core.paths import sfx_path
+from core.readings import load_readings
+from core.builder import build, practice_items, to_srt
 from core.models import (
     Config,
     LineItem,
@@ -33,9 +36,11 @@ from core.models import (
     save_project,
 )
 from core.parser import ScriptError, parse_script
+from core.worksheet import worksheet_html
 from providers.base import SynthRequest, TTSProvider
+from providers.edge import VOICES as EDGE_VOICES
 from providers.edge import EdgeProvider
-from providers.voicevox import VoicevoxProvider
+from providers.voicevox import VoicevoxProvider, list_speakers
 
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
@@ -134,10 +139,10 @@ def dry_run(project: Project) -> None:
             print(f"        đọc: {it.tts_text}")
 
 
-def project_from_script(script: Path, cfg: Config) -> Project:
+def project_from_script(script: Path, cfg: Config, readings: dict[str, str] | None = None) -> Project:
     items = [
         {k: v for k, v in it.items() if k != "text"}  # "text" thô đã có tts_text/display/plain
-        for it in parse_script(script.read_text(encoding="utf-8"))
+        for it in parse_script(script.read_text(encoding="utf-8"), readings)
     ]
     return Project.model_validate(
         {
@@ -150,13 +155,76 @@ def project_from_script(script: Path, cfg: Config) -> Project:
     )
 
 
+def _cache_command(cache_dir: Path, *, clear: bool) -> int:
+    files = [p for p in cache_dir.glob("*") if p.is_file()] if cache_dir.is_dir() else []
+    size_mb = sum(p.stat().st_size for p in files) / 1_000_000
+    if not clear:
+        print(f"Cache {cache_dir}: {len(files)} file, {size_mb:.1f} MB")
+        return 0
+    for p in files:
+        p.unlink()
+    print(f"Đã xóa {len(files)} file ({size_mb:.1f} MB) trong {cache_dir}")
+    return 0
+
+
+def _strip_options(argv: list[str], names: set[str]) -> list[str]:
+    """Bỏ các tùy chọn (kèm giá trị) có tên trong `names` khỏi danh sách tham số."""
+    out, skip = [], False
+    for tok in argv:
+        if skip:
+            skip = False
+            continue
+        if tok in names:
+            skip = True
+            continue
+        if any(tok.startswith(n + "=") for n in names):
+            continue
+        out.append(tok)
+    return out
+
+
+def run_batch(batch_dir: Path, outdir: Path, argv: list[str]) -> int:
+    """Chạy lần lượt mọi kịch bản .txt trong thư mục; mỗi file ra <tên>.mp3 trong outdir.
+
+    Tùy chọn còn lại (--lufs, --srt, --bgm...) được truyền nguyên cho từng file.
+    Một file lỗi không dừng batch; cuối cùng trả về 1 nếu có file lỗi.
+    """
+    scripts = sorted(batch_dir.glob("*.txt"))
+    if not scripts:
+        print(f"Không có kịch bản .txt trong {batch_dir}", file=sys.stderr)
+        return 2
+    extra = _strip_options(argv, {"--batch", "--outdir"})
+    failed = []
+    for script in scripts:
+        print(f"== {script.name}")
+        code = main([str(script), "-o", str(outdir / f"{script.stem}.mp3"), *extra])
+        if code != 0:
+            failed.append(script.name)
+    if failed:
+        print("Các file lỗi: " + ", ".join(failed), file=sys.stderr)
+        return 1
+    print(f"Hoàn tất {len(scripts)} kịch bản.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="TTS hội thoại tiếng Nhật")
-    src = ap.add_mutually_exclusive_group(required=True)
+    src = ap.add_mutually_exclusive_group()
     src.add_argument("script", nargs="?", type=Path, help="file kịch bản .txt")
     src.add_argument("--project", type=Path, help="đọc project.json đã lưu")
     ap.add_argument("-o", "--output", type=Path, help="file đầu ra (.mp3 hoặc .wav)")
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
+    ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
+                    help="in danh sách giọng của engine dạng JSON (edge hoặc voicevox) rồi thoát")
+    ap.add_argument("--batch", type=Path, metavar="DIR",
+                    help="xử lý mọi file .txt trong thư mục (cần --outdir)")
+    ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
+    ap.add_argument("--lint", action="store_true",
+                    help="kiểm tra kịch bản/project, in JSON các lỗi và cảnh báo rồi thoát")
+    ap.add_argument("--cache-info", action="store_true", help="in số file và dung lượng thư mục cache rồi thoát")
+    ap.add_argument("--clear-cache", action="store_true", help="xóa thư mục cache rồi thoát")
+    ap.add_argument("--readings", type=Path, default=ROOT / "readings.yaml",
+                    help="từ điển cách đọc (từ: kana), áp dụng khi nhập kịch bản")
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
     ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
@@ -165,19 +233,46 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lufs", type=float, metavar="LUFS", help="chuẩn hóa độ to về mức LUFS, ví dụ -16")
     ap.add_argument("--slow", action="store_true",
                     help="xuất thêm bản chậm 0.8× (giữ cao độ), tên <tên>_slow.<đuôi>")
+    ap.add_argument("--role-play", metavar="VAI",
+                    help="bản luyện nói: chỉ giữ lời vai này, các vai khác thành khoảng lặng")
+    ap.add_argument("--shadow", action="store_true",
+                    help="bản shadowing: sau mỗi câu luyện tập chèn khoảng lặng để nhắc lại")
+    ap.add_argument("--shadow-gap", type=int, default=1500, metavar="MS",
+                    help="khoảng lặng thêm sau mỗi câu khi dùng --shadow (mặc định 1500 ms)")
+    ap.add_argument("--worksheet", type=Path, metavar="FILE.html",
+                    help="xuất phiếu học tập HTML có furigana (không cần tạo âm thanh)")
     ap.add_argument("--export-lines", type=Path, metavar="DIR",
                     help="xuất từng câu thành file riêng để luyện tập")
     ap.add_argument("--bgm", type=Path, metavar="FILE",
                     help="nhạc nền lặp lại, trộn dưới lời thoại (mp3/wav/...)")
     ap.add_argument("--bgm-db", type=float, default=-18.0,
                     help="độ nhỏ của nhạc nền so với lời thoại, dB (mặc định -18)")
+    argv = sys.argv[1:] if argv is None else argv
     args = ap.parse_args(argv)
+
+    if args.cache_info or args.clear_cache:
+        return _cache_command(args.cache_dir, clear=args.clear_cache)
+
+    if args.list_voices:
+        if args.list_voices == "voicevox":
+            voices = asyncio.run(list_speakers())
+        else:
+            voices = [{"value": v, "label": v} for v in EDGE_VOICES]
+        print(json.dumps(voices, ensure_ascii=False))
+        return 0
+    if args.batch:
+        if args.script or args.project or args.outdir is None:
+            ap.error("--batch cần --outdir và không dùng cùng kịch bản đơn hoặc --project")
+        return run_batch(args.batch, args.outdir, argv)
+    if not (args.script or args.project):
+        ap.error("cần truyền kịch bản .txt hoặc --project")
 
     try:
         if args.project:
             project = load_project(args.project)
         else:
-            project = project_from_script(args.script, load_config(args.roles))
+            readings = load_readings(args.readings)
+            project = project_from_script(args.script, load_config(args.roles), readings)
     except (ScriptError, ValidationError, yaml.YAMLError, OSError, ValueError) as exc:
         print(f"Lỗi: {exc}", file=sys.stderr)
         return 2
@@ -185,6 +280,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.save_project:
         save_project(project, args.save_project)
         print(f"Đã lưu {args.save_project}")
+
+    if args.lint:
+        issues = lint_project(project, (args.script or args.project).resolve().parent)
+        print(json.dumps(issues, ensure_ascii=False))
+        return 1 if any(i["level"] == "error" for i in issues) else 0
+
+    if args.worksheet:
+        args.worksheet.parent.mkdir(parents=True, exist_ok=True)
+        args.worksheet.write_text(
+            worksheet_html(project.title, [it.model_dump() for it in project.items]),
+            encoding="utf-8",
+        )
+        print(f"Đã xuất phiếu học tập {args.worksheet}")
+        if args.dry_run or not args.output:
+            return 0
 
     if args.dry_run or not args.output:
         dry_run(project)
@@ -195,9 +305,10 @@ def main(argv: list[str] | None = None) -> int:
     if project.engine not in PROVIDERS:
         print(f"Engine không hỗ trợ: {project.engine}", file=sys.stderr)
         return 2
+    base = (args.script or args.project).resolve().parent
     missing_files = [
-        it.path for it in project.items
-        if isinstance(it, SfxItem) and not Path(it.path).is_file()
+        str(sfx_path(it.path, base)) for it in project.items
+        if isinstance(it, SfxItem) and not sfx_path(it.path, base).is_file()
     ]
     if args.bgm and not args.bgm.is_file():
         missing_files.append(str(args.bgm))
@@ -232,11 +343,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Đã xuất câu {args.preview} ra {args.output}")
         return 0
 
-    audio, placed = build(
-        [it.model_dump() for it in project.items],
-        project.timing.model_dump(),
-        role_gains={k: r.gain_db for k, r in project.roles.items()},
-    )
+    build_items = [
+        {**it.model_dump(), "path": str(sfx_path(it.path, base))}
+        if isinstance(it, SfxItem) else it.model_dump()
+        for it in project.items
+    ]
+    gains = {k: r.gain_db for k, r in project.roles.items()}
+    timing = project.timing.model_dump()
+    audio, placed = build(build_items, timing, role_gains=gains)
+    if args.role_play or args.shadow:
+        if args.role_play and args.role_play not in project.roles:
+            print(f"Không có vai {args.role_play} trong project", file=sys.stderr)
+            return 2
+        shadow_gap = args.shadow_gap if args.shadow else None
+        audio, placed = build(
+            practice_items(build_items, placed,
+                           practice_role=args.role_play, shadow_gap_ms=shadow_gap),
+            timing,
+            role_gains=gains,
+        )
     if args.bgm:
         bgm = AudioSegment.from_file(args.bgm)
         audio = add_background(audio, bgm, gain_db=args.bgm_db)

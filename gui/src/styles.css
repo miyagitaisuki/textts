@@ -50,3 +50,8 @@ audio { width: 100%; }
 .vu-channel { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .vu-track { width: 22px; height: 90px; background: #0e1014; border: 1px solid #2a2f3a; border-radius: 4px; display: flex; align-items: flex-end; overflow: hidden; }
 .vu-fill { width: 100%; transition: height 60ms linear; }
+
+.lines tr.error td { background: #4a1d1d; }
+.lines tr.warn td { background: #3d3517; }
+.export-opts { display: inline-flex; gap: 12px; align-items: center; margin-right: 8px; }
+.export-opts[open] { display: inline-flex; flex-wrap: wrap; }

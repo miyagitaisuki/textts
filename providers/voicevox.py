@@ -49,3 +49,17 @@ class VoicevoxProvider(TTSProvider):
                 r.raise_for_status()
                 data = await r.read()
         Path(out_path).write_bytes(data)
+
+
+async def list_speakers(base_url: str | None = None, timeout: float = 10.0) -> list[dict]:
+    """Danh sách giọng (mỗi style là một giá trị `voice`) lấy từ VOICEVOX Engine /speakers."""
+    url = (base_url or os.environ.get("VOICEVOX_URL") or DEFAULT_URL).rstrip("/")
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+        async with session.get(f"{url}/speakers") as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+    return [
+        {"value": str(style["id"]), "label": f'{speaker["name"]} ({style["name"]})'}
+        for speaker in data
+        for style in speaker.get("styles", [])
+    ]

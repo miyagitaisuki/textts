@@ -67,6 +67,36 @@ def build(
     return out, placed
 
 
+def practice_items(
+    items: list[dict],
+    placed: list[dict],
+    *,
+    practice_role: str | None = None,
+    shadow_gap_ms: int | None = None,
+) -> list[dict]:
+    """Biến danh sách mục để xuất bản luyện tập từ kết quả `build` lần đầu.
+
+    - `practice_role`: giữ lời thoại của vai này; câu của vai khác thành khoảng lặng cùng độ dài.
+    - `shadow_gap_ms`: sau mỗi câu luyện tập chèn thêm khoảng lặng này để học viên nhắc lại.
+    Độ dài lấy từ `placed` (có `id`, `start_ms`, `end_ms`) nên phải gọi `build` trước.
+    """
+    durations = {p["id"]: p["end_ms"] - p["start_ms"] for p in placed}
+    out: list[dict] = []
+    for it in items:
+        if it["type"] != "line":
+            out.append(it)
+            continue
+        dur = durations.get(it["id"], 0)
+        is_practice = practice_role is None or it["role"] == practice_role
+        if not is_practice:
+            out.append({"type": "pause", "ms": dur})
+            continue
+        out.append(it)
+        if shadow_gap_ms is not None:
+            out.append({"type": "pause", "ms": dur + shadow_gap_ms})
+    return out
+
+
 def to_srt(placed: list[dict]) -> str:
     blocks = []
     for n, it in enumerate(placed, 1):

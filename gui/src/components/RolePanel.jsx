@@ -3,7 +3,9 @@ export const VOICES = ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"];
 export const EMOTIONS = ["neutral", "happy", "sad", "angry", "surprised"];
 export const SPEEDS = ["slow", "normal", "fast"];
 
-export default function RolePanel({ roles, onChange, disabled }) {
+// voices: [{value, label}] từ engine hiện tại; rỗng thì dùng danh sách Edge mặc định.
+export default function RolePanel({ roles, onChange, disabled, voices = [], recorder }) {
+  const options = voices.length ? voices : VOICES.map((v) => ({ value: v, label: v }));
   return (
     <section className="roles">
       <h2>Vai</h2>
@@ -15,8 +17,10 @@ export default function RolePanel({ roles, onChange, disabled }) {
               Giọng
               <select value={role.voice} disabled={disabled}
                 onChange={(e) => onChange(id, { voice: e.target.value })}>
-                {VOICES.includes(role.voice) ? null : <option value={role.voice}>{role.voice}</option>}
-                {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+                {options.some((o) => o.value === role.voice) ? null : (
+                  <option value={role.voice}>{role.voice}</option>
+                )}
+                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
             <label>
@@ -33,6 +37,7 @@ export default function RolePanel({ roles, onChange, disabled }) {
                 {SPEEDS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </label>
+            {recorder?.(id)}
             <label>
               Cao độ: {role.pitch} Hz
               <input type="range" min={-50} max={50} value={role.pitch} disabled={disabled}

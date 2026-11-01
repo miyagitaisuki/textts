@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RolePanel from "./components/RolePanel.jsx";
+import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
 import Mixer from "./components/Mixer.jsx";
@@ -10,7 +11,11 @@ const nextId = (items) => {
 };
 
 export default function App() {
-  const [project, setProject] = useState(null);
+  const [project, setProjectState] = useState(null);
+  // Bản hiện tại nằm trong ref để edit() luôn lấy đúng bản mới nhất, kể cả khi gọi liên tiếp.
+  const projectRef = useRef(null);
+  const history = useRef({ past: [], future: [] });
+  const HISTORY_LIMIT = 100;
   const [filePath, setFilePath] = useState("");
   const [dirty, setDirty] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -20,17 +25,78 @@ export default function App() {
   const [suggestions, setSuggestions] = useState({});
   const [output, setOutput] = useState(null);
   const [outputStale, setOutputStale] = useState(false);
+  const [errorIds, setErrorIds] = useState([]);
+  const [voices, setVoices] = useState([]);
+  const [issues, setIssues] = useState([]);
+  const [exportOpts, setExportOpts] = useState({ format: "mp3", lufs: "", slow: false, srt: false });
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
   const items = project?.items ?? [];
   const lineCount = useMemo(() => items.filter((it) => it.type === "line").length, [items]);
 
+  function setProject(next) {
+    projectRef.current = next;
+    setProjectState(next);
+  }
+
   function edit(mutator) {
-    setProject((p) => mutator(p));
+    const cur = projectRef.current;
+    const next = mutator(cur);
+    if (next === cur) return;
+    const h = history.current;
+    h.past.push(cur);
+    if (h.past.length > HISTORY_LIMIT) h.past.shift();
+    h.future = [];
+    setProject(next);
     setDirty(true);
     setOutputStale(true);
   }
+
+  function undo() {
+    const h = history.current;
+    if (!h.past.length) return;
+    h.future.push(projectRef.current);
+    setProject(h.past.pop());
+    setDirty(true);
+    setOutputStale(true);
+  }
+
+  function redo() {
+    const h = history.current;
+    if (!h.future.length) return;
+    h.past.push(projectRef.current);
+    setProject(h.future.pop());
+    setDirty(true);
+    setOutputStale(true);
+  }
+
+  // Phím tắt: Ctrl/⌘+Z hoàn tác, Ctrl/⌘+Shift+Z hoặc Ctrl+Y làm lại, Ctrl/⌘+S lưu,
+  // Ctrl/⌘+Enter thêm câu. Bỏ qua khi đang gõ trong ô nhập để không đè lên undo của trình duyệt.
+  useEffect(() => {
+    function onKey(e) {
+      if (busy || !projectRef.current) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
+      if (key === "s") {
+        e.preventDefault();
+        save();
+      } else if (key === "enter") {
+        e.preventDefault();
+        addLine();
+      } else if (!typing && key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (!typing && ((key === "z" && e.shiftKey) || key === "y")) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Gợi ý cách đọc chỉ là tham khảo: lỗi ở đây không chặn việc soạn thảo.
   async function refreshSuggestions(proj) {
@@ -48,8 +114,24 @@ export default function App() {
 
   async function openProject() {
     const res = await window.textts.openProject();
+    if (res) applyProject(res);
+  }
+
+  async function openScript() {
+    const res = await window.textts.openScript();
     if (!res) return;
+    if (res.error) {
+      setLog(res.error);
+      return;
+    }
+    applyProject(res);
+  }
+
+  function applyProject(res) {
+    history.current = { past: [], future: [] };
     setProject(res.data);
+    window.textts.listVoices(res.data.engine).then(setVoices);
+    window.textts.lint(res.filePath).then(setIssues);
     setFilePath(res.filePath);
     setDirty(false);
     setSelectedId(null);
@@ -65,13 +147,14 @@ export default function App() {
     if (!filePath || !project) return false;
     await window.textts.saveProject(filePath, project);
     setDirty(false);
+    window.textts.lint(filePath).then(setIssues);
     refreshSuggestions(project);
     return true;
   }
 
   // Kết quả nằm cạnh project: <tên>.mp3 và <tên>.timeline.json
-  async function loadOutputFor(projectPath) {
-    const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, ".mp3"));
+  async function loadOutputFor(projectPath, format = "mp3") {
+    const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, `.${format}`));
     setOutput(res);
     setOutputStale(false);
   }
@@ -149,11 +232,21 @@ export default function App() {
     if (!(await save())) return;
     setBusy(true);
     setLog("");
-    const outputPath = filePath.replace(/\.json$/, ".mp3");
-    const res = await window.textts.generate(filePath, outputPath);
+    const format = exportOpts.format;
+    const outputPath = filePath.replace(/\.json$/, `.${format}`);
+    const lufs = exportOpts.lufs.trim() === "" ? null : Number(exportOpts.lufs);
+    const res = await window.textts.generate(filePath, outputPath, {
+      lufs, slow: exportOpts.slow, srt: exportOpts.srt,
+    });
     setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
+    // Dòng lỗi có dạng "  - L002 (dòng 5): ...": đánh dấu và cuộn tới câu lỗi đầu tiên.
+    const failed = [...res.log.matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
+    setErrorIds(failed);
+    if (failed.length) {
+      setTimeout(() => document.getElementById(`row-${failed[0]}`)?.scrollIntoView({ block: "center" }), 0);
+    }
     if (res.code === 0) {
-      await loadOutputFor(filePath);
+      await loadOutputFor(filePath, format);
       setOutputStale(false);
     }
     setBusy(false);
@@ -163,7 +256,27 @@ export default function App() {
     <div className="app">
       <header className="toolbar">
         <button onClick={openProject} disabled={busy}>Mở project.json</button>
+        <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
+        <details className="export-opts">
+          <summary>Tùy chọn xuất</summary>
+          <label>Định dạng
+            <select value={exportOpts.format} disabled={busy}
+              onChange={(e) => setExportOpts({ ...exportOpts, format: e.target.value })}>
+              <option value="mp3">MP3</option>
+              <option value="wav">WAV</option>
+            </select>
+          </label>
+          <label>LUFS (để trống = không chuẩn hóa)
+            <input type="number" step="0.5" value={exportOpts.lufs} disabled={busy}
+              placeholder="-16"
+              onChange={(e) => setExportOpts({ ...exportOpts, lufs: e.target.value })} />
+          </label>
+          <label><input type="checkbox" checked={exportOpts.slow} disabled={busy}
+            onChange={(e) => setExportOpts({ ...exportOpts, slow: e.target.checked })} /> Bản chậm 0.8×</label>
+          <label><input type="checkbox" checked={exportOpts.srt} disabled={busy}
+            onChange={(e) => setExportOpts({ ...exportOpts, srt: e.target.checked })} /> Phụ đề .srt</label>
+        </details>
         <button onClick={generate} disabled={busy || !project || lineCount === 0}>
           {busy ? "Đang xử lý..." : "Tạo âm thanh"}
         </button>
@@ -177,7 +290,8 @@ export default function App() {
         <main className="content empty-state">Mở một project.json để bắt đầu.</main>
       ) : (
         <main className="content">
-          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} />
+          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices}
+            recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />} />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>
@@ -199,6 +313,8 @@ export default function App() {
               suggestions={suggestions}
               onApply={applySuggestion}
               disabled={busy}
+              errorIds={errorIds}
+              issues={issues}
             />
           </section>
 
