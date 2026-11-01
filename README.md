@@ -155,3 +155,39 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 - Thư mục `docs/ui/` chỉ chứa ảnh tham khảo, không phải giao diện đã làm.
 - `--lufs` có thể làm cắt đỉnh (clipping) khi bài quá nhỏ hoặc nhạc nền quá to. Nếu thấy cảnh báo `Possible clipped samples`, giảm `--bgm-db` hoặc chọn LUFS thấp hơn.
 - Luôn nghe duyệt từng câu trước khi phát cho lớp, đặc biệt các chữ Hán đọc nhiều cách.
+
+## Lộ trình đề xuất
+
+Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là thứ tự thực hiện. Trạng thái cập nhật khi làm xong.
+
+**Sửa lỗi và hạ tầng**
+1. [ ] `requirements.txt` khai báo đủ `numpy` và `pyloudnorm` (đang ở PR #10).
+2. [ ] CI chạy `pytest` trên GitHub Actions (đang ở PR #10).
+3. [ ] `[sfx=...]` tìm file tương đối theo thư mục chứa kịch bản, không theo thư mục chạy lệnh.
+4. [ ] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
+
+**Giao diện biên tập**
+5. [ ] Mở kịch bản `.txt` trực tiếp trong giao diện.
+6. [ ] Hiển thị lỗi theo dòng và nhảy tới câu lỗi.
+7. [ ] Chọn giọng VOICEVOX từ danh sách lấy từ `/speakers`.
+8. [ ] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
+
+**Đầu ra cho lớp học**
+9. [ ] Chế độ luyện nói theo vai (role-play): chỉ vai người học có tiếng, vai còn lại thành khoảng lặng.
+10. [ ] Chế độ shadowing: sau mỗi câu chèn khoảng lặng để học viên nhắc lại.
+11. [ ] Xuất phiếu học tập HTML có furigana (`<ruby>`).
+
+**Tiện ích**
+12. [ ] Từ điển cách đọc do người dùng quản lý, lưu theo dự án hoặc dùng chung.
+13. [ ] Lệnh xem và xóa cache (`--clear-cache`).
+14. [ ] Xử lý hàng loạt: một thư mục kịch bản, xuất hết vào một thư mục đầu ra.
+15. [ ] Lint kịch bản trong giao diện: vai chưa khai báo, chữ Hán thiếu cách đọc, file sfx không tồn tại.
+
+**Theo mockup, chưa làm**
+16. [ ] Ghi âm giọng thật làm mẫu (nút Record).
+17. [ ] Thư viện giọng và mẫu, mục Cài đặt chung.
+18. [ ] Nút "Generate All" và xuất MP3/WAV trong giao diện.
+
+**Hạ tầng bổ sung**
+19. [ ] Cấu hình đóng gói Electron (`electron-builder`).
+20. [ ] Test cho renderer và IPC.
