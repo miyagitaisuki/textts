@@ -1,6 +1,6 @@
 {
   "name": "textts-gui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Giao diện soạn và tạo hội thoại TTS tiếng Nhật (Electron + React)",
   "main": "electron/main.cjs",
