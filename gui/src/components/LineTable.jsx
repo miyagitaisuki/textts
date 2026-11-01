@@ -58,13 +58,15 @@ export default function LineTable({
                 </select>
               </td>
               <td className="text-cell">
-                {(errorIds.includes(it.id) || issueOf[it.id]?.level === "error") ? (
-                  <span className="flag error-flag" aria-label="Lỗi">✕ </span>
-                ) : issueOf[it.id]?.level === "warning" ? (
-                  <span className="flag warn-flag" aria-label="Cảnh báo">⚠ </span>
-                ) : null}
-                <input className="text" value={it.display} disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { display: e.target.value })} />
+                <div className="text-field">
+                  {(errorIds.includes(it.id) || issueOf[it.id]?.level === "error") ? (
+                    <span className="flag error-flag" aria-label="Lỗi">✕</span>
+                  ) : issueOf[it.id]?.level === "warning" ? (
+                    <span className="flag warn-flag" aria-label="Cảnh báo">⚠</span>
+                  ) : null}
+                  <input className="text" value={it.display} disabled={disabled}
+                    onChange={(e) => onPatch(it.id, { display: e.target.value })} />
+                </div>
               </td>
               <td className="reading">
                 <SuggestionCell

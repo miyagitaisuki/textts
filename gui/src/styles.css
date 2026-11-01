@@ -102,3 +102,10 @@ audio { width: 100%; }
 button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible {
   outline: 2px solid #7dd3fc; outline-offset: 2px;
 }
+/* Kiểm tra trên màn hình thật: cột gợi ý đọc và cụm nút hàng không bị bẻ */
+.lines th { white-space: nowrap; }
+.lines td.reading { white-space: nowrap; }
+.lines td:last-child { white-space: nowrap; }
+.row-actions { display: inline-flex; gap: 2px; flex-wrap: nowrap; align-items: center; }
+.text-field { display: flex; align-items: center; gap: 6px; }
+.text-field input.text { flex: 1; min-width: 0; }
