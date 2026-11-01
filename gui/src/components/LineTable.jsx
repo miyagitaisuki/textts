@@ -5,6 +5,7 @@ const ROLE_IDS = ["1", "2", "3"];
 
 export default function LineTable({
   items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, suggestions, onApply, disabled,
+  errorIds = [],
 }) {
   return (
     <table className="lines">
@@ -44,7 +45,8 @@ export default function LineTable({
               </td>
             </tr>
           ) : (
-            <tr key={it.id} className={selectedId === it.id ? "selected" : ""}
+            <tr key={it.id} id={`row-${it.id}`}
+              className={[selectedId === it.id ? "selected" : "", errorIds.includes(it.id) ? "error" : ""].join(" ").trim()}
               onClick={() => onSelect(it.id)}>
               <td>{it.id}</td>
               <td>

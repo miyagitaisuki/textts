@@ -20,6 +20,7 @@ export default function App() {
   const [suggestions, setSuggestions] = useState({});
   const [output, setOutput] = useState(null);
   const [outputStale, setOutputStale] = useState(false);
+  const [errorIds, setErrorIds] = useState([]);
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -165,6 +166,12 @@ export default function App() {
     const outputPath = filePath.replace(/\.json$/, ".mp3");
     const res = await window.textts.generate(filePath, outputPath);
     setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
+    // Dòng lỗi có dạng "  - L002 (dòng 5): ...": đánh dấu và cuộn tới câu lỗi đầu tiên.
+    const failed = [...res.log.matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
+    setErrorIds(failed);
+    if (failed.length) {
+      setTimeout(() => document.getElementById(`row-${failed[0]}`)?.scrollIntoView({ block: "center" }), 0);
+    }
     if (res.code === 0) {
       await loadOutputFor(filePath);
       setOutputStale(false);
@@ -213,6 +220,7 @@ export default function App() {
               suggestions={suggestions}
               onApply={applySuggestion}
               disabled={busy}
+              errorIds={errorIds}
             />
           </section>
 
