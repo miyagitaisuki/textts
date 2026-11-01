@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import RolePanel from "./components/RolePanel.jsx";
 import LineTable from "./components/LineTable.jsx";
+import Timeline from "./components/Timeline.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -16,6 +17,7 @@ export default function App() {
   const [log, setLog] = useState("");
   const [busy, setBusy] = useState(false);
   const [suggestions, setSuggestions] = useState({});
+  const [output, setOutput] = useState(null);
 
   useEffect(() => window.textts.onLog((text) => setLog((prev) => prev + text)), []);
 
@@ -50,7 +52,9 @@ export default function App() {
     setSelectedId(null);
     setPreviewUrl(null);
     setLog("");
+    setOutput(null);
     refreshSuggestions(res.data);
+    loadOutputFor(res.filePath);
   }
 
   async function save() {
@@ -59,6 +63,12 @@ export default function App() {
     setDirty(false);
     refreshSuggestions(project);
     return true;
+  }
+
+  // Kết quả nằm cạnh project: <tên>.mp3 và <tên>.timeline.json
+  async function loadOutputFor(projectPath) {
+    const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, ".mp3"));
+    setOutput(res);
   }
 
   function applySuggestion(id) {
@@ -127,6 +137,7 @@ export default function App() {
     const outputPath = filePath.replace(/\.json$/, ".mp3");
     const res = await window.textts.generate(filePath, outputPath);
     setLog((prev) => prev + `\n[thoát với mã ${res.code}]`);
+    if (res.code === 0) await loadOutputFor(filePath);
     setBusy(false);
   }
 
@@ -170,6 +181,13 @@ export default function App() {
               disabled={busy}
             />
           </section>
+
+          {output && (
+            <section>
+              <h2>Timeline</h2>
+              <Timeline output={output} />
+            </section>
+          )}
 
           {previewUrl && (
             <section>

@@ -40,3 +40,37 @@ def loudness_normalize(seg: AudioSegment, target_lufs: float = -16.0) -> AudioSe
     adjusted = np.clip(adjusted, -1.0, 1.0)
     pcm = (adjusted * (scale - 1)).astype(np.int32 if seg.sample_width > 2 else np.int16)
     return seg._spawn(pcm.reshape(-1).tobytes()).set_sample_width(seg.sample_width)
+
+
+def add_background(
+    speech: AudioSegment,
+    bgm: AudioSegment,
+    gain_db: float = -18.0,
+    fade_in_ms: int = 1000,
+    fade_out_ms: int = 2000,
+) -> AudioSegment:
+    """Trộn nhạc nền lặp lại dưới lời thoại, có fade vào và fade ra."""
+    bgm = bgm.set_frame_rate(speech.frame_rate).set_channels(speech.channels)
+    bgm = bgm.set_sample_width(speech.sample_width)
+    if len(bgm) == 0:
+        raise ValueError("File nhạc nền rỗng")
+    loops = len(speech) // len(bgm) + 1
+    looped = (bgm * loops)[: len(speech)]
+    looped = looped + gain_db
+    fade_in = min(fade_in_ms, len(looped) // 2)
+    fade_out = min(fade_out_ms, len(looped) // 2)
+    looped = looped.fade_in(fade_in).fade_out(fade_out)
+    return speech.overlay(looped)
+
+
+def peaks(seg: AudioSegment, bins: int = 600) -> list[float]:
+    """Biên độ lớn nhất của từng khoảng thời gian, chuẩn hóa về 0..1 (để vẽ sóng)."""
+    if len(seg) == 0 or bins <= 0:
+        return []
+    mono = seg.set_channels(1)
+    scale = float(1 << (8 * mono.sample_width - 1))
+    samples = np.abs(np.array(mono.get_array_of_samples(), dtype=np.float64)) / scale
+    chunks = np.array_split(samples, min(bins, len(samples)))
+    values = [float(c.max()) if len(c) else 0.0 for c in chunks]
+    top = max(values) or 1.0
+    return [round(v / top, 3) for v in values]

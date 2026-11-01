@@ -33,6 +33,10 @@ def build(items: list[dict], timing: dict | None = None) -> tuple[AudioSegment, 
             out += AudioSegment.silent(it["ms"])
             prev_role = None
             continue
+        if it["type"] == "sfx":
+            out += AudioSegment.from_file(it["path"])
+            prev_role = None
+            continue
 
         seg = AudioSegment.from_file(it["audio"])
         seg = effects.strip_silence(seg, silence_len=150, silence_thresh=-45, padding=40)

@@ -13,6 +13,7 @@ import re
 
 LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
+SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
 # 漢字{かな}: giữ chữ Hán để hiển thị, gửi kana cho engine
 RUBY_RE = re.compile(r"([一-鿿々]+)\{([぀-ヿー]+)\}")
 
@@ -41,6 +42,9 @@ def parse_script(text: str) -> list[dict]:
             continue
         if m := PAUSE_RE.match(raw):
             items.append({"type": "pause", "ms": int(m[1]), "src_line": line_no})
+            cur = None
+        elif m := SFX_RE.match(raw):
+            items.append({"type": "sfx", "path": m[1], "src_line": line_no})
             cur = None
         elif m := LINE_RE.match(raw):
             cur = {

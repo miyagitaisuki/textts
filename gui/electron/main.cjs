@@ -101,6 +101,19 @@ ipcMain.handle("reading:suggest", async (_evt, { texts }) => {
   });
 });
 
+// Đọc kết quả sau khi tạo âm thanh: file audio (data URL) và timeline cạnh nó.
+ipcMain.handle("output:load", async (_evt, { audioPath }) => {
+  if (!audioPath || !fs.existsSync(audioPath)) return null;
+  const base = audioPath.replace(/\.[^./\\]+$/, "");
+  const timelinePath = `${base}.timeline.json`;
+  if (!fs.existsSync(timelinePath)) return null;
+  const timeline = JSON.parse(fs.readFileSync(timelinePath, "utf-8"));
+  const ext = path.extname(audioPath).slice(1).toLowerCase();
+  const mime = ext === "wav" ? "audio/wav" : "audio/mpeg";
+  const dataUrl = `data:${mime};base64,${fs.readFileSync(audioPath).toString("base64")}`;
+  return { timeline, dataUrl };
+});
+
 app.whenReady().then(() => {
   createWindow();
   app.on("activate", () => {

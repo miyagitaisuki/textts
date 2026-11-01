@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("textts", {
     ipcRenderer.invoke("tts:generate", { projectPath, outputPath }),
   preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
   suggestReadings: (texts) => ipcRenderer.invoke("reading:suggest", { texts }),
+  loadOutput: (audioPath) => ipcRenderer.invoke("output:load", { audioPath }),
   onLog: (callback) => {
     const listener = (_evt, text) => callback(text);
     ipcRenderer.on("tts:log", listener);
