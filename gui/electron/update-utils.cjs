@@ -1,6 +1,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 
 // Hàm thuần của bộ tự cập nhật: không phụ thuộc Electron nên có thể test trên Node thường.
 
@@ -37,4 +39,39 @@ function writeSwapScript(newExe, targetExe, pid) {
   return script;
 }
 
-module.exports = { updateErrorText, compareVersions, writeSwapScript };
+// Tải file theo chuyển hướng của GitHub (302 tới objects.githubusercontent.com).
+function download(url, dest, onProgress, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith("http:") ? http : https; // ứng dụng thật chỉ gọi https tới GitHub
+    client.get(url, { headers: { "User-Agent": "textts-updater" } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        return resolve(download(new URL(res.headers.location, url).toString(), dest, onProgress, redirects - 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      const total = Number(res.headers["content-length"]) || 0;
+      let got = 0;
+      const file = fs.createWriteStream(dest);
+      let lastStep = -1;
+      res.on("data", (c) => {
+        got += c.length;
+        if (!total) return;
+        const step = Math.floor((got / total) * 4) * 25; // báo mỗi 25%
+        if (step !== lastStep) {
+          lastStep = step;
+          onProgress?.(step);
+        }
+      });
+      res.pipe(file);
+      file.on("finish", () => file.close(() => resolve(dest)));
+      file.on("error", reject);
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+
+module.exports = { updateErrorText, compareVersions, writeSwapScript, download };
