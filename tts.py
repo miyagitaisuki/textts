@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
+from core.readings import load_readings
 from core.builder import build, practice_items, to_srt
 from core.models import (
     Config,
@@ -142,10 +143,10 @@ def dry_run(project: Project) -> None:
             print(f"        đọc: {it.tts_text}")
 
 
-def project_from_script(script: Path, cfg: Config) -> Project:
+def project_from_script(script: Path, cfg: Config, readings: dict[str, str] | None = None) -> Project:
     items = [
         {k: v for k, v in it.items() if k != "text"}  # "text" thô đã có tts_text/display/plain
-        for it in parse_script(script.read_text(encoding="utf-8"))
+        for it in parse_script(script.read_text(encoding="utf-8"), readings)
     ]
     return Project.model_validate(
         {
@@ -158,6 +159,58 @@ def project_from_script(script: Path, cfg: Config) -> Project:
     )
 
 
+def _cache_command(cache_dir: Path, *, clear: bool) -> int:
+    files = [p for p in cache_dir.glob("*") if p.is_file()] if cache_dir.is_dir() else []
+    size_mb = sum(p.stat().st_size for p in files) / 1_000_000
+    if not clear:
+        print(f"Cache {cache_dir}: {len(files)} file, {size_mb:.1f} MB")
+        return 0
+    for p in files:
+        p.unlink()
+    print(f"Đã xóa {len(files)} file ({size_mb:.1f} MB) trong {cache_dir}")
+    return 0
+
+
+def _strip_options(argv: list[str], names: set[str]) -> list[str]:
+    """Bỏ các tùy chọn (kèm giá trị) có tên trong `names` khỏi danh sách tham số."""
+    out, skip = [], False
+    for tok in argv:
+        if skip:
+            skip = False
+            continue
+        if tok in names:
+            skip = True
+            continue
+        if any(tok.startswith(n + "=") for n in names):
+            continue
+        out.append(tok)
+    return out
+
+
+def run_batch(batch_dir: Path, outdir: Path, argv: list[str]) -> int:
+    """Chạy lần lượt mọi kịch bản .txt trong thư mục; mỗi file ra <tên>.mp3 trong outdir.
+
+    Tùy chọn còn lại (--lufs, --srt, --bgm...) được truyền nguyên cho từng file.
+    Một file lỗi không dừng batch; cuối cùng trả về 1 nếu có file lỗi.
+    """
+    scripts = sorted(batch_dir.glob("*.txt"))
+    if not scripts:
+        print(f"Không có kịch bản .txt trong {batch_dir}", file=sys.stderr)
+        return 2
+    extra = _strip_options(argv, {"--batch", "--outdir"})
+    failed = []
+    for script in scripts:
+        print(f"== {script.name}")
+        code = main([str(script), "-o", str(outdir / f"{script.stem}.mp3"), *extra])
+        if code != 0:
+            failed.append(script.name)
+    if failed:
+        print("Các file lỗi: " + ", ".join(failed), file=sys.stderr)
+        return 1
+    print(f"Hoàn tất {len(scripts)} kịch bản.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="TTS hội thoại tiếng Nhật")
     src = ap.add_mutually_exclusive_group()
@@ -167,6 +220,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
     ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
                     help="in danh sách giọng của engine dạng JSON (edge hoặc voicevox) rồi thoát")
+    ap.add_argument("--batch", type=Path, metavar="DIR",
+                    help="xử lý mọi file .txt trong thư mục (cần --outdir)")
+    ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
+    ap.add_argument("--cache-info", action="store_true", help="in số file và dung lượng thư mục cache rồi thoát")
+    ap.add_argument("--clear-cache", action="store_true", help="xóa thư mục cache rồi thoát")
+    ap.add_argument("--readings", type=Path, default=ROOT / "readings.yaml",
+                    help="từ điển cách đọc (từ: kana), áp dụng khi nhập kịch bản")
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
     ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
@@ -189,7 +249,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="nhạc nền lặp lại, trộn dưới lời thoại (mp3/wav/...)")
     ap.add_argument("--bgm-db", type=float, default=-18.0,
                     help="độ nhỏ của nhạc nền so với lời thoại, dB (mặc định -18)")
+    argv = sys.argv[1:] if argv is None else argv
     args = ap.parse_args(argv)
+
+    if args.cache_info or args.clear_cache:
+        return _cache_command(args.cache_dir, clear=args.clear_cache)
 
     if args.list_voices:
         if args.list_voices == "voicevox":
@@ -198,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
             voices = [{"value": v, "label": v} for v in EDGE_VOICES]
         print(json.dumps(voices, ensure_ascii=False))
         return 0
+    if args.batch:
+        if args.script or args.project or args.outdir is None:
+            ap.error("--batch cần --outdir và không dùng cùng kịch bản đơn hoặc --project")
+        return run_batch(args.batch, args.outdir, argv)
     if not (args.script or args.project):
         ap.error("cần truyền kịch bản .txt hoặc --project")
 
@@ -205,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.project:
             project = load_project(args.project)
         else:
-            project = project_from_script(args.script, load_config(args.roles))
+            readings = load_readings(args.readings)
+            project = project_from_script(args.script, load_config(args.roles), readings)
     except (ScriptError, ValidationError, yaml.YAMLError, OSError, ValueError) as exc:
         print(f"Lỗi: {exc}", file=sys.stderr)
         return 2

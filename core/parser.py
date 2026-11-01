@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 
+from core.readings import apply_readings
+
 LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
 SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
@@ -34,7 +36,7 @@ def parse_attrs(raw: str | None) -> dict[str, str]:
     return attrs
 
 
-def parse_script(text: str) -> list[dict]:
+def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict]:
     items: list[dict] = []
     cur: dict | None = None
     for line_no, raw in enumerate(text.splitlines(), 1):
@@ -70,9 +72,9 @@ def parse_script(text: str) -> list[dict]:
     for i, it in enumerate(items):
         it["id"] = f"L{i + 1:03d}"
         if it["type"] == "line":
-            it["display"] = it["text"]                       # giữ furigana để hiển thị
-            it["tts_text"] = RUBY_RE.sub(r"\2", it["text"])  # gửi kana cho engine
-            it["plain"] = RUBY_RE.sub(r"\1", it["text"])     # bản không furigana cho phụ đề
+            it["display"] = apply_readings(it["text"], readings or {})  # giữ furigana để hiển thị
+            it["tts_text"] = RUBY_RE.sub(r"\2", it["display"])  # gửi kana cho engine
+            it["plain"] = RUBY_RE.sub(r"\1", it["display"])     # bản không furigana cho phụ đề
     return items
 
 
