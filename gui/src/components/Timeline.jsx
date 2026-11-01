@@ -5,13 +5,39 @@ import { useEffect, useRef, useState } from "react";
 const ROLE_COLORS = { "1": "#4ade80", "2": "#60a5fa", "3": "#c084fc" };
 const DRAG_THRESHOLD_PX = 4;
 
+// Thanh VU: mức của từng vai tại vị trí phát hiện tại.
+function VuMeters({ levels, nowMs, durationMs }) {
+  const roles = Object.keys(levels ?? {});
+  const bins = roles.length ? levels[roles[0]].length : 0;
+  const index = bins ? Math.min(bins - 1, Math.max(0, Math.floor((nowMs / durationMs) * bins))) : 0;
+  return (
+    <div className="vu">
+      {roles.map((role) => {
+        const level = levels[role][index] ?? 0;
+        return (
+          <div key={role} className="vu-channel" title={`Vai ${role}: ${Math.round(level * 100)}%`}>
+            <div className="vu-track">
+              <div className="vu-fill" style={{
+                height: `${Math.round(level * 100)}%`,
+                background: level > 0.9 ? "#ef4444" : level > 0.7 ? "#facc15" : ROLE_COLORS[role],
+              }} />
+            </div>
+            <span className="fader-label" style={{ color: ROLE_COLORS[role] }}>[{role}]</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Timeline({ output, onShift, disabled }) {
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
   const dragRef = useRef(null);
   const [now, setNow] = useState(0);
   const [drag, setDrag] = useState(null); // {id, offsetMs}
-  const { peaks, items, duration_ms } = output.timeline;
+  const { peaks, items, duration_ms, role_levels } = output.timeline;
+  const rafRef = useRef(null);
   const duration = duration_ms / 1000;
 
   useEffect(() => {
@@ -42,6 +68,21 @@ export default function Timeline({ output, onShift, disabled }) {
     ctx.fillStyle = "#f8fafc";
     ctx.fillRect(x, 0, 2, height);
   }, [output, now, drag]);
+
+  // Khi đang phát, cập nhật vị trí mỗi khung hình để thanh VU chạy mượt.
+  function startTracking() {
+    const tick = () => {
+      if (audioRef.current) setNow(audioRef.current.currentTime * 1000);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+  }
+  function stopTracking() {
+    cancelAnimationFrame(rafRef.current);
+    if (audioRef.current) setNow(audioRef.current.currentTime * 1000);
+  }
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
   function canvasX(e) {
     const canvas = canvasRef.current;
@@ -95,7 +136,12 @@ export default function Timeline({ output, onShift, disabled }) {
   return (
     <div className="timeline">
       <audio ref={audioRef} controls src={output.dataUrl}
+        onPlay={startTracking}
+        onPause={stopTracking}
+        onEnded={stopTracking}
+        onSeeked={(e) => setNow(e.currentTarget.currentTime * 1000)}
         onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)} />
+      <VuMeters levels={role_levels} nowMs={now} durationMs={duration_ms} />
       <canvas
         ref={canvasRef}
         width={1200}

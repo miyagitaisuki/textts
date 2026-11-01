@@ -20,7 +20,7 @@ from pydub import AudioSegment
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from core.audio import add_background, loudness_normalize, peaks, time_stretch
+from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
 from core.builder import build, to_srt
 from core.models import (
     Config,
@@ -286,6 +286,7 @@ def write_timeline(audio, placed: list[dict], path: Path) -> None:
     data = {
         "duration_ms": len(audio),
         "peaks": peaks(audio, bins=600),
+        "role_levels": role_levels(audio, placed, bins=600),
         "items": [
             {"id": it["id"], "role": it["role"], "start_ms": it["start_ms"], "end_ms": it["end_ms"]}
             for it in placed
