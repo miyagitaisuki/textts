@@ -62,6 +62,37 @@ ipcMain.handle("project:open", async () => {
   return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
 });
 
+// Mở kịch bản .txt: tts.py phân tích và lưu thành project.json (chọn nơi lưu bằng hộp thoại).
+ipcMain.handle("script:open", async () => {
+  const picked = await dialog.showOpenDialog({
+    title: "Mở kịch bản .txt",
+    filters: [{ name: "Kịch bản", extensions: ["txt"] }],
+    properties: ["openFile"],
+  });
+  if (picked.canceled || picked.filePaths.length === 0) return null;
+  const scriptPath = path.resolve(picked.filePaths[0]);
+  const saved = await dialog.showSaveDialog({
+    title: "Lưu project.json",
+    defaultPath: path.join(path.dirname(scriptPath), `${path.parse(scriptPath).name}.json`),
+    filters: [{ name: "Project", extensions: ["json"] }],
+  });
+  if (saved.canceled || !saved.filePath) return null;
+  const filePath = path.resolve(saved.filePath);
+  allowDirOf(filePath);
+
+  const result = await new Promise((resolve) => {
+    const args = [TTS_CLI, scriptPath, "--save-project", filePath, "--dry-run"];
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT });
+    let log = "";
+    child.stdout.on("data", (c) => (log += c));
+    child.stderr.on("data", (c) => (log += c));
+    child.on("error", (err) => resolve({ code: -1, log: String(err) }));
+    child.on("close", (code) => resolve({ code, log }));
+  });
+  if (result.code !== 0) return { error: result.log.trim() || "Không phân tích được kịch bản" };
+  return { filePath, data: JSON.parse(fs.readFileSync(filePath, "utf-8")) };
+});
+
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   const target = assertAllowed(filePath, new Set([".json"]));
   fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");

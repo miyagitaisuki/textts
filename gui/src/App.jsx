@@ -48,7 +48,20 @@ export default function App() {
 
   async function openProject() {
     const res = await window.textts.openProject();
+    if (res) applyProject(res);
+  }
+
+  async function openScript() {
+    const res = await window.textts.openScript();
     if (!res) return;
+    if (res.error) {
+      setLog(res.error);
+      return;
+    }
+    applyProject(res);
+  }
+
+  function applyProject(res) {
     setProject(res.data);
     setFilePath(res.filePath);
     setDirty(false);
@@ -163,6 +176,7 @@ export default function App() {
     <div className="app">
       <header className="toolbar">
         <button onClick={openProject} disabled={busy}>Mở project.json</button>
+        <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={save} disabled={busy || !project || !dirty}>Lưu</button>
         <button onClick={generate} disabled={busy || !project || lineCount === 0}>
           {busy ? "Đang xử lý..." : "Tạo âm thanh"}

@@ -167,7 +167,7 @@ Các đề xuất sau đến từ đợt rà soát mã nguồn. Thứ tự là t
 4. [x] Giới hạn đường dẫn mà IPC của Electron được đọc và ghi (`project:save`, `output:load`).
 
 **Giao diện biên tập**
-5. [ ] Mở kịch bản `.txt` trực tiếp trong giao diện.
+5. [x] Mở kịch bản `.txt` trực tiếp trong giao diện.
 6. [ ] Hiển thị lỗi theo dòng và nhảy tới câu lỗi.
 7. [ ] Chọn giọng VOICEVOX từ danh sách lấy từ `/speakers`.
 8. [ ] Undo/Redo và phím tắt (Ctrl+S, Ctrl+Z, Enter).
