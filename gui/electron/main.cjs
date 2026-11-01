@@ -6,6 +6,7 @@ const { sanitizeName, timestampName, uniqueName, validOutputRoot } = require("./
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
+const updater = require("./updater.cjs");
 
 // Khi đóng gói, tts.py và core/ nằm trong resources/engine (xem "build.extraResources" trong package.json).
 const REPO_ROOT = app.isPackaged
@@ -29,7 +30,14 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+  return win;
 }
+
+// Kiểm tra cập nhật bấm tay từ thanh công cụ.
+ipcMain.handle("update:check", async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  return updater.checkNow(win, (text) => evt.sender.send("tts:log", `${text}\n`));
+});
 
 // Chỉ cho phép đọc/ghi trong thư mục của các project đã mở qua hộp thoại.
 // Renderer không được chỉ định đường dẫn tùy ý (xem electron/guard.cjs).
@@ -240,7 +248,9 @@ ipcMain.handle("output:load", async (_evt, { audioPath }) => {
 });
 
 app.whenReady().then(() => {
-  createWindow();
+  const win = createWindow();
+  // Tự kiểm tra bản mới khi mở app; thông báo lỗi (nếu có) đưa vào nhật ký giao diện.
+  updater.setupUpdater(win, (text) => win.webContents.send("tts:log", `${text}\n`));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

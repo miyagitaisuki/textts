@@ -194,6 +194,11 @@ export default function App() {
     applyProject(res);
   }
 
+  async function checkUpdates() {
+    const res = await window.textts.checkForUpdates();
+    setLog((prev) => prev + `\n${res.message}\n`);
+  }
+
   async function openProjectFolder() {
     const res = await window.textts.openFolder(filePath);
     if (res?.error) setLog(`Không mở được thư mục: ${res.error}`);
@@ -331,6 +336,7 @@ export default function App() {
         <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
         <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
         <button className="ghost" onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
+        <button className="ghost" onClick={checkUpdates} disabled={busy} title="Kiểm tra bản mới trên GitHub">Kiểm tra cập nhật</button>
         <span className="toolbar-spacer" />
         <button className="ghost" onClick={undo} disabled={busy || !canUndo} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button>
         <button className="ghost" onClick={redo} disabled={busy || !canRedo} title="Làm lại (Ctrl+Shift+Z)" aria-label="Làm lại">↷</button>

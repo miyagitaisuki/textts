@@ -66,6 +66,29 @@ npm install
 npm run dev
 ```
 
+## Tự cập nhật và phát hành (bản Windows)
+
+Bản portable (`textts-<phiên bản>-portable.exe`) tự kiểm tra bản mới trên GitHub Releases khi mở, và có nút **Kiểm tra cập nhật** trên thanh công cụ.
+
+- Khi có bản mới, ứng dụng tải về rồi hỏi người dùng. Nếu đồng ý, app đóng, thay file exe bằng bản mới rồi mở lại.
+- Nguồn cập nhật: `build.publish` trong `gui/package.json` (GitHub `miyagitaisuki/textts`). Mã trong `gui/electron/updater.cjs`.
+- Chỉ hoạt động trong bản đã đóng gói. Khi chạy `npm run dev` nút kiểm tra chỉ báo "chỉ kiểm tra trong bản đã đóng gói".
+
+Phát hành một bản mới:
+
+1. Tăng `version` trong `gui/package.json` (ví dụ `0.1.0` → `0.1.1`) rồi merge vào `main`.
+2. Build bản portable trên máy Windows (lệnh này cũng tạo `latest.yml`):
+
+```bash
+cd gui
+npm ci
+npm run dist:win
+```
+
+3. Tạo Release trên GitHub với tag `v<phiên bản>` (ví dụ `v0.1.1`), tải lên **cả hai file** trong `gui/release/`: `textts-<phiên bản>-portable.exe` và `latest.yml`. Thiếu `latest.yml` thì app cũ không thấy bản mới.
+
+Người dùng đã có bản cũ sẽ được gợi ý cập nhật ở lần mở sau. Lưu ý: electron-updater không hỗ trợ cài trực tiếp bản portable, nên việc thay file do `updater.cjs` làm.
+
 ## Đầu ra cho lớp học
 
 ```bash

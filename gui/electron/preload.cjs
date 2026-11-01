@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("textts", {
   importText: (text) => ipcRenderer.invoke("script:importText", { text }),
   getOutputRoot: () => ipcRenderer.invoke("outputRoot:get"),
   pickOutputRoot: () => ipcRenderer.invoke("outputRoot:pick"),
+  checkForUpdates: () => ipcRenderer.invoke("update:check"),
   openFolder: (projectPath) => ipcRenderer.invoke("folder:open", { projectPath }),
   listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
   loadPresets: () => ipcRenderer.invoke("presets:load"),
