@@ -25,6 +25,11 @@ jobs:
           cache: npm
           cache-dependency-path: gui/package-lock.json
 
+      # Python đầy đủ để build wheel (pyopenjtalk) cho bản embeddable; phải khớp 3.12 trong bundle-python.ps1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Cài dependency
         run: npm ci
 
