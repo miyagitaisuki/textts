@@ -25,11 +25,13 @@ $PyZip = Join-Path $Tmp "python.zip"
 Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-embed-amd64.zip" -OutFile $PyZip
 Expand-Archive -Path $PyZip -DestinationPath $PyDir -Force
 
-# 2. Bật site-packages (embeddable mặc định tắt "import site") và thêm thư mục repo vào sys.path
+# 2. Bật site-packages (embeddable mặc định tắt "import site") và thêm resources\engine (..\engine, tính từ thư mục python) vào sys.path:
+#    bản embeddable có ._pth nên không tự thêm thư mục của script, thiếu dòng này sẽ lỗi "No module named 'core'"
 $PthFile = Join-Path $PyDir "python$PyTag._pth"
 @(
     "python$PyTag.zip",
     ".",
+    "..\engine",
     "Lib\site-packages",
     "import site"
 ) | Set-Content -Encoding ASCII $PthFile
