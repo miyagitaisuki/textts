@@ -61,3 +61,22 @@ def test_role_gain_bounds_validated():
 def test_delay_must_not_be_negative():
     with pytest.raises(ValidationError):
         LineItem(id="L001", src_line=1, role="1", display="はい", tts_text="", plain="", delay_ms=-5)
+
+
+def test_question_gap_added_after_question_before_answer(tmp_path):
+    f = _tone_file(tmp_path / "a.wav", ms=200)
+    items = [
+        {"type": "line", "id": "L001", "src_line": 1, "role": "1", "audio": f, "plain": "駅はどこですか？"},
+        {"type": "line", "id": "L002", "src_line": 2, "role": "2", "audio": f, "plain": "あそこです。"},
+        {"type": "line", "id": "L003", "src_line": 3, "role": "1", "audio": f, "plain": "ありがとう。"},
+    ]
+    _, placed = build(items, {"lead_in_ms": 0, "tail_ms": 0, "turn_gap_ms": 400, "same_speaker_gap_ms": 200})
+    # L001 is question: ends at ~200ms
+    # L002 is answer to L001: gap should be turn_gap_ms (400) + 100 = 500ms
+    gap_after_q = placed[1]["start_ms"] - placed[0]["end_ms"]
+    assert gap_after_q == 500
+
+    # L002 ends, L003 is NOT following a question: gap should be turn_gap_ms (400)
+    gap_normal = placed[2]["start_ms"] - placed[1]["end_ms"]
+    assert gap_normal == 400
+

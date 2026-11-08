@@ -20,7 +20,7 @@ def test_no_options_keeps_items():
 def test_role_play_replaces_other_roles_with_silence_of_same_length():
     out = practice_items(ITEMS, PLACED, practice_role="1")
     assert out[0] == ITEMS[0]
-    assert out[1] == {"type": "pause", "ms": 750}
+    assert out[1] == {"type": "pause", "ms": 750, "role": "2"}
     assert out[2] == ITEMS[2]
     assert out[3] == ITEMS[3]
 
@@ -39,7 +39,7 @@ def test_shadow_only_for_practice_role():
     out = practice_items(ITEMS, PLACED, practice_role="1", shadow_gap_ms=1500)
     assert out == [
         ITEMS[0], {"type": "pause", "ms": 2500},
-        {"type": "pause", "ms": 750},
+        {"type": "pause", "ms": 750, "role": "2"},
         ITEMS[2],
         ITEMS[3], {"type": "pause", "ms": 2300},
     ]

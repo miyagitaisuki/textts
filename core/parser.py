@@ -19,7 +19,7 @@ from core.readings import apply_readings
 
 LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
 # Dạng rút gọn: số vai ở đầu dòng (không thụt), sau đó là khoảng trắng hoặc dấu : ： . 、
-BARE_LINE_RE = re.compile(r"^(\d)[ \t:：.、]+(.+)$")
+BARE_LINE_RE = re.compile(r"^(\d+)[ \t:：.、]+(.+)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
 SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
 # 漢字{かな}: giữ chữ Hán để hiển thị, gửi kana cho engine

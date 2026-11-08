@@ -28,19 +28,21 @@ from core.paths import sfx_path
 from core.readings import load_readings
 from core.worksheet import worksheet_html
 from providers.base import TTSProvider
-from providers.edge import EdgeProvider
+from providers.edge import VOICES as EDGE_VOICES, EdgeProvider
 from providers.voicevox import VoicevoxProvider, list_speakers
+from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
 from tts import PROVIDERS, cache_key, synth_all, write_audio, write_timeline
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = ROOT / "output" / "api"
 DEFAULT_CACHE_DIR = ROOT / "cache"
 VOICEVOX_DEFAULT_URL = "http://127.0.0.1:50021"
+AIVIS_DEFAULT_URL = "http://127.0.0.1:10101"
 
 app = FastAPI(
-    title="textts VOICEVOX API",
-    description="REST API cho AI sinh giọng nói hội thoại tiếng Nhật, phụ đề và phiếu bài tập Furigana.",
-    version="1.0.0",
+    title="textts TTS API",
+    description="REST API cho AI sinh giọng nói hội thoại tiếng Nhật (VOICEVOX, AivisSpeech, Edge-TTS), phụ đề và phiếu bài tập Furigana.",
+    version="1.1.0",
 )
 
 # Cho phép CORS để các client web / local AI tool có thể gọi
@@ -82,7 +84,7 @@ class DialogueOptions(BaseModel):
 class DialogueRequest(BaseModel):
     title: str = Field("hoi_thoai", description="Tiêu đề bài học / tên file")
     script: str = Field(..., description="Kịch bản tiếng Nhật. Mỗi dòng bắt đầu bằng vai: [1] ... hoặc 1 ...")
-    engine: Literal["voicevox", "edge"] = Field("voicevox", description="Engine TTS sử dụng")
+    engine: Literal["voicevox", "edge", "aivis"] = Field("voicevox", description="Engine TTS sử dụng (voicevox, aivis, edge)")
     roles: dict[str, RoleInput] | None = Field(
         None, description="Cấu hình vai tùy chọn (nếu để trống sẽ dùng cấu hình mặc định trong roles.yaml)"
     )
@@ -108,31 +110,58 @@ async def check_voicevox_alive(url: str | None = None) -> bool:
         return False
 
 
+async def check_aivis_alive(url: str | None = None) -> bool:
+    target = (url or os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2.0)) as session:
+            async with session.get(f"{target}/version") as r:
+                return r.status == 200
+    except Exception:
+        return False
+
+
 # --- Endpoints ---
-@app.get("/api/v1/health", summary="Kiểm tra trạng thái hệ thống và VOICEVOX")
+@app.get("/api/v1/health", summary="Kiểm tra trạng thái hệ thống, VOICEVOX và AivisSpeech")
 async def health_check():
     vv_url = (os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
     vv_ok = await check_voicevox_alive(vv_url)
+    aivis_url = (os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
+    aivis_ok = await check_aivis_alive(aivis_url)
     return {
         "status": "ok",
         "voicevox_connected": vv_ok,
         "voicevox_url": vv_url,
+        "aivis_connected": aivis_ok,
+        "aivis_url": aivis_url,
         "cache_dir": str(DEFAULT_CACHE_DIR),
-        "version": "1.0.0",
+        "version": "1.1.0",
     }
 
 
-@app.get("/api/v1/speakers", summary="Liệt kê danh sách giọng và phong cách nhân vật VOICEVOX")
-async def get_speakers():
-    vv_url = (os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
-    try:
-        speakers = await list_speakers(base_url=vv_url)
-        return {"ok": True, "engine": "voicevox", "speakers": speakers}
-    except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Không kết nối được tới VOICEVOX Engine tại {vv_url}. Hãy chắc chắn rằng VOICEVOX đã được khởi động. Chi tiết: {exc}",
-        )
+@app.get("/api/v1/speakers", summary="Liệt kê danh sách giọng và phong cách nhân vật (VOICEVOX, Aivis, Edge)")
+async def get_speakers(engine: Literal["voicevox", "aivis", "edge"] = "voicevox"):
+    if engine == "edge":
+        return {"ok": True, "engine": "edge", "speakers": [{"value": v, "label": v} for v in EDGE_VOICES]}
+    elif engine == "aivis":
+        url = (os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
+        try:
+            speakers = await aivis_list_speakers(base_url=url, only_normal=True)
+            return {"ok": True, "engine": "aivis", "speakers": speakers}
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Không kết nối được tới AivisSpeech Engine tại {url}. Hãy chắc chắn rằng AivisSpeech đã được khởi động. Chi tiết: {exc}",
+            )
+    else:
+        vv_url = (os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
+        try:
+            speakers = await list_speakers(base_url=vv_url)
+            return {"ok": True, "engine": "voicevox", "speakers": speakers}
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Không kết nối được tới VOICEVOX Engine tại {vv_url}. Hãy chắc chắn rằng VOICEVOX đã được khởi động. Chi tiết: {exc}",
+            )
 
 
 @app.post("/api/v1/preview-script", summary="Phân tích kịch bản và gợi ý Furigana cho chữ Hán")
@@ -193,6 +222,11 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
             for role_id, r in roles_dict.items():
                 if not r.voice.isdigit():
                     roles_dict[role_id] = r.model_copy(update={"voice": "3" if role_id == "1" else "2"})
+        elif req.engine == "aivis":
+            # Gán style ID mặc định JVNV (Style-BERT-VITS2) nếu roles.yaml dùng giọng Edge
+            for role_id, r in roles_dict.items():
+                if not r.voice.isdigit():
+                    roles_dict[role_id] = r.model_copy(update={"voice": "888753760" if role_id == "1" else "888753770"})
 
     # 2. Phân tích kịch bản
     readings_file = ROOT / "readings.yaml"
@@ -206,8 +240,13 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
     for it in raw_items:
         if it.get("type") == "line" and it.get("role") not in roles_dict:
             # Tự động khởi tạo vai nếu chưa khai báo
+            default_voice = "ja-JP-NanamiNeural"
+            if req.engine == "voicevox":
+                default_voice = "3" if it["role"] == "1" else "2"
+            elif req.engine == "aivis":
+                default_voice = "888753760" if it["role"] == "1" else "888753770"
             roles_dict[it["role"]] = Role(
-                voice="3" if it["role"] == "1" else "2",
+                voice=default_voice,
                 name=f"Vai {it['role']}",
                 emotion="neutral",
                 speed="normal",
@@ -226,6 +265,13 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
         items=clean_items,
     )
 
+    # Kiểm tra vai luyện nói nếu có
+    if req.options.role_play and req.options.role_play not in project.roles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Không tìm thấy vai [{req.options.role_play}] trong project (các vai có sẵn: {', '.join(project.roles)})",
+        )
+
     # 4. Kiểm tra provider
     if req.engine not in PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Engine không hỗ trợ: {req.engine}")
@@ -237,6 +283,13 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
             raise HTTPException(
                 status_code=503,
                 detail="VOICEVOX Engine chưa chạy. Hãy khởi động ứng dụng VOICEVOX trước khi gọi API.",
+            )
+    elif req.engine == "aivis":
+        aivis_ok = await check_aivis_alive(getattr(provider, "base_url", None))
+        if not aivis_ok:
+            raise HTTPException(
+                status_code=503,
+                detail="AivisSpeech Engine chưa chạy. Hãy khởi động ứng dụng AivisSpeech trước khi gọi API.",
             )
 
     # 5. Tổng hợp âm thanh song song có cache

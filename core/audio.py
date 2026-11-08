@@ -26,14 +26,19 @@ def time_stretch(seg: AudioSegment, rate: float) -> AudioSegment:
 
 
 def loudness_normalize(seg: AudioSegment, target_lufs: float = -16.0) -> AudioSegment:
-    """Chuẩn hóa độ to tích hợp (LUFS) về mức đích. Đoạn im lặng hoàn toàn được giữ nguyên."""
+    """Chuẩn hóa độ to tích hợp (LUFS) về mức đích. Đoạn im lặng hoàn toàn hoặc quá ngắn (< 400ms) được giữ nguyên."""
+    if len(seg) < 400:
+        return seg
     channels = seg.channels
     scale = float(1 << (8 * seg.sample_width - 1))
     samples = np.array(seg.get_array_of_samples(), dtype=np.float64) / scale
     samples = samples.reshape(-1, channels)
 
     meter = pyln.Meter(seg.frame_rate)
-    loudness = meter.integrated_loudness(samples)
+    try:
+        loudness = meter.integrated_loudness(samples)
+    except ValueError:
+        return seg
     if not np.isfinite(loudness):
         return seg
     adjusted = pyln.normalize.loudness(samples, loudness, target_lufs)

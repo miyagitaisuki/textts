@@ -3,16 +3,23 @@ from __future__ import annotations
 
 import html
 
-from core.normalize import _HAS_KANJI, _KANJI_ONLY, _clean_pron, _tokens
+from core.normalize import _HAS_KANJI, _clean_pron, _tokens, annotate_token
 from core.parser import RUBY_RE
 
 
 def _auto_ruby(text: str) -> str:
-    """Chú âm tự động cho các từ toàn Hán chưa có `{かな}` (pyopenjtalk)."""
+    """Chú âm tự động cho các từ toàn Hán và từ có okurigana chưa có `{かな}` (pyopenjtalk)."""
     parts = []
     for surface, pron in _tokens(text):
-        if pron is not None and _KANJI_ONLY.match(surface):
-            parts.append(_ruby(surface, _clean_pron(pron)))
+        if pron is not None and _HAS_KANJI.search(surface):
+            ann = annotate_token(surface, pron)
+            sub_parts, last = [], 0
+            for m in RUBY_RE.finditer(ann):
+                sub_parts.append(html.escape(ann[last:m.start()]))
+                sub_parts.append(_ruby(m.group(1), m.group(2)))
+                last = m.end()
+            sub_parts.append(html.escape(ann[last:]))
+            parts.append("".join(sub_parts))
         else:
             parts.append(html.escape(surface))
     return "".join(parts)

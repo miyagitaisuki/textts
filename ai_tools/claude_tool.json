@@ -14,7 +14,7 @@
       },
       "engine": {
         "type": "string",
-        "enum": ["voicevox", "edge"],
+        "enum": ["voicevox", "aivis", "edge"],
         "description": "Engine tổng hợp giọng nói. Mặc định là 'voicevox'.",
         "default": "voicevox"
       },

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from core.models import LineItem, Project, SfxItem
+from core.parser import RUBY_RE
 from core.paths import sfx_path
 
 _KANJI = re.compile(r"[一-鿿々]")
@@ -26,7 +27,8 @@ def lint_project(project: Project, base: Path) -> list[dict]:
                            "message": f"vai [{it.role}] chưa khai báo trong roles.yaml"})
         if not it.tts_text.strip():
             issues.append({"id": it.id, "level": "error", "message": "câu thoại trống"})
-        if _KANJI.search(it.plain) and it.display == it.plain:
+        unannotated = RUBY_RE.sub("", it.display)
+        if _KANJI.search(unannotated):
             # Chữ Hán chưa có {かな}: chỉ nhắc, vì phần lớn trường hợp pyopenjtalk đọc đúng.
             issues.append({"id": it.id, "level": "warning",
                            "message": "có chữ Hán chưa có cách đọc {かな}; nên kiểm tra"})

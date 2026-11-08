@@ -99,3 +99,61 @@ def test_generate_dialogue_mocked(mock_vv_alive, mock_synth, tmp_path):
         assert "slow_audio" in data["files"]
         assert "worksheet_html" in data["files"]
         assert len(data["timeline"]) == 2
+
+
+@patch("server.synth_all", new_callable=AsyncMock)
+@patch("server.check_aivis_alive", new_callable=AsyncMock)
+def test_generate_dialogue_aivis_mocked(mock_aivis_alive, mock_synth, tmp_path):
+    from pydub import AudioSegment
+    import server
+
+    mock_aivis_alive.return_value = True
+
+    async def fake_synth(project, provider, cache_dir):
+        dummy_wav = tmp_path / "dummy.wav"
+        AudioSegment.silent(500).export(dummy_wav, format="wav")
+        for it in project.items:
+            if hasattr(it, "audio"):
+                it.audio = str(dummy_wav)
+        return []
+
+    mock_synth.side_effect = fake_synth
+
+    payload = {
+        "title": "Bai_Test_Aivis",
+        "script": "[1] こんにちは。\n[2] おはようございます。",
+        "engine": "aivis",
+        "options": {"format": "wav"},
+    }
+
+    with patch.object(server, "output_dir", tmp_path):
+        res = client.post("/api/v1/dialogue", json=payload)
+        assert res.status_code == 200
+        assert res.json()["ok"] is True
+
+
+def test_generate_dialogue_invalid_role_play():
+    payload = {
+        "title": "Bai_Test_Role_Play",
+        "script": "[1] こんにちは。\n[2] おはようございます。",
+        "engine": "edge",
+        "options": {"role_play": "99"},
+    }
+    res = client.post("/api/v1/dialogue", json=payload)
+    assert res.status_code == 400
+    assert "Không tìm thấy vai [99]" in res.json()["detail"]
+
+
+@patch("server.aivis_list_speakers", new_callable=AsyncMock)
+def test_speakers_endpoint_aivis_and_edge(mock_aivis_speakers):
+    mock_aivis_speakers.return_value = [{"value": "888753760", "label": "jvnv-F1 (ノーマル)"}]
+    res_aivis = client.get("/api/v1/speakers?engine=aivis")
+    assert res_aivis.status_code == 200
+    assert res_aivis.json()["engine"] == "aivis"
+    assert len(res_aivis.json()["speakers"]) == 1
+
+    res_edge = client.get("/api/v1/speakers?engine=edge")
+    assert res_edge.status_code == 200
+    assert res_edge.json()["engine"] == "edge"
+    assert len(res_edge.json()["speakers"]) > 0
+

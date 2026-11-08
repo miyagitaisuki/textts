@@ -23,30 +23,97 @@ ffmpeg -version
 
 Bản GUI (`textts-<phiên bản>-setup.exe`) đã đi kèm Python embeddable, các thư viện trong `requirements.txt` và `ffmpeg.exe`, nên người dùng chỉ cần chạy bộ cài, không cần cài Python hay pip. Khi build bộ cài trên Windows, `npm run dist:win` tự chạy `gui/scripts/bundle-python.ps1` để chuẩn bị phần này (cần kết nối mạng). Khi chạy dev (`npm run dev`), app dùng Python hệ thống hoặc biến `TEXTTS_PYTHON`.
 
-## Dùng
+## Hướng dẫn chạy riêng lẻ bằng dòng lệnh (CLI)
+
+Bạn có thể tự động hóa toàn bộ quy trình tổng hợp bài học tiếng Nhật bằng cách gọi trực tiếp lệnh `tts.py` từ Terminal hoặc file batch mà không cần mở giao diện GUI.
+
+### Các lệnh cơ bản
 
 ```bash
-# Xem kế hoạch đọc (không gọi API): vai, giọng, cảm xúc, cách đọc kana
+# 1. Xem kế hoạch đọc (Dry-run không tốn thời gian gọi API): kiểm tra vai, giọng, cảm xúc, chú âm kana
 python tts.py examples/minna_bai10_hoi_duong.txt --dry-run
 
-# Tạo MP3 + phụ đề
+# 2. Tạo file âm thanh MP3 hoàn chỉnh kèm phụ đề .srt:
 python tts.py examples/minna_bai10_hoi_duong.txt -o output/bai10.mp3 --srt
 
-# Lưu kết quả phân tích ra project.json, rồi tạo âm thanh từ file đó
+# 3. Lưu kết quả phân tích ra project.json, rồi tạo âm thanh từ file đó:
 python tts.py examples/minna_bai10_hoi_duong.txt --save-project projects/bai10.json
 python tts.py --project projects/bai10.json -o output/bai10.mp3
-
-# Khởi chạy REST API Server cho AI (FastAPI + Swagger UI tại http://127.0.0.1:8000/docs)
-python server.py --port 8000
-
-# Chạy kiểm thử
-python -m pytest -q
 ```
 
-Câu nào lỗi sẽ được báo kèm số dòng và **không** xuất file, để tránh nghe nửa vời.
-Kết quả tổng hợp được cache trong `cache/` theo hash. Sửa một câu (đổi cảm xúc, tốc độ, cách đọc...) chỉ tạo lại đúng câu đó. Lỗi tạm thời được thử lại tối đa 3 lần.
+### Bảng tham số CLI đầy đủ (`tts.py`)
 
-`project.json` là file lưu dự án: cấu hình vai, khoảng nghỉ và danh sách câu đã phân tích, kèm `version` để kiểm tra tương thích. Có thể sửa tay file này rồi chạy lại với `--project`.
+| Tham số | Ý nghĩa & Cách dùng |
+| --- | --- |
+| `script.txt` / `--project FILE.json` | Đường dẫn file kịch bản nguồn (`.txt`) hoặc file dự án (`.json`). |
+| `-o, --output FILE` | Đường dẫn file âm thanh đầu ra (`.mp3` hoặc `.wav`). Mặc định tự đặt tên theo kịch bản. |
+| `--dry-run` | Chỉ in kế hoạch đọc (vai, cảm xúc, tốc độ, văn bản kanji + kana), không gọi engine TTS. |
+| `--srt` | Tự động xuất file phụ đề `.srt` đồng bộ thời gian chính xác theo từng câu thoại. |
+| `--slow` | Tạo thêm một bản đọc chậm tốc độ 0.8× (giữ nguyên cao độ) và phụ đề tương ứng `_slow.srt` để học viên luyện nghe. |
+| `--role-play <VAI>` | Chế độ luyện nói nhập vai: chỉ phát lời thoại của vai chỉ định, các vai khác biến thành khoảng lặng có cùng độ dài để học viên đóng vai và nói vào. |
+| `--shadow [--shadow-gap MS]` | Chế độ Shadowing: sau mỗi câu thoại tự động chèn khoảng lặng (mặc định 1500ms) để học viên nhại lại. |
+| `--worksheet <FILE.html>` | Xuất phiếu học tập HTML có chú âm Furigana chuẩn (thẻ `<ruby>`) dùng để in ra phát cho học viên. |
+| `--export-lines <THƯ_MỤC>` | Tách và xuất từng câu thoại thành từng file riêng biệt (ví dụ `L001_vai1.mp3`). |
+| `--preview <MÃ_CÂU>` | Chỉ tổng hợp và nghe thử riêng 1 câu (ví dụ `--preview L002 -o test.mp3`). |
+| `--lufs <MỨC>` | Chuẩn hóa độ to tích hợp theo tiêu chuẩn phát thanh (khuyên dùng `--lufs -16`). |
+| `--bgm <FILE> --bgm-db <DB>` | Lặp và trộn nhạc nền dưới giọng nói với âm lượng nhỏ hơn lời thoại (ví dụ `--bgm-db -18`). |
+| `--batch <THƯ_MỤC> --outdir <THƯ_MỤC>` | Xử lý hàng loạt toàn bộ file kịch bản `.txt` trong một thư mục ra thư mục đầu ra. |
+| `--lint` | Quét kiểm tra lỗi kịch bản: câu trống, file sfx thiếu, và cảnh báo Hán tự chưa có chú âm `{かな}`. |
+| `--list-voices {edge,voicevox,aivis}` | Xuất danh sách giọng đọc khả dụng của từng engine dưới dạng JSON. |
+| `--readings <FILE.yaml>` | Chỉ định file từ điển cách đọc Hán tự riêng (mặc định nạp `readings.yaml` nếu tồn tại). |
+| `--cache-info` / `--clear-cache` | Xem dung lượng bộ nhớ cache âm thanh hoặc dọn dẹp toàn bộ cache. |
+
+### Ví dụ lệnh xuất trọn gói bài học
+
+```bash
+python tts.py examples/minna_bai10_hoi_duong.txt \
+  -o output/bai10.mp3 \
+  --srt \
+  --slow \
+  --lufs -16 \
+  --worksheet output/bai10_phieu_in.html
+```
+
+---
+
+## Kết nối và tự động hóa với AI (REST API, ChatGPT & Claude)
+
+`textts` tích hợp sẵn một REST API server chuẩn FastAPI (kèm OpenAPI schema và Swagger UI), cho phép ChatGPT, Claude, các trợ lý AI hoặc agent tự động hóa quy trình soạn bài, gợi ý furigana và tổng hợp audio tiếng Nhật.
+
+### 1. Khởi động API Server
+
+Bạn có thể bấm nút **"API: Bật/Tắt"** trên thanh công cụ của app GUI, hoặc chạy dòng lệnh:
+
+```bash
+# Khởi chạy server ở cổng 8000
+python server.py --host 127.0.0.1 --port 8000
+```
+
+- Trang tài liệu tương tác Swagger UI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- OpenAPI Specification JSON: [http://127.0.0.1:8000/openapi.json](http://127.0.0.1:8000/openapi.json)
+
+### 2. Các Endpoint chính
+
+| Endpoint | Phương thức | Mô tả |
+| --- | --- | --- |
+| `/api/v1/dialogue` | `POST` | Nhận kịch bản tiếng Nhật và sinh trọn bộ: file audio MP3/WAV, bản chậm 0.8x, phụ đề `.srt`, phiếu in Furigana HTML và mốc timeline JSON. |
+| `/api/v1/preview-script` | `POST` | Phân tích kịch bản và tự động gợi ý chú âm Furigana thông minh (giữ nguyên Okurigana) cho giáo viên duyệt trước khi tạo audio. |
+| `/api/v1/speakers` | `GET` | Lấy danh sách giọng đọc của engine (`edge`, `voicevox`, hoặc `aivis`). |
+| `/api/v1/health` | `GET` | Kiểm tra trạng thái hoạt động của server và các engine cục bộ. |
+
+### 3. Tích hợp với Custom GPTs (ChatGPT Actions)
+
+1. Mở trang [ChatGPT GPT Builder](https://chatgpt.com/create) và tạo GPT mới (ví dụ: "Giáo viên tiếng Nhật").
+2. Chọn mục **Actions** > **Create new action**.
+3. Dán URL OpenAPI Schema: `http://127.0.0.1:8000/openapi.json` (hoặc dán nội dung từ file [`ai_tools/openai_tool.json`](ai_tools/openai_tool.json)).
+4. Khi trò chuyện, bạn chỉ cần yêu cầu ChatGPT soạn bài hội thoại, GPT sẽ gọi `textts` để tạo ngay file âm thanh hoàn chỉnh.
+
+### 4. Tích hợp với Claude Desktop / Claude Code / AI Agents
+
+- Schema định nghĩa công cụ (Tool Use / MCP) đã được cấu hình sẵn trong [`ai_tools/claude_tool.json`](ai_tools/claude_tool.json).
+- Đoạn mã Python mẫu để AI Agent gọi API và tải file kết quả: [`ai_tools/example_agent.py`](ai_tools/example_agent.py).
+
+---
 
 ## Giao diện (Electron + React)
 
@@ -232,6 +299,7 @@ Chỉ liệt kê engine miễn phí, mã mở, dùng không kinh doanh.
 | --- | --- | --- |
 | Edge-TTS | Đã cài (mặc định) | Miễn phí, không cần key. Dịch vụ của Microsoft không chính thức, không có SLA, có thể ngừng bất cứ lúc nào. Thư viện `edge-tts` là mã mở. |
 | VOICEVOX | Đã cài, chạy offline | Cần chạy VOICEVOX Engine trước (mặc định `http://127.0.0.1:50021`, đổi bằng `VOICEVOX_URL`). Trường `voice` là mã nhân vật, ví dụ `3`. Không có cảm xúc tách riêng; `emotion` bị bỏ qua. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. Chưa kiểm chứng với engine thật trong môi trường phát triển (chỉ test bằng server giả). |
+| AivisSpeech | Đã hỗ trợ, chạy offline | Cần chạy AivisSpeech Engine (mặc định `http://127.0.0.1:10101`, đổi bằng `AIVIS_URL`). Hỗ trợ bộ model chất lượng cao JVNV (Style-BERT-VITS2), tự động ánh xạ 5 cảm xúc (neutral/happy/sad/angry/surprised) theo style nhân vật. |
 
 Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phép của mã và của model giọng, và có giọng tiếng Nhật hay không. Khi thêm engine mới, chỉ cần viết một lớp mới kế thừa `TTSProvider` trong `providers/`.
 

@@ -2,13 +2,21 @@ from core.worksheet import ruby_html, worksheet_html
 
 
 def test_explicit_reading_is_used():
-    assert ruby_html("漢字{かんじ}を読みます") == "<ruby>漢字<rt>かんじ</rt></ruby>を読みます"
+    assert ruby_html("漢字{かんじ}を読みます") == "<ruby>漢字<rt>かんじ</rt></ruby>を<ruby>読<rt>よ</rt></ruby>みます"
+
 
 
 def test_auto_reading_for_plain_kanji():
     out = ruby_html("日本語を勉強します")
     assert "<ruby>日本語<rt>にほんご</rt></ruby>" in out
     assert "<ruby>勉強<rt>べんきょう</rt></ruby>" in out
+
+
+def test_okurigana_has_furigana():
+    out = ruby_html("駅に行きます")
+    assert "<ruby>駅<rt>えき</rt></ruby>" in out
+    assert "<ruby>行<rt>い</rt></ruby>きます" in out
+
 
 
 def test_html_is_escaped():

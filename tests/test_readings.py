@@ -14,6 +14,13 @@ def test_keeps_explicit_reading():
     assert apply_readings("日本{にほん}語", {"日本": "にっぽん"}) == "日本{にほん}語"
 
 
+def test_does_not_nest_subwords_in_existing_ruby():
+    # Khi đã có 東京駅{とうきょうえき}, từ điển có 東京 không được chèn lồng vào trong
+    assert apply_readings("東京駅{とうきょうえき}へ行く", {"東京": "とうきょう"}) == "東京駅{とうきょうえき}へ行く"
+    assert apply_readings("良い{いい}", {"いい": "よい"}) == "良い{いい}"
+
+
+
 def test_longer_word_wins():
     readings = {"日本": "にほん", "日本語": "にほんご"}
     assert apply_readings("日本語", readings) == "日本語{にほんご}"

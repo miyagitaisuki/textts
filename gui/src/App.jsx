@@ -8,6 +8,7 @@ import Mixer from "./components/Mixer.jsx";
 import ExportDialog from "./components/ExportDialog.jsx";
 import ReadingsDialog from "./components/ReadingsDialog.jsx";
 import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
+import AboutDialog from "./components/AboutDialog.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -42,6 +43,7 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [showReadings, setShowReadings] = useState(false);
   const [showCache, setShowCache] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [readingsDict, setReadingsDict] = useState({});
   const [hasWorksheet, setHasWorksheet] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -57,11 +59,15 @@ export default function App() {
     if (window.textts?.getVoicevoxStatus) {
       window.textts.getVoicevoxStatus().then((res) => setVoicevoxOk(Boolean(res?.ok)));
     }
+    const unsubAbout = window.textts?.onShowAbout?.(() => setShowAbout(true));
     const interval = setInterval(() => {
       window.textts?.getApiServerStatus?.().then((s) => s && setApiServer(s));
       window.textts?.getVoicevoxStatus?.().then((res) => setVoicevoxOk(Boolean(res?.ok)));
     }, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsubAbout?.();
+    };
   }, []);
 
   async function toggleApiServer() {
@@ -507,6 +513,7 @@ export default function App() {
         <button className="ghost" onClick={checkUpdates} disabled={busy} title="Kiểm tra bản mới trên GitHub">Kiểm tra cập nhật</button>
         <button className="ghost" onClick={() => setShowReadings(true)} disabled={busy} title="Mở từ điển cách đọc Kanji (readings.yaml)">Từ điển đọc</button>
         <button className="ghost" onClick={() => setShowCache(true)} disabled={busy} title="Quản lý bộ nhớ đệm cache">Cache</button>
+        <button className="ghost" onClick={() => setShowAbout(true)} disabled={busy} title="Hướng dẫn sử dụng CLI, kết nối AI & Giới thiệu">Hướng dẫn & About</button>
         <button
           className={searchOpen ? "ghost active" : "ghost"}
           onClick={() => setSearchOpen((v) => !v)}
@@ -581,6 +588,7 @@ export default function App() {
             <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
             <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán kịch bản</button>
             <button className="ghost" onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
+            <button className="ghost" onClick={() => setShowAbout(true)} disabled={busy} title="Xem hướng dẫn chạy CLI và kết nối AI">Hướng dẫn & About</button>
           </div>
         </main>
       ) : (
@@ -702,6 +710,15 @@ export default function App() {
 
       {showCache && (
         <CacheManagerDialog disabled={busy} onClose={() => setShowCache(false)} />
+      )}
+
+      {showAbout && (
+        <AboutDialog
+          onClose={() => setShowAbout(false)}
+          docsUrl={apiServer.docsUrl}
+          apiRunning={apiServer.running}
+          onToggleApi={toggleApiServer}
+        />
       )}
     </div>
   );

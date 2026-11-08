@@ -10,3 +10,4 @@ gui/dist/
 recordings/
 gui/release/
 gui/python-runtime/
+.vite/

@@ -32,16 +32,25 @@ def build(
     gains = role_gains or {}
     out = AudioSegment.silent(t["lead_in_ms"])
     prev_role: str | None = None
+    prev_plain: str | None = None
     placed: list[dict] = []
 
     for it in items:
         if it["type"] == "pause":
+            pause_role = it.get("role")
+            if pause_role is not None and prev_role is not None:
+                gap = t["same_speaker_gap_ms"] if pause_role == prev_role else t["turn_gap_ms"]
+                if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
+                    gap += 100
+                out += AudioSegment.silent(gap)
             out += AudioSegment.silent(it["ms"])
-            prev_role = None
+            prev_role = pause_role
+            prev_plain = None
             continue
         if it["type"] == "sfx":
             out += AudioSegment.from_file(it["path"])
             prev_role = None
+            prev_plain = None
             continue
 
         seg = AudioSegment.from_file(it["audio"])
@@ -52,7 +61,7 @@ def build(
 
         if prev_role is not None:
             gap = t["same_speaker_gap_ms"] if it["role"] == prev_role else t["turn_gap_ms"]
-            if it["plain"].rstrip().endswith(("？", "?")):
+            if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
                 gap += 100  # chờ trả lời sau câu hỏi
             out += AudioSegment.silent(gap)
         if it.get("delay_ms"):
@@ -62,6 +71,7 @@ def build(
         out += seg
         placed.append({**it, "start_ms": start, "end_ms": len(out)})
         prev_role = it["role"]
+        prev_plain = it.get("plain", "")
 
     out += AudioSegment.silent(t["tail_ms"])
     return out, placed
@@ -89,7 +99,7 @@ def practice_items(
         dur = durations.get(it["id"], 0)
         is_practice = practice_role is None or it["role"] == practice_role
         if not is_practice:
-            out.append({"type": "pause", "ms": dur})
+            out.append({"type": "pause", "ms": dur, "role": it["role"]})
             continue
         out.append(it)
         if shadow_gap_ms is not None:

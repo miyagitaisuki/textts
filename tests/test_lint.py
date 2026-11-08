@@ -37,3 +37,22 @@ def test_kanji_without_reading_is_warning(tmp_path: Path):
     ])
     levels = [i["level"] for i in lint_project(p, tmp_path)]
     assert levels == ["warning"]
+
+
+def test_partially_annotated_kanji_is_warning(tmp_path: Path):
+    p = _project([
+        {"id": "L001", "type": "line", "role": "1", "src_line": 1, "attrs": {},
+         "display": "駅{えき}に行きます", "tts_text": "えきにいきます", "plain": "駅に行きます"},
+    ])
+    levels = [i["level"] for i in lint_project(p, tmp_path)]
+    assert levels == ["warning"]
+
+
+def test_fully_annotated_kanji_has_no_warning(tmp_path: Path):
+    p = _project([
+        {"id": "L001", "type": "line", "role": "1", "src_line": 1, "attrs": {},
+         "display": "駅{えき}に行{い}きます", "tts_text": "えきにいきます", "plain": "駅に行きます"},
+    ])
+    levels = [i["level"] for i in lint_project(p, tmp_path)]
+    assert levels == []
+

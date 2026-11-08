@@ -68,7 +68,10 @@ function buildMenu({ getWindow, onCheckUpdates }) {
         { type: "separator" },
         { label: "Kiểm tra cập nhật", click: () => onCheckUpdates() },
         { type: "separator" },
-        { label: `Giới thiệu (phiên bản ${app.getVersion()})`, enabled: false },
+        {
+          label: `Hướng dẫn & Giới thiệu (v${app.getVersion()})…`,
+          click: () => getWindow()?.webContents.send("app:showAbout"),
+        },
       ],
     },
   ];

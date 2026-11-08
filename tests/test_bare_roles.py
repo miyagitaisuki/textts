@@ -8,6 +8,14 @@ def test_bare_number_sets_role():
     ]
 
 
+def test_multi_digit_bare_number_sets_role():
+    items = parse_script("10: すみません\n12 はい\n")
+    assert [(i["role"], i["display"]) for i in items] == [
+        ("10", "すみません"), ("12", "はい"),
+    ]
+
+
+
 def test_bracket_and_bare_lines_mix():
     items = parse_script("[1] こんにちは\n2 はい\n")
     assert [i["role"] for i in items] == ["1", "2"]

@@ -113,6 +113,14 @@ def test_loudness_normalize_keeps_silence():
     assert out.rms == 0
 
 
+def test_loudness_normalize_short_audio_kept_as_is():
+    short_audio = _tone(200, amp=0.2)
+    out = loudness_normalize(short_audio, -16.0)
+    assert len(out) == len(short_audio)
+    assert abs(out.dBFS - short_audio.dBFS) < 0.1
+
+
+
 # ---------- xuất từng câu ----------
 
 def test_export_lines_names_files_by_id_and_role(tmp_path):

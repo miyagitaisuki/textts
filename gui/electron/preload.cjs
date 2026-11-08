@@ -37,4 +37,9 @@ contextBridge.exposeInMainWorld("textts", {
     ipcRenderer.on("tts:log", listener);
     return () => ipcRenderer.removeListener("tts:log", listener);
   },
+  onShowAbout: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("app:showAbout", listener);
+    return () => ipcRenderer.removeListener("app:showAbout", listener);
+  },
 });

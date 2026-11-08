@@ -28,13 +28,30 @@ def load_readings(path: Path) -> dict[str, str]:
     return readings
 
 
+BRACKET_OR_RUBY = re.compile(r"[一-鿿々]+\{[^}]*\}|\{[^}]*\}")
+
+
 def apply_readings(text: str, readings: dict[str, str]) -> str:
-    """Thêm `{かな}` vào các từ trong từ điển chưa có cách đọc riêng."""
-    if not readings:
+    """Thêm `{かな}` vào các từ trong từ điển chưa có cách đọc riêng.
+    
+    Bảo vệ các đoạn đã có chú âm hoặc nằm trong ngoặc nhọn, tránh chèn lồng làm lặp âm.
+    """
+    if not readings or not text:
         return text
     words = sorted(readings, key=len, reverse=True)
     pattern = re.compile("(" + "|".join(re.escape(w) for w in words) + r")(?!\{)")
-    return pattern.sub(lambda m: f"{m[1]}{{{readings[m[1]]}}}", text)
+    parts = []
+    last = 0
+    for m in BRACKET_OR_RUBY.finditer(text):
+        chunk = text[last:m.start()]
+        if chunk:
+            parts.append(pattern.sub(lambda sm: f"{sm[1]}{{{readings[sm[1]]}}}", chunk))
+        parts.append(m.group())
+        last = m.end()
+    chunk = text[last:]
+    if chunk:
+        parts.append(pattern.sub(lambda sm: f"{sm[1]}{{{readings[sm[1]]}}}", chunk))
+    return "".join(parts)
 
 
 def save_readings(path: Path, readings: dict[str, str]) -> None:
