@@ -104,15 +104,69 @@ def annotate(text: str) -> str:
     return "".join(result)
 
 
+def annotate_token(surface: str, pron: str | None) -> str:
+    """Tự động chú âm cho token: hỗ trợ cả từ thuần Hán và từ có Okurigana."""
+    if not pron or not _HAS_KANJI.search(surface):
+        return surface
+    if _KANJI_ONLY.match(surface):
+        return f"{surface}{{{_clean_pron(pron)}}}"
+
+    clean_hira = _clean_pron(pron)
+    m = re.match(r"^([぀-ヿー]*)([一-鿿々]+)([぀-ヿー]*)$", surface)
+    if m:
+        pref, kanji, suff = m.groups()
+        pref_hira = to_hiragana(pref)
+        suff_hira = to_hiragana(suff)
+        if clean_hira.startswith(pref_hira) and clean_hira.endswith(suff_hira):
+            end_idx = len(clean_hira) - len(suff_hira) if suff_hira else len(clean_hira)
+            kanji_reading = clean_hira[len(pref_hira):end_idx]
+            if kanji_reading:
+                return f"{pref}{kanji}{{{kanji_reading}}}{suff}"
+
+    segments = re.findall(r"[一-鿿々]+|[぀-ヿー]+|[^一-鿿々぀-ヿー]+", surface)
+    if len(segments) > 1 and all(_HAS_KANJI.match(s) or re.match(r"^[぀-ヿー]+$", s) for s in segments):
+        result = []
+        cur_hira = clean_hira
+        ok = True
+        for i, seg in enumerate(segments):
+            if not _HAS_KANJI.search(seg):
+                seg_hira = to_hiragana(seg)
+                if cur_hira.startswith(seg_hira):
+                    result.append(seg)
+                    cur_hira = cur_hira[len(seg_hira):]
+                else:
+                    ok = False
+                    break
+            else:
+                if i + 1 < len(segments):
+                    next_kana = to_hiragana(segments[i + 1])
+                    idx = cur_hira.find(next_kana)
+                    if idx > 0:
+                        k_reading = cur_hira[:idx]
+                        result.append(f"{seg}{{{k_reading}}}")
+                        cur_hira = cur_hira[idx:]
+                    else:
+                        ok = False
+                        break
+                else:
+                    if cur_hira:
+                        result.append(f"{seg}{{{cur_hira}}}")
+                        cur_hira = ""
+                    else:
+                        ok = False
+                        break
+        if ok and not cur_hira:
+            return "".join(result)
+
+    return surface
+
+
 def _annotate_plain(text: str) -> str:
     if not text:
         return text
     parts = []
     for surface, pron in _tokens(text):
-        if pron is not None and _KANJI_ONLY.match(surface):
-            parts.append(f"{surface}{{{_clean_pron(pron)}}}")
-        else:
-            parts.append(surface)
+        parts.append(annotate_token(surface, pron))
     return "".join(parts)
 
 

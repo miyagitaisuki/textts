@@ -6,6 +6,8 @@ import LineTable from "./components/LineTable.jsx";
 import Timeline from "./components/Timeline.jsx";
 import Mixer from "./components/Mixer.jsx";
 import ExportDialog from "./components/ExportDialog.jsx";
+import ReadingsDialog from "./components/ReadingsDialog.jsx";
+import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -38,6 +40,40 @@ export default function App() {
   // Lỗi tạo dự án từ kịch bản dán: hiện ngay trong khung dán, không phụ thuộc đã mở project hay chưa.
   const [pasteError, setPasteError] = useState("");
   const [showExport, setShowExport] = useState(false);
+  const [showReadings, setShowReadings] = useState(false);
+  const [showCache, setShowCache] = useState(false);
+  const [readingsDict, setReadingsDict] = useState({});
+  const [hasWorksheet, setHasWorksheet] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [apiServer, setApiServer] = useState({ running: false, port: 8000, docsUrl: "http://127.0.0.1:8000/docs" });
+  const [voicevoxOk, setVoicevoxOk] = useState(false);
+
+  useEffect(() => {
+    if (window.textts?.getApiServerStatus) {
+      window.textts.getApiServerStatus().then((s) => s && setApiServer(s));
+    }
+    if (window.textts?.getVoicevoxStatus) {
+      window.textts.getVoicevoxStatus().then((res) => setVoicevoxOk(Boolean(res?.ok)));
+    }
+    const interval = setInterval(() => {
+      window.textts?.getApiServerStatus?.().then((s) => s && setApiServer(s));
+      window.textts?.getVoicevoxStatus?.().then((res) => setVoicevoxOk(Boolean(res?.ok)));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function toggleApiServer() {
+    if (!window.textts?.toggleApiServer) return;
+    const res = await window.textts.toggleApiServer();
+    if (res) setApiServer(res);
+  }
+
+  function openDocs() {
+    window.textts?.openExternalUrl?.(apiServer.docsUrl || "http://127.0.0.1:8000/docs");
+  }
+
   // Đọc từ ref khi render; mỗi thay đổi đều đi kèm setState nên giao diện luôn cập nhật.
   const canUndo = history.current.past.length > 0;
   const canRedo = history.current.future.length > 0;
@@ -51,7 +87,10 @@ export default function App() {
 
   useEffect(() => {
     window.textts.loadPresets().then(setPresets);
-  }, []);
+    if (window.textts?.loadReadings) {
+      window.textts.loadReadings(filePath).then((d) => d && setReadingsDict(d));
+    }
+  }, [filePath]);
 
   function persistPresets(next) {
     setPresets(next);
@@ -121,6 +160,9 @@ export default function App() {
       } else if (key === "enter") {
         e.preventDefault();
         addLine();
+      } else if (key === "f") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
       } else if (!typing && key === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -300,6 +342,117 @@ export default function App() {
     }));
   }
 
+  function addRole() {
+    edit((p) => {
+      const nums = Object.keys(p.roles).map(Number).filter((n) => !Number.isNaN(n));
+      const nextRoleId = String((nums.length ? Math.max(...nums) : 0) + 1);
+      const firstRole = Object.values(p.roles)[0] || {
+        voice: "ja-JP-NanamiNeural",
+        emotion: "neutral",
+        speed: "normal",
+        pitch: 0,
+        gain_db: 0,
+      };
+      return {
+        ...p,
+        roles: {
+          ...p.roles,
+          [nextRoleId]: {
+            ...firstRole,
+            name: `Vai ${nextRoleId}`,
+            gain_db: 0,
+          },
+        },
+      };
+    });
+  }
+
+  function deleteRole(roleId) {
+    const isUsed = (projectRef.current?.items || []).some((it) => it.type === "line" && it.role === roleId);
+    if (isUsed) {
+      alert(`Vai [${roleId}] đang được sử dụng trong kịch bản. Hãy đổi vai của các câu thoại đó trước khi xóa.`);
+      return;
+    }
+    edit((p) => {
+      const nextRoles = { ...p.roles };
+      delete nextRoles[roleId];
+      return { ...p, roles: nextRoles };
+    });
+  }
+
+  function duplicateItem(id) {
+    edit((p) => {
+      const idx = p.items.findIndex((it) => it.id === id);
+      if (idx < 0) return p;
+      const target = p.items[idx];
+      const copy = { ...target, id: nextId(p.items) };
+      const nextItems = [...p.items];
+      nextItems.splice(idx + 1, 0, copy);
+      return { ...p, items: nextItems };
+    });
+  }
+
+  function insertLineBelow(id) {
+    edit((p) => {
+      const idx = p.items.findIndex((it) => it.id === id);
+      const targetRole = p.items[idx]?.role || Object.keys(p.roles)[0] || "1";
+      const newLine = {
+        id: nextId(p.items),
+        type: "line",
+        src_line: 0,
+        role: targetRole,
+        attrs: {},
+        display: "",
+        tts_text: "",
+        plain: "",
+      };
+      const nextItems = [...p.items];
+      nextItems.splice(idx + 1, 0, newLine);
+      return { ...p, items: nextItems };
+    });
+  }
+
+  async function addSfx() {
+    let chosenPath = "";
+    if (window.textts?.pickAudioFile) {
+      chosenPath = await window.textts.pickAudioFile();
+    }
+    if (!chosenPath) {
+      chosenPath = window.prompt("Nhập đường dẫn file hiệu ứng âm thanh (.wav, .mp3):");
+    }
+    if (!chosenPath) return;
+    edit((p) => ({
+      ...p,
+      items: [...p.items, { id: nextId(p.items), type: "sfx", src_line: 0, path: chosenPath }],
+    }));
+  }
+
+  function applyReadingsToProject(dict) {
+    if (!dict || Object.keys(dict).length === 0) return;
+    const words = Object.keys(dict).sort((a, b) => b.length - a.length);
+    const pattern = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?!\\{)`, "g");
+    edit((p) => ({
+      ...p,
+      items: p.items.map((it) => {
+        if (it.type !== "line") return it;
+        const nextDisplay = it.display.replace(pattern, (m, w) => `${w}{${dict[w]}}`);
+        return nextDisplay !== it.display ? { ...it, display: nextDisplay } : it;
+      }),
+    }));
+  }
+
+  function replaceAll() {
+    if (!searchText) return;
+    edit((p) => ({
+      ...p,
+      items: p.items.map((it) => {
+        if (it.type !== "line") return it;
+        const nextDisplay = it.display.replaceAll(searchText, replaceText);
+        return nextDisplay !== it.display ? { ...it, display: nextDisplay } : it;
+      }),
+    }));
+  }
+
   // Lưu trước khi chạy để tiến trình Python đọc đúng nội dung đang sửa.
   async function preview(id) {
     if (!(await save())) return;
@@ -317,9 +470,17 @@ export default function App() {
     setLog("");
     const format = exportOpts.format;
     const outputPath = filePath.replace(/\.json$/, `.${format}`);
-    const lufs = exportOpts.lufs.trim() === "" ? null : Number(exportOpts.lufs);
     const res = await window.textts.generate(filePath, outputPath, {
-      lufs, slow: exportOpts.slow, srt: exportOpts.srt,
+      lufs: exportOpts.lufs,
+      slow: exportOpts.slow,
+      srt: exportOpts.srt,
+      rolePlay: exportOpts.rolePlay,
+      shadow: exportOpts.shadow,
+      shadowGap: exportOpts.shadowGap,
+      exportLines: exportOpts.exportLines,
+      worksheet: exportOpts.worksheet,
+      bgmPath: exportOpts.bgmPath,
+      bgmDb: exportOpts.bgmDb,
     });
     setLog((prev) => prev + `\n${res.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res.code})`);
     // Dòng lỗi có dạng "  - L002 (dòng 5): ...": đánh dấu và cuộn tới câu lỗi đầu tiên.
@@ -331,6 +492,7 @@ export default function App() {
     if (res.code === 0) {
       await loadOutputFor(filePath, format);
       setOutputStale(false);
+      window.textts?.worksheetExists?.(filePath).then(setHasWorksheet);
     }
     setBusy(false);
   }
@@ -343,10 +505,59 @@ export default function App() {
         <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
         <button className="ghost" onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
         <button className="ghost" onClick={checkUpdates} disabled={busy} title="Kiểm tra bản mới trên GitHub">Kiểm tra cập nhật</button>
+        <button className="ghost" onClick={() => setShowReadings(true)} disabled={busy} title="Mở từ điển cách đọc Kanji (readings.yaml)">Từ điển đọc</button>
+        <button className="ghost" onClick={() => setShowCache(true)} disabled={busy} title="Quản lý bộ nhớ đệm cache">Cache</button>
+        <button
+          className={searchOpen ? "ghost active" : "ghost"}
+          onClick={() => setSearchOpen((v) => !v)}
+          disabled={busy || !project}
+          title="Tìm kiếm & Thay thế (Ctrl+F)"
+        >
+          Tìm (Ctrl+F)
+        </button>
+        <button
+          className={apiServer.running ? "ghost api-btn on" : "ghost api-btn"}
+          onClick={toggleApiServer}
+          title={apiServer.running ? "API Server đang bật trên cổng 8000. Bấm để tắt" : "Bật API Server cho AI"}
+        >
+          <span className={`status-dot ${apiServer.running ? "dot-green" : "dot-gray"}`} />
+          API: {apiServer.running ? "Bật (:8000)" : "Tắt"}
+        </button>
+        {apiServer.running && (
+          <button className="ghost" onClick={openDocs} title="Mở trang tài liệu Swagger UI">
+            Docs
+          </button>
+        )}
+        <span
+          className="voicevox-status"
+          title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
+        >
+          <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
+          VOICEVOX
+        </span>
         <span className="toolbar-spacer" />
         <button className="ghost" onClick={undo} disabled={busy || !canUndo} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button>
         <button className="ghost" onClick={redo} disabled={busy || !canRedo} title="Làm lại (Ctrl+Shift+Z)" aria-label="Làm lại">↷</button>
       </header>
+
+      {searchOpen && project && (
+        <section className="search-bar">
+          <input
+            type="text"
+            placeholder="Tìm kiếm trong kịch bản..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Thay thế bằng..."
+            value={replaceText}
+            onChange={(e) => setReplaceText(e.target.value)}
+          />
+          <button className="ghost" onClick={replaceAll} disabled={busy || !searchText}>Thay thế tất cả</button>
+          <button className="ghost" onClick={() => setSearchOpen(false)}>✕</button>
+        </section>
+      )}
 
       {pasting && (
         <section className="paste-panel">
@@ -374,9 +585,16 @@ export default function App() {
         </main>
       ) : (
         <main className="content">
-          <RolePanel roles={project.roles} onChange={patchRole} disabled={busy} voices={voices}
+          <RolePanel
+            roles={project.roles}
+            onChange={patchRole}
+            onAddRole={addRole}
+            onDeleteRole={deleteRole}
+            disabled={busy}
+            voices={voices}
             recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
-            library={library} />
+            library={library}
+          />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
           <section>
@@ -385,15 +603,19 @@ export default function App() {
               <div>
                 <button className="ghost" onClick={addLine} disabled={busy} title="Thêm câu (Ctrl+Enter)">+ Câu thoại</button>
                 <button className="ghost" onClick={addPause} disabled={busy}>+ Nghỉ</button>
+                <button className="ghost" onClick={addSfx} disabled={busy} title="Thêm hiệu ứng âm thanh">+ SFX</button>
               </div>
             </div>
             <LineTable
               items={items}
+              roles={project.roles}
               selectedId={selectedId}
               onSelect={setSelectedId}
               onPatch={patchItem}
               onMove={moveItem}
               onDelete={deleteItem}
+              onDuplicate={duplicateItem}
+              onInsertBelow={insertLineBelow}
               onPreview={preview}
               suggestions={suggestions}
               onApply={applySuggestion}
@@ -409,7 +631,7 @@ export default function App() {
               {outputStale && (
                 <p className="stale">Bản đầu ra đã cũ so với chỉnh sửa. Bấm "Tạo âm thanh" để cập nhật.</p>
               )}
-              <Timeline output={output} onShift={shiftItem} disabled={busy} />
+              <Timeline output={output} selectedId={selectedId} onShift={shiftItem} disabled={busy} />
             </section>
           )}
 
@@ -453,9 +675,35 @@ export default function App() {
       </footer>
 
       {showExport && (
-        <ExportDialog opts={exportOpts} onChange={setExportOpts} disabled={busy}
-          onClose={() => setShowExport(false)} />
+        <ExportDialog
+          opts={exportOpts}
+          onChange={setExportOpts}
+          roles={project?.roles || {}}
+          onPickAudio={() => window.textts?.pickAudioFile?.()}
+          onOpenWorksheet={() => window.textts?.openWorksheet?.(filePath)}
+          hasWorksheet={hasWorksheet}
+          disabled={busy}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showReadings && (
+        <ReadingsDialog
+          readings={readingsDict}
+          onSave={async (dict) => {
+            setReadingsDict(dict);
+            await window.textts?.saveReadings?.(filePath, dict);
+          }}
+          onApplyToProject={applyReadingsToProject}
+          disabled={busy}
+          onClose={() => setShowReadings(false)}
+        />
+      )}
+
+      {showCache && (
+        <CacheManagerDialog disabled={busy} onClose={() => setShowCache(false)} />
       )}
     </div>
   );
 }
+

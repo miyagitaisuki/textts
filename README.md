@@ -35,6 +35,9 @@ python tts.py examples/minna_bai10_hoi_duong.txt -o output/bai10.mp3 --srt
 python tts.py examples/minna_bai10_hoi_duong.txt --save-project projects/bai10.json
 python tts.py --project projects/bai10.json -o output/bai10.mp3
 
+# Khởi chạy REST API Server cho AI (FastAPI + Swagger UI tại http://127.0.0.1:8000/docs)
+python server.py --port 8000
+
 # Chạy kiểm thử
 python -m pytest -q
 ```
@@ -56,7 +59,9 @@ Kiến trúc:
 Các thao tác chính:
 - **Vai:** chọn giọng, cảm xúc mặc định, tốc độ, cao độ cho từng vai.
 - **Câu thoại:** sửa chữ (dùng `漢字{かな}` để ép cách đọc), chọn vai, cảm xúc/tốc độ riêng. Chọn `theo vai` để dùng giá trị của vai.
-- **Gợi ý đọc:** cột "Gợi ý đọc" hiển thị cách đọc hiragana dự đoán của câu, để giáo viên đối chiếu trước khi tạo âm thanh. "Áp dụng" ghi chú âm `{かな}` cho các từ toàn chữ Hán. Từ lẫn Hán-kana (ví dụ `久しぶり`) không tự động, cần sửa tay.
+- **Gợi ý đọc:** cột "Gợi ý đọc" hiển thị cách đọc hiragana dự đoán của câu, để giáo viên đối chiếu trước khi tạo âm thanh. "Áp dụng" ghi chú âm `{かな}` thông minh: tự căn chỉnh phần gốc Hán tự và giữ nguyên Okurigana (ví dụ `久しぶり` thành `久{ひさ}しぶり`, `食べます` thành `食{た}べます`).
+- **Từ điển cách đọc:** quản lý từ điển `readings.yaml` ngay trên GUI, hỗ trợ áp dụng hàng loạt vào dự án.
+- **Tùy chọn xuất & Lớp học:** hộp thoại trực quan cho phép xuất Role-play, Shadowing, phiếu học tập HTML furigana, xuất từng câu riêng (`lines/`), và trộn nhạc nền BGM.
 - **Nghe thử:** `▶ Nghe` tổng hợp đúng một câu (dùng cache) và phát ngay. Trước khi nghe thử hoặc tạo âm thanh, giao diện tự lưu file.
 - **Tạo âm thanh:** chạy `tts.py --project`, xuất `.mp3` cạnh file project, log hiển thị bên dưới.
 

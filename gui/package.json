@@ -49,8 +49,10 @@
         "to": "engine",
         "filter": [
           "tts.py",
+          "server.py",
           "core/**/*.py",
           "providers/**/*.py",
+          "ai_tools/**",
           "roles.yaml",
           "readings.example.yaml",
           "!**/__pycache__/**"

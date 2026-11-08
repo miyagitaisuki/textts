@@ -35,3 +35,11 @@ def apply_readings(text: str, readings: dict[str, str]) -> str:
     words = sorted(readings, key=len, reverse=True)
     pattern = re.compile("(" + "|".join(re.escape(w) for w in words) + r")(?!\{)")
     return pattern.sub(lambda m: f"{m[1]}{{{readings[m[1]]}}}", text)
+
+
+def save_readings(path: Path, readings: dict[str, str]) -> None:
+    for word, kana in readings.items():
+        if not word or not KANA_RE.match(kana):
+            raise ValueError(f"Cách đọc của '{word}' phải là kana: {kana!r}")
+    lines = [f"{word}: {kana}" for word, kana in sorted(readings.items())]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

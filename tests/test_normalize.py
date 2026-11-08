@@ -41,9 +41,14 @@ def test_annotate_adds_ruby_for_pure_kanji_words():
     assert annotate("田中さん") == "田中{たなか}さん"
 
 
-def test_annotate_leaves_existing_ruby_and_mixed_words_alone():
+def test_annotate_leaves_existing_ruby_alone():
     assert annotate("駅{えき}です") == "駅{えき}です"
-    assert annotate("本当に久しぶり") == "本当に久しぶり"
+
+
+def test_annotate_handles_okurigana_words():
+    assert annotate("本当に久しぶり") == "本当{ほんとう}に久{ひさ}しぶり"
+    assert annotate("ご飯を食べます") == "ご飯{はん}を食{た}べます"
+    assert annotate("学校へ行きます") == "学校{がっこう}へ行{い}きます"
 
 
 def test_cli_roundtrip_json():

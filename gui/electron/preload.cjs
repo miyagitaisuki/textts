@@ -21,6 +21,17 @@ contextBridge.exposeInMainWorld("textts", {
   preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
   suggestReadings: (texts) => ipcRenderer.invoke("reading:suggest", { texts }),
   loadOutput: (audioPath) => ipcRenderer.invoke("output:load", { audioPath }),
+  pickAudioFile: () => ipcRenderer.invoke("file:pickAudio"),
+  openWorksheet: (projectPath) => ipcRenderer.invoke("worksheet:open", { projectPath }),
+  worksheetExists: (projectPath) => ipcRenderer.invoke("worksheet:exists", { projectPath }),
+  loadReadings: (projectPath) => ipcRenderer.invoke("readings:load", { projectPath }),
+  saveReadings: (projectPath, readings) => ipcRenderer.invoke("readings:save", { projectPath, readings }),
+  getCacheInfo: () => ipcRenderer.invoke("cache:info"),
+  clearCache: () => ipcRenderer.invoke("cache:clear"),
+  getApiServerStatus: () => ipcRenderer.invoke("apiServer:status"),
+  toggleApiServer: () => ipcRenderer.invoke("apiServer:toggle"),
+  getVoicevoxStatus: () => ipcRenderer.invoke("voicevox:status"),
+  openExternalUrl: (url) => ipcRenderer.invoke("url:openExternal", { url }),
   onLog: (callback) => {
     const listener = (_evt, text) => callback(text);
     ipcRenderer.on("tts:log", listener);

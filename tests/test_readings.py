@@ -46,3 +46,10 @@ def test_load_readings_reads_yaml(tmp_path: Path):
     f = tmp_path / "r.yaml"
     f.write_text("日本語: にほんご\n", encoding="utf-8")
     assert load_readings(f) == {"日本語": "にほんご"}
+
+
+def test_save_readings_writes_sorted_yaml(tmp_path: Path):
+    from core.readings import save_readings
+    f = tmp_path / "saved.yaml"
+    save_readings(f, {"学校": "がっこう", "日本語": "にほんご"})
+    assert load_readings(f) == {"学校": "がっこう", "日本語": "にほんご"}

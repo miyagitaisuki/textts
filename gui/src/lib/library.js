@@ -2,7 +2,19 @@
 
 export const PRESET_FIELDS = ["voice", "emotion", "speed", "pitch"];
 
-export const DEFAULT_SETTINGS = { format: "mp3", lufs: "", slow: false, srt: false };
+export const DEFAULT_SETTINGS = {
+  format: "mp3",
+  lufs: "",
+  slow: false,
+  srt: false,
+  rolePlay: "",
+  shadow: false,
+  shadowGap: 1500,
+  exportLines: false,
+  worksheet: true,
+  bgmPath: "",
+  bgmDb: -18,
+};
 const SETTINGS_KEY = "textts.settings";
 
 /** Lấy các trường mẫu từ cấu hình một vai. */

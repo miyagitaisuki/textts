@@ -2,13 +2,28 @@
 import { EMOTIONS, SPEEDS, EMOTION_LABELS, SPEED_LABELS } from "./RolePanel.jsx";
 import { indexIssues } from "../lib/library.js";
 
-const ROLE_IDS = ["1", "2", "3"];
+const DEFAULT_ROLE_IDS = ["1", "2", "3"];
 
 export default function LineTable({
-  items, selectedId, onSelect, onPatch, onMove, onDelete, onPreview, suggestions, onApply, disabled,
-  errorIds = [], issues = [],
+  items,
+  selectedId,
+  roles = {},
+  onSelect,
+  onPatch,
+  onMove,
+  onDelete,
+  onDuplicate,
+  onInsertBelow,
+  onPreview,
+  suggestions,
+  onApply,
+  disabled,
+  errorIds = [],
+  issues = [],
 }) {
   const issueOf = indexIssues(issues);
+  const roleIds = Object.keys(roles).length ? Object.keys(roles) : DEFAULT_ROLE_IDS;
+
   return (
     <table className="lines">
       <thead>
@@ -25,47 +40,95 @@ export default function LineTable({
         {items.map((it, idx) =>
           it.type === "sfx" ? (
             <tr key={it.id} className="sfx">
-              <td colSpan={5}>Hiệu ứng: <code>{it.path}</code></td>
+              <td colSpan={5}>
+                Hiệu ứng (SFX): <code>{it.path}</code>
+              </td>
               <td>
-                <RowActions idx={idx} total={items.length} id={it.id}
-                  onMove={onMove} onDelete={onDelete} disabled={disabled} />
+                <RowActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
               </td>
             </tr>
           ) : it.type === "pause" ? (
             <tr key={it.id} className="pause">
               <td colSpan={2}>
                 Nghỉ{" "}
-                <input type="number" min={0} value={it.ms} disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { ms: Number(e.target.value) })} /> ms
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={it.ms}
+                  disabled={disabled}
+                  onChange={(e) => onPatch(it.id, { ms: Number(e.target.value) })}
+                />{" "}
+                ms
               </td>
-              <td colSpan={3}>
-                <RowActions idx={idx} total={items.length} id={it.id}
-                  onMove={onMove} onDelete={onDelete} disabled={disabled} />
+              <td colSpan={3}></td>
+              <td>
+                <RowActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
               </td>
             </tr>
           ) : (
-            <tr key={it.id} id={`row-${it.id}`} title={issueOf[it.id]?.message || it.id}
+            <tr
+              key={it.id}
+              id={`row-${it.id}`}
+              title={issueOf[it.id]?.message || it.id}
               className={[
                 selectedId === it.id ? "selected" : "",
                 errorIds.includes(it.id) || issueOf[it.id]?.level === "error" ? "error" : "",
                 !errorIds.includes(it.id) && issueOf[it.id]?.level === "warning" ? "warn" : "",
-              ].join(" ").trim()}
-              onClick={() => onSelect(it.id)}>
+              ]
+                .join(" ")
+                .trim()}
+              onClick={() => onSelect(it.id)}
+            >
               <td>
-                <select className={`role-${it.role}`} value={it.role} disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { role: e.target.value })}>
-                  {ROLE_IDS.map((r) => <option key={r} value={r}>[{r}]</option>)}
+                <select
+                  className={`role-${it.role}`}
+                  value={it.role}
+                  disabled={disabled}
+                  onChange={(e) => onPatch(it.id, { role: e.target.value })}
+                >
+                  {roleIds.map((r) => (
+                    <option key={r} value={r}>
+                      [{r}] {roles[r]?.name ? roles[r].name : `Vai ${r}`}
+                    </option>
+                  ))}
                 </select>
               </td>
               <td className="text-cell">
                 <div className="text-field">
-                  {(errorIds.includes(it.id) || issueOf[it.id]?.level === "error") ? (
-                    <span className="flag error-flag" aria-label="Lỗi">✕</span>
+                  {errorIds.includes(it.id) || issueOf[it.id]?.level === "error" ? (
+                    <span className="flag error-flag" aria-label="Lỗi">
+                      ✕
+                    </span>
                   ) : issueOf[it.id]?.level === "warning" ? (
-                    <span className="flag warn-flag" aria-label="Cảnh báo">⚠</span>
+                    <span className="flag warn-flag" aria-label="Cảnh báo">
+                      ⚠
+                    </span>
                   ) : null}
-                  <input className="text" value={it.display} disabled={disabled}
-                    onChange={(e) => onPatch(it.id, { display: e.target.value })} />
+                  <input
+                    className="text"
+                    value={it.display}
+                    disabled={disabled}
+                    onChange={(e) => onPatch(it.id, { display: e.target.value })}
+                  />
                 </div>
               </td>
               <td className="reading">
@@ -73,27 +136,63 @@ export default function LineTable({
                   suggestion={suggestions?.[it.id]}
                   display={it.display}
                   disabled={disabled}
-                  onApply={() => onApply(it.id)} />
+                  onApply={() => onApply(it.id)}
+                />
               </td>
               <td>
-                <select className={it.attrs?.emotion ? "" : "inherit"} value={it.attrs?.emotion ?? ""} disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "emotion", e.target.value) })}>
+                <select
+                  className={it.attrs?.emotion ? "" : "inherit"}
+                  value={it.attrs?.emotion ?? ""}
+                  disabled={disabled}
+                  onChange={(e) =>
+                    onPatch(it.id, { attrs: patchAttr(it, "emotion", e.target.value) })
+                  }
+                >
                   <option value="">theo vai</option>
-                  {EMOTIONS.map((v) => <option key={v} value={v}>{EMOTION_LABELS[v]}</option>)}
+                  {EMOTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {EMOTION_LABELS[v]}
+                    </option>
+                  ))}
                 </select>
               </td>
               <td>
-                <select className={it.attrs?.speed ? "" : "inherit"} value={it.attrs?.speed ?? ""} disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "speed", e.target.value) })}>
+                <select
+                  className={it.attrs?.speed ? "" : "inherit"}
+                  value={it.attrs?.speed ?? ""}
+                  disabled={disabled}
+                  onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "speed", e.target.value) })}
+                >
                   <option value="">theo vai</option>
-                  {SPEEDS.map((v) => <option key={v} value={v}>{SPEED_LABELS[v]}</option>)}
+                  {SPEEDS.map((v) => (
+                    <option key={v} value={v}>
+                      {SPEED_LABELS[v]}
+                    </option>
+                  ))}
                 </select>
               </td>
               <td>
-                <button className="ghost" disabled={disabled}
-                  onClick={(e) => { e.stopPropagation(); onPreview(it.id); }}>▶ Nghe thử</button>
-                <RowActions idx={idx} total={items.length} id={it.id}
-                  onMove={onMove} onDelete={onDelete} disabled={disabled} />
+                <button
+                  className="ghost"
+                  disabled={disabled}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPreview(it.id);
+                  }}
+                  title="Nghe thử câu này"
+                >
+                  ▶ Nghe
+                </button>
+                <RowActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
               </td>
             </tr>
           )
@@ -125,12 +224,53 @@ function patchAttr(item, key, value) {
   return attrs;
 }
 
-function RowActions({ idx, total, id, onMove, onDelete, disabled }) {
+function RowActions({ idx, total, id, onMove, onDelete, onDuplicate, onInsertBelow, disabled }) {
   return (
     <span className="row-actions" onClick={(e) => e.stopPropagation()}>
-      <button className="ghost" disabled={disabled || idx === 0} onClick={() => onMove(id, -1)}>↑</button>
-      <button className="ghost" disabled={disabled || idx === total - 1} onClick={() => onMove(id, 1)}>↓</button>
-      <button className="ghost danger" disabled={disabled} onClick={() => onDelete(id)}>✕</button>
+      {onInsertBelow && (
+        <button
+          className="ghost"
+          disabled={disabled}
+          onClick={() => onInsertBelow(id)}
+          title="Chèn câu phía dưới"
+        >
+          +
+        </button>
+      )}
+      {onDuplicate && (
+        <button
+          className="ghost"
+          disabled={disabled}
+          onClick={() => onDuplicate(id)}
+          title="Nhân bản câu này"
+        >
+          ⧉
+        </button>
+      )}
+      <button
+        className="ghost"
+        disabled={disabled || idx === 0}
+        onClick={() => onMove(id, -1)}
+        title="Dời lên"
+      >
+        ↑
+      </button>
+      <button
+        className="ghost"
+        disabled={disabled || idx === total - 1}
+        onClick={() => onMove(id, 1)}
+        title="Dời xuống"
+      >
+        ↓
+      </button>
+      <button
+        className="ghost danger"
+        disabled={disabled}
+        onClick={() => onDelete(id)}
+        title="Xóa dòng"
+      >
+        ✕
+      </button>
     </span>
   );
 }

@@ -48,15 +48,46 @@ function VuMeters({ levels, nowMs, durationMs }) {
   );
 }
 
-export default function Timeline({ output, onShift, disabled }) {
+export default function Timeline({ output, onShift, selectedId, disabled }) {
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
   const dragRef = useRef(null);
   const [now, setNow] = useState(0);
+  const [rate, setRate] = useState(1.0);
   const [drag, setDrag] = useState(null); // {id, offsetMs}
   const { peaks, items, duration_ms, role_levels } = output.timeline;
   const rafRef = useRef(null);
   const duration = duration_ms / 1000;
+
+  // Spacebar để Play/Pause
+  useEffect(() => {
+    function onKey(e) {
+      if (e.code === "Space") {
+        const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
+        if (typing) return;
+        e.preventDefault();
+        if (!audioRef.current) return;
+        if (audioRef.current.paused) {
+          audioRef.current.play().catch(() => {});
+        } else {
+          audioRef.current.pause();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Click câu thoại để tua đến vị trí trên timeline
+  useEffect(() => {
+    if (!selectedId || !audioRef.current || !items) return;
+    const item = items.find((it) => it.id === selectedId);
+    if (item && Number.isFinite(item.start_ms)) {
+      const t = item.start_ms / 1000;
+      audioRef.current.currentTime = t;
+      setNow(item.start_ms);
+    }
+  }, [selectedId, items]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -160,12 +191,35 @@ export default function Timeline({ output, onShift, disabled }) {
 
   return (
     <div className="timeline">
-      <audio ref={audioRef} controls src={output.dataUrl}
-        onPlay={startTracking}
-        onPause={stopTracking}
-        onEnded={stopTracking}
-        onSeeked={(e) => setNow(e.currentTarget.currentTime * 1000)}
-        onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)} />
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+        <audio
+          ref={audioRef}
+          controls
+          src={output.dataUrl}
+          style={{ flex: 1 }}
+          onPlay={startTracking}
+          onPause={stopTracking}
+          onEnded={stopTracking}
+          onSeeked={(e) => setNow(e.currentTarget.currentTime * 1000)}
+          onTimeUpdate={(e) => setNow(e.currentTarget.currentTime * 1000)}
+        />
+        <select
+          value={rate}
+          disabled={disabled}
+          onChange={(e) => {
+            const r = Number(e.target.value);
+            setRate(r);
+            if (audioRef.current) audioRef.current.playbackRate = r;
+          }}
+          title="Tốc độ phát lại"
+          style={{ height: 38, padding: "0 6px" }}
+        >
+          <option value={0.75}>0.75×</option>
+          <option value={1.0}>1.0×</option>
+          <option value={1.25}>1.25×</option>
+          <option value={1.5}>1.5×</option>
+        </select>
+      </div>
       <VuMeters levels={role_levels} nowMs={now} durationMs={duration_ms} />
       <Ruler durationMs={duration_ms} />
       <canvas

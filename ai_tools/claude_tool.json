@@ -1,0 +1,49 @@
+{
+  "name": "generate_japanese_dialogue_audio",
+  "description": "Tạo bài nghe hội thoại tiếng Nhật hoàn chỉnh bằng VOICEVOX (kèm phụ đề .srt, bản đọc chậm 0.8x và phiếu học tập HTML có Furigana) thông qua textts API.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "description": "Tên bài học hoặc chủ đề, ví dụ 'Bai_10_Hoi_Duong' (không dấu, viết liền hoặc dùng gạch dưới)"
+      },
+      "script": {
+        "type": "string",
+        "description": "Kịch bản hội thoại tiếng Nhật. Mỗi câu thoại trên một dòng, bắt đầu bằng số vai ví dụ '[1] すみません' hoặc '1 すみません'. Có thể dùng 漢字{かな} để chỉ định rõ cách đọc, [pause=1000] để tạo khoảng lặng 1 giây."
+      },
+      "engine": {
+        "type": "string",
+        "enum": ["voicevox", "edge"],
+        "description": "Engine tổng hợp giọng nói. Mặc định là 'voicevox'.",
+        "default": "voicevox"
+      },
+      "options": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": ["mp3", "wav"],
+            "default": "mp3"
+          },
+          "slow": {
+            "type": "boolean",
+            "description": "Tạo thêm bản đọc chậm 0.8x cho học viên luyện nghe",
+            "default": true
+          },
+          "srt": {
+            "type": "boolean",
+            "description": "Tạo file phụ đề .srt đồng bộ thời gian",
+            "default": true
+          },
+          "worksheet": {
+            "type": "boolean",
+            "description": "Tạo phiếu in HTML có chú âm Furigana <ruby>",
+            "default": true
+          }
+        }
+      }
+    },
+    "required": ["title", "script"]
+  }
+}

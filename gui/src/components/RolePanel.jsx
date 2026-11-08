@@ -62,15 +62,56 @@ function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled 
 }
 
 // voices: [{value, label}] từ engine hiện tại; rỗng thì dùng danh sách Edge mặc định.
-export default function RolePanel({ roles, onChange, disabled, voices = [], recorder, library }) {
+export default function RolePanel({
+  roles,
+  onChange,
+  onAddRole,
+  onDeleteRole,
+  disabled,
+  voices = [],
+  recorder,
+  library,
+}) {
   const options = voices.length ? voices : VOICES.map((v) => ({ value: v, label: v }));
   return (
     <section className="roles">
-      <h2>Vai</h2>
+      <div className="section-head" style={{ marginBottom: 8 }}>
+        <h2>Vai</h2>
+        {onAddRole && (
+          <button
+            className="ghost"
+            onClick={onAddRole}
+            disabled={disabled}
+            title="Thêm một vai nhân vật mới"
+          >
+            + Thêm vai
+          </button>
+        )}
+      </div>
       <div className="role-grid">
         {Object.entries(roles).map(([id, role]) => (
           <div key={id} className={`role-card role-${id}`}>
-            <div className="role-title">[{id}] {role.name || ""}</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div className="role-title">[{id}]</div>
+              <input
+                style={{ flex: 1 }}
+                placeholder="Tên nhân vật (ví dụ: Tanaka)"
+                value={role.name || ""}
+                disabled={disabled}
+                onChange={(e) => onChange(id, { name: e.target.value })}
+              />
+              {onDeleteRole && Object.keys(roles).length > 1 && (
+                <button
+                  type="button"
+                  className="ghost danger"
+                  disabled={disabled}
+                  onClick={() => onDeleteRole(id)}
+                  title="Xóa vai này"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <label>
               Giọng
               <select value={role.voice} disabled={disabled}

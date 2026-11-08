@@ -186,11 +186,32 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
   const out = assertAllowed(outputPath, AUDIO_EXTS);
   // Tùy chọn xuất từ giao diện; chỉ nhận đúng các cờ đã biết.
   const args = [TTS_CLI, "--project", proj, "-o", out];
-  if (options.lufs !== null && options.lufs !== undefined && Number.isFinite(Number(options.lufs))) {
+  if (options.lufs !== null && options.lufs !== undefined && String(options.lufs).trim() !== "" && Number.isFinite(Number(options.lufs))) {
     args.push("--lufs", String(Number(options.lufs)));
   }
   if (options.slow) args.push("--slow");
   if (options.srt) args.push("--srt");
+  if (options.rolePlay && String(options.rolePlay).trim()) {
+    args.push("--role-play", String(options.rolePlay).trim());
+  }
+  if (options.shadow) {
+    args.push("--shadow");
+    if (options.shadowGap && Number.isFinite(Number(options.shadowGap))) {
+      args.push("--shadow-gap", String(Number(options.shadowGap)));
+    }
+  }
+  if (options.exportLines) {
+    args.push("--export-lines", path.join(path.dirname(proj), "lines"));
+  }
+  if (options.worksheet) {
+    args.push("--worksheet", proj.replace(/\.json$/, ".html"));
+  }
+  if (options.bgmPath && typeof options.bgmPath === "string" && fs.existsSync(options.bgmPath)) {
+    args.push("--bgm", options.bgmPath);
+    if (options.bgmDb !== undefined && Number.isFinite(Number(options.bgmDb))) {
+      args.push("--bgm-db", String(Number(options.bgmDb)));
+    }
+  }
   return new Promise((resolve) => {
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
@@ -208,6 +229,83 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
       resolve({ code, log });
     });
   });
+});
+
+// Chọn file âm thanh (nhạc nền BGM hoặc hiệu ứng SFX).
+ipcMain.handle("file:pickAudio", async () => {
+  const res = await dialog.showOpenDialog({
+    title: "Chọn file âm thanh",
+    filters: [{ name: "Âm thanh", extensions: ["mp3", "wav", "ogg", "m4a"] }],
+    properties: ["openFile"],
+  });
+  if (res.canceled || res.filePaths.length === 0) return "";
+  return path.resolve(res.filePaths[0]);
+});
+
+// Mở phiếu in HTML bằng trình duyệt mặc định.
+ipcMain.handle("worksheet:open", async (_evt, { projectPath }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const htmlPath = proj.replace(/\.json$/, ".html");
+  if (!fs.existsSync(htmlPath)) return { error: "Chưa có file phiếu học tập" };
+  const err = await shell.openPath(htmlPath);
+  return err ? { error: err } : { ok: true };
+});
+
+// Kiểm tra sự tồn tại của file phiếu học tập.
+ipcMain.handle("worksheet:exists", async (_evt, { projectPath }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const htmlPath = proj.replace(/\.json$/, ".html");
+  return fs.existsSync(htmlPath);
+});
+
+// Đọc từ điển cách đọc readings.yaml
+ipcMain.handle("readings:load", async (_evt, { projectPath } = {}) => {
+  const custom = projectPath ? path.join(path.dirname(projectPath), "readings.yaml") : null;
+  const target = custom && fs.existsSync(custom) ? custom : path.join(REPO_ROOT, "readings.yaml");
+  if (!fs.existsSync(target)) return {};
+  try {
+    const raw = fs.readFileSync(target, "utf-8");
+    const dict = {};
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#") || !trimmed.includes(":")) continue;
+      const [k, v] = trimmed.split(":", 2);
+      if (k && v) dict[k.trim()] = v.trim();
+    }
+    return dict;
+  } catch {
+    return {};
+  }
+});
+
+// Lưu từ điển cách đọc readings.yaml
+ipcMain.handle("readings:save", async (_evt, { projectPath, readings }) => {
+  const custom = projectPath ? path.join(path.dirname(projectPath), "readings.yaml") : null;
+  const target = custom || path.join(REPO_ROOT, "readings.yaml");
+  const lines = Object.entries(readings || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([w, k]) => `${w}: ${k}`);
+  fs.writeFileSync(target, lines.join("\n") + "\n", "utf-8");
+  return { ok: true, path: target };
+});
+
+// Quản lý bộ nhớ đệm (cache)
+ipcMain.handle("cache:info", async () => {
+  const cacheDir = path.join(REPO_ROOT, "cache");
+  if (!fs.existsSync(cacheDir)) return { count: 0, sizeMb: 0 };
+  const files = fs.readdirSync(cacheDir).map((f) => path.join(cacheDir, f)).filter((f) => fs.statSync(f).isFile());
+  const bytes = files.reduce((sum, f) => sum + fs.statSync(f).size, 0);
+  return { count: files.length, sizeMb: Math.round((bytes / 1_000_000) * 10) / 10 };
+});
+
+ipcMain.handle("cache:clear", async () => {
+  const cacheDir = path.join(REPO_ROOT, "cache");
+  if (!fs.existsSync(cacheDir)) return { ok: true, cleared: 0 };
+  const files = fs.readdirSync(cacheDir).map((f) => path.join(cacheDir, f)).filter((f) => fs.statSync(f).isFile());
+  files.forEach((f) => {
+    try { fs.unlinkSync(f); } catch {}
+  });
+  return { ok: true, cleared: files.length };
 });
 
 // Nghe thử một câu: chạy tts.py --preview <ID> rồi trả về audio dạng data URL.
@@ -275,6 +373,92 @@ ipcMain.handle("output:load", async (_evt, { audioPath }) => {
   const mime = ext === "wav" ? "audio/wav" : "audio/mpeg";
   const dataUrl = `data:${mime};base64,${fs.readFileSync(audioPath).toString("base64")}`;
   return { timeline, dataUrl };
+});
+
+// --- Quản lý API Server & VOICEVOX ---
+let apiServerProcess = null;
+const API_PORT = 8000;
+const API_URL = `http://127.0.0.1:${API_PORT}`;
+const VOICEVOX_URL = process.env.VOICEVOX_URL || "http://127.0.0.1:50021";
+
+async function pingUrl(url, timeoutMs = 1500) {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.handle("voicevox:status", async () => {
+  const ok = await pingUrl(`${VOICEVOX_URL}/version`);
+  return { ok, url: VOICEVOX_URL };
+});
+
+ipcMain.handle("apiServer:status", async () => {
+  const isHealthy = await pingUrl(`${API_URL}/api/v1/health`);
+  return {
+    running: Boolean(apiServerProcess) || isHealthy,
+    port: API_PORT,
+    url: API_URL,
+    docsUrl: `${API_URL}/docs`,
+  };
+});
+
+ipcMain.handle("apiServer:toggle", async () => {
+  if (apiServerProcess) {
+    apiServerProcess.kill();
+    apiServerProcess = null;
+    logger.log("INFO", "API Server đã dừng");
+    return { running: false, port: API_PORT, url: API_URL };
+  }
+
+  const serverScript = path.join(REPO_ROOT, "server.py");
+  apiServerProcess = spawn(PYTHON, [serverScript, "--port", String(API_PORT)], {
+    cwd: REPO_ROOT,
+    env: CHILD_ENV,
+  });
+
+  apiServerProcess.stdout.on("data", (chunk) => {
+    logger.log("INFO", `[API] ${chunk.toString().trim()}`);
+  });
+  apiServerProcess.stderr.on("data", (chunk) => {
+    logger.log("ERROR", `[API] ${chunk.toString().trim()}`);
+  });
+  apiServerProcess.on("close", (code) => {
+    logger.log("INFO", `[API] Tiến trình kết thúc (mã ${code})`);
+    apiServerProcess = null;
+  });
+  apiServerProcess.on("error", (err) => {
+    logger.log("ERROR", `[API] Lỗi khởi động: ${err.message}`);
+    apiServerProcess = null;
+  });
+
+  await new Promise((r) => setTimeout(r, 800));
+  const isHealthy = await pingUrl(`${API_URL}/api/v1/health`);
+  return { running: isHealthy || Boolean(apiServerProcess), port: API_PORT, url: API_URL, docsUrl: `${API_URL}/docs` };
+});
+
+ipcMain.handle("url:openExternal", async (_evt, { url }) => {
+  if (typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"))) {
+    await shell.openExternal(url);
+    return true;
+  }
+  return false;
+});
+
+app.on("before-quit", () => {
+  if (apiServerProcess) {
+    try {
+      apiServerProcess.kill();
+    } catch {
+      // Bỏ qua lỗi dọn dẹp khi thoát
+    }
+    apiServerProcess = null;
+  }
 });
 
 app.whenReady().then(() => {
