@@ -411,7 +411,13 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
 
 def main():
     import argparse
+    import sys
     import uvicorn
+
+    # Khi bị GUI chạy qua pipe, stdout dùng bảng mã Windows (cp1252/cp932) và in emoji sẽ làm server thoát ngay.
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description="Khởi chạy textts REST API Server")
     parser.add_argument("--host", default="127.0.0.1", help="Địa chỉ host (mặc định: 127.0.0.1)")
