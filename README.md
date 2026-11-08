@@ -6,7 +6,8 @@ có khoảng nghỉ giữa các lượt nói và phụ đề `.srt` tùy chọn.
 Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng thái hiện tại:
 
 - **Giai đoạn 1 và 2 (xong):** CLI, cache theo hash, `project.json` có kiểm tra bằng pydantic, thử lại khi lỗi tạm thời, cú pháp `漢字{かな}` và `[pause=ms]`.
-- **Giai đoạn 4 (xong):** VOICEVOX offline, bản chậm 0.8×, xuất từng câu riêng, chuẩn hóa LUFS, nhạc nền, hiệu ứng `[sfx=...]`, timeline có sóng âm trong giao diện.
+- **Giai đoạn 4 (xong):** VOICEVOX & AivisSpeech offline, bản chậm 0.8×, xuất từng câu riêng, chuẩn hóa LUFS, nhạc nền, hiệu ứng `[sfx=...]`, timeline có sóng âm trong giao diện.
+- **Engine AivisSpeech & Bộ model JVNV:** hỗ trợ engine AivisSpeech (port 10101, CPU) với các giọng chất lượng cao JVNV (F1, F2, M1, M2), tự động chọn style theo 5 cảm xúc (neutral/happy/sad/angry/surprised).
 - **Mixer và chỉnh timeline (xong):** fader dọc theo từng vai (dB, áp dụng khi tạo âm thanh); kéo câu trên timeline để dời về phía sau (`delay_ms`). VU meter theo từng vai đã có (xem bên dưới).
 - **Giai đoạn 3 (xong):** giao diện **Electron + React** trong `gui/`, gọi CLI Python ở bên dưới. Có: mở/lưu `project.json`, sửa câu thoại (chữ, vai, cảm xúc, tốc độ), thêm/xóa/đổi thứ tự câu và khoảng nghỉ, cấu hình từng vai, nghe thử một câu, tạo âm thanh, và cột **gợi ý cách đọc** kèm nút "Áp dụng" để ghi `漢字{かな}`.
 
@@ -114,12 +115,33 @@ python tts.py --project projects/bai10.json -o output/bai10.mp3 \
 - `--role-play VAI`: bản luyện nói. Chỉ giữ lời vai đó, các vai khác thành khoảng lặng cùng độ dài. Học viên đóng vai và nói theo.
 - `--shadow [--shadow-gap MS]`: bản shadowing. Sau mỗi câu luyện tập chèn khoảng lặng (mặc định 1500 ms) để học viên nhắc lại. Kết hợp được với `--role-play`.
 - `--worksheet FILE.html`: phiếu học tập có furigana (`<ruby>`), mở bằng trình duyệt rồi in. Không cần tạo âm thanh. Chữ Hán có `{かな}` dùng đúng cách đọc đó, phần còn lại chú âm tự động bằng pyopenjtalk.
-- `--list-voices {edge,voicevox}`: in danh sách giọng dạng JSON (giao diện dùng để điền danh sách chọn).
+- `--list-voices {edge,voicevox,aivis}`: in danh sách giọng dạng JSON (giao diện dùng để điền danh sách chọn).
 - `--batch DIR --outdir DIR`: xử lý mọi `.txt` trong thư mục, mỗi file ra `<tên>.mp3`. Các tùy chọn khác (`--lufs`, `--srt`, `--bgm`...) áp dụng cho từng file. Một file lỗi không dừng batch.
 - `--cache-info` / `--clear-cache`: xem hoặc xóa thư mục `cache/`.
 - `--lint`: in JSON các lỗi (chặn tạo âm thanh) và cảnh báo (chữ Hán chưa có `{かな}`). Giao diện hiển thị ở cột ghi chú của từng dòng. Vai chưa khai báo bị chặn ngay khi nạp project, nên không nằm trong lint.
 - `--bgm FILE --bgm-db -18`: trộn nhạc nền lặp lại dưới lời thoại, có fade vào và ra. Nhạc nền do giáo viên cung cấp, dự án không đính kèm.
 - Mỗi lần xuất còn ghi `<tên>.timeline.json` (vị trí từng câu và dữ liệu sóng). Giao diện đọc file này để vẽ timeline sau khi tạo âm thanh.
+
+## Cài đặt & Sử dụng AivisSpeech (Bộ giọng JVNV)
+
+AivisSpeech là engine TTS mã mở chất lượng cao (Style-BERT-VITS2), tương thích API VOICEVOX, chạy trực tiếp trên máy bằng CPU (hoặc GPU DirectML/CUDA).
+
+1. **Khởi chạy Engine:**
+   - Tải và cài đặt [AivisSpeech-Engine](https://github.com/Aivis-Project/AivisSpeech-Engine).
+   - Đặt 4 file model `.aivmx` của bộ JVNV (`jvnv-F1`, `jvnv-F2`, `jvnv-M1`, `jvnv-M2`) vào thư mục `Models/` của AivisSpeech.
+   - Khởi động engine, mặc định chạy ở cổng `http://127.0.0.1:10101` (kiểm tra tài liệu Swagger tại `http://127.0.0.1:10101/docs`). Có thể đổi URL qua biến môi trường `AIVIS_URL`.
+
+2. **Cấu hình kịch bản & vai (`roles.aivis.example.yaml`):**
+   - Chạy lệnh lấy mã ID style `ノーマル` của các giọng:
+     ```bash
+     python tts.py --list-voices aivis
+     ```
+   - Điền mã ID vào trường `voice` của từng vai.
+   - **Cảm xúc (`emotion`):** Tự động chọn style tương ứng của nhân vật (`neutral` -> `ノーマル`, `happy` -> `幸せ`, `sad` -> `悲しみ`, `angry` -> `怒り`, `surprised` -> `驚き`). Nếu nhân vật thiếu style thì engine tự động quay về giọng `ノーマル`.
+   - **Lưu ý kỹ thuật:**
+     - `pitchScale`: Bị bỏ qua vì điều chỉnh cao độ làm giảm chất lượng mô hình Style-BERT-VITS2; trường `pitch` trong cấu hình không ảnh hưởng đến âm thanh của Aivis.
+     - `intonationScale`: Tự động áp dụng mức độ cảm xúc `1.2` cho các style diễn cảm khác `ノーマル`.
+     - **Giấy phép:** AivisSpeech Engine phát hành theo giấy phép LGPL-3.0. Bộ model JVNV phát hành theo giấy phép CC BY-SA 4.0 (cần ghi nhận tác giả nếu chia sẻ âm thanh ra bên ngoài).
 
 ## Cú pháp kịch bản
 
@@ -146,7 +168,7 @@ core/parser.py    phân tích kịch bản → danh sách câu
 core/models.py    mô hình pydantic: Config (roles.yaml), Project (project.json)
 core/normalize.py gợi ý cách đọc kanji (pyopenjtalk, MIT, offline)
 core/builder.py   ghép âm thanh, khoảng nghỉ, xuất .srt
-providers/        TTSProvider (base), EdgeProvider, VoicevoxProvider
+providers/        TTSProvider (base), EdgeProvider, VoicevoxProvider, AivisProvider
 core/audio.py     đổi tốc độ không đổi cao độ (ffmpeg atempo), chuẩn hóa LUFS
 examples/         kịch bản mẫu
 docs/ui/          ảnh mockup giao diện tham khảo

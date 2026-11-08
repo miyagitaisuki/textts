@@ -41,6 +41,7 @@ from providers.base import SynthRequest, TTSProvider
 from providers.edge import VOICES as EDGE_VOICES
 from providers.edge import EdgeProvider
 from providers.voicevox import VoicevoxProvider, list_speakers
+from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
 
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
@@ -49,6 +50,7 @@ MAX_CONCURRENCY = 3
 PROVIDERS: dict[str, type[TTSProvider]] = {
     EdgeProvider.name: EdgeProvider,
     VoicevoxProvider.name: VoicevoxProvider,
+    AivisProvider.name: AivisProvider,
 }
 
 
@@ -101,7 +103,7 @@ async def synth_all(
         if only_ids is not None and item.id not in only_ids:
             return
         req = resolve(item, project.roles)
-        key = cache_key(provider.name, req)
+        key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
         out = cache_dir / f"{key}.{provider.ext}"
         item.cache_key = key
         if not out.exists() or out.stat().st_size == 0:
@@ -215,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--output", type=Path, help="file đầu ra (.mp3 hoặc .wav)")
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
     ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
-                    help="in danh sách giọng của engine dạng JSON (edge hoặc voicevox) rồi thoát")
+                    help="in danh sách giọng của engine dạng JSON (edge, voicevox, aivis) rồi thoát")
     ap.add_argument("--batch", type=Path, metavar="DIR",
                     help="xử lý mọi file .txt trong thư mục (cần --outdir)")
     ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
@@ -258,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_voices:
         if args.list_voices == "voicevox":
             voices = asyncio.run(list_speakers())
+        elif args.list_voices == "aivis":
+            voices = asyncio.run(aivis_list_speakers(only_normal=True))
         else:
             voices = [{"value": v, "label": v} for v in EDGE_VOICES]
         print(json.dumps(voices, ensure_ascii=False))

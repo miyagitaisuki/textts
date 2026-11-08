@@ -42,3 +42,20 @@ def test_list_speakers_flattens_styles():
         {"value": "0", "label": "四国めたん (あまあま)"},
         {"value": "3", "label": "ずんだもん (ノーマル)"},
     ]
+
+
+def test_aivis_list_speakers_filters_normal_only():
+    from providers.aivis import list_speakers as aivis_list_speakers
+
+    server = HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}"
+        voices = asyncio.run(aivis_list_speakers(url, only_normal=True))
+    finally:
+        server.shutdown()
+    assert voices == [
+        {"value": "2", "label": "四国めたん (ノーマル)"},
+        {"value": "3", "label": "ずんだもん (ノーマル)"},
+    ]

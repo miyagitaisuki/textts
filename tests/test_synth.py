@@ -68,6 +68,13 @@ def test_cache_key_changes_with_any_field():
     assert len(keys) == 5
 
 
+def test_cache_key_changes_with_cache_salt():
+    req = SynthRequest("text", "v", "neutral", "normal", 0)
+    k1 = cache_key("aivis", req)
+    k2 = cache_key("aivis" + "v1-1.2", req)
+    assert k1 != k2
+
+
 def test_editing_one_line_regenerates_only_that_line(tmp_path):
     cache = tmp_path / "cache"
     p = FakeProvider()

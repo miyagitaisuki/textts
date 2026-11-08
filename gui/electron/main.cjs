@@ -308,6 +308,82 @@ ipcMain.handle("cache:clear", async () => {
   return { ok: true, cleared: files.length };
 });
 
+function presetsFile() {
+  return path.join(app.getPath("userData"), "presets.json");
+}
+
+ipcMain.handle("presets:load", async () => {
+  try {
+    const data = JSON.parse(fs.readFileSync(presetsFile(), "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("presets:save", async (_evt, { presets }) => {
+  if (!Array.isArray(presets)) throw new Error("Danh sách mẫu không hợp lệ");
+  fs.mkdirSync(path.dirname(presetsFile()), { recursive: true });
+  fs.writeFileSync(presetsFile(), JSON.stringify(presets, null, 2), "utf-8");
+  return true;
+});
+
+// Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
+ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
+  const eng = engine || "edge";
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, [TTS_CLI, "--list-voices", eng], { cwd: REPO_ROOT, env: CHILD_ENV });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", () => resolve([]));
+    child.on("close", (code) => {
+      try {
+        resolve(code === 0 ? JSON.parse(out) : []);
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
+
+// Kiểm tra kịch bản đã lưu (tts.py --lint): trả về [{id, level, message}].
+ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
+  try {
+    const proj = assertAllowed(projectPath, new Set([".json"]));
+    return new Promise((resolve) => {
+      const child = spawn(PYTHON, [TTS_CLI, "--project", proj, "--lint"], { cwd: REPO_ROOT, env: CHILD_ENV });
+      let out = "";
+      child.stdout.on("data", (c) => (out += c));
+      child.on("error", () => resolve([]));
+      child.on("close", (code) => {
+        try {
+          resolve(code === 0 ? JSON.parse(out) : []);
+        } catch {
+          resolve([]);
+        }
+      });
+    });
+  } catch {
+    return [];
+  }
+});
+
+// Lưu bản ghi âm mẫu của một vai vào recordings/<tên project>/ cạnh project.json.
+ipcMain.handle("recording:save", async (_evt, { projectPath, roleId, base64 }) => {
+  try {
+    const proj = assertAllowed(projectPath, new Set([".json"]));
+    if (!/^\d+$/.test(String(roleId))) throw new Error(`Mã vai không hợp lệ: ${roleId}`);
+    const stem = path.parse(proj).name;
+    const dir = path.join(path.dirname(proj), "recordings", stem);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `role${roleId}-${Date.now()}.webm`);
+    fs.writeFileSync(file, Buffer.from(base64, "base64"));
+    return { ok: true, path: file };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
 // Nghe thử một câu: chạy tts.py --preview <ID> rồi trả về audio dạng data URL.
 ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   const proj = assertAllowed(projectPath, new Set([".json"]));

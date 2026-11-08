@@ -1,0 +1,33 @@
+engine: aivis
+# Cấu hình 4 vai tương ứng 4 giọng JVNV (F1, F2, M1, M2).
+# Lấy mã style "ノーマル" bằng lệnh: python tts.py --list-voices aivis
+roles:
+  "1":
+    name: "Nữ 1 (F1)"
+    voice: "<điền id từ --list-voices aivis>"
+    emotion: neutral
+    speed: normal
+    pitch: 0
+    gain_db: 0
+  "2":
+    name: "Nữ 2 (F2)"
+    voice: "<điền id từ --list-voices aivis>"
+    emotion: neutral
+    speed: normal
+    pitch: 0
+    gain_db: 0
+  "3":
+    name: "Nam 1 (M1)"
+    voice: "<điền id từ --list-voices aivis>"
+    emotion: neutral
+    speed: normal
+    pitch: 0
+    gain_db: 0
+  "4":
+    name: "Nam 2 (M2)"
+    voice: "<điền id từ --list-voices aivis>"
+    emotion: neutral
+    speed: normal
+    pitch: 0
+    gain_db: 0
+pause_default_ms: 600
