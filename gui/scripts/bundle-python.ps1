@@ -41,7 +41,19 @@ Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $GetPip
 if ($LASTEXITCODE -ne 0) { throw "Cài pip thất bại" }
 
 # 4. Thư viện của dự án
-& (Join-Path $PyDir "python.exe") -m pip install --no-warn-script-location -r (Join-Path $RepoDir "requirements.txt")
+# pyopenjtalk chỉ có bản sdist (phải biên dịch C++/Cython, cần Python.h + setuptools + cmake).
+# Python embeddable không có include/libs và bỏ qua PYTHONPATH nên không build được -> build wheel
+# bằng Python đầy đủ (cùng phiên bản 3.12, ví dụ từ actions/setup-python) rồi cài wheel vào bản embeddable.
+$HostPy = (Get-Command python -ErrorAction SilentlyContinue)
+if (-not $HostPy) { throw "Cần Python $PyVersion đầy đủ trong PATH để build wheel (pyopenjtalk)" }
+$HostVer = & $HostPy.Source -c "import sys; print('%d%d' % sys.version_info[:2])"
+if ($HostVer -ne $PyTag) { throw "Python trong PATH là $HostVer, cần $PyTag để wheel khớp với bản embeddable" }
+$Wheels = Join-Path $Tmp "wheels"
+& $HostPy.Source -m pip install --upgrade pip setuptools wheel
+if ($LASTEXITCODE -ne 0) { throw "Cài công cụ build thất bại" }
+& $HostPy.Source -m pip wheel --wheel-dir $Wheels -r (Join-Path $RepoDir "requirements.txt")
+if ($LASTEXITCODE -ne 0) { throw "Build wheel cho requirements.txt thất bại" }
+& (Join-Path $PyDir "python.exe") -m pip install --no-warn-script-location --no-index --find-links $Wheels -r (Join-Path $RepoDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "Cài requirements.txt thất bại" }
 
 # 5. ffmpeg (pydub cần ffmpeg.exe)
@@ -53,7 +65,7 @@ if (-not $FfExe) { throw "Không tìm thấy ffmpeg.exe trong gói tải về" }
 Copy-Item $FfExe.FullName (Join-Path $FfDir "ffmpeg.exe")
 
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
-& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity; print('imports OK')"
+& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
 & (Join-Path $FfDir "ffmpeg.exe") -version | Select-Object -First 1
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg.exe không chạy được" }
