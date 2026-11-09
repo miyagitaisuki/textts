@@ -43,3 +43,10 @@ describe("LineTable row state", () => {
     expect(container.querySelector("#row-L002").className).toContain("error");
   });
 });
+
+describe("LineTable empty script", () => {
+  it("explains how to add lines when there are none", () => {
+    const { container } = renderTable({ items: [] });
+    expect(container.querySelector(".empty-row").textContent).toContain("+ Câu thoại");
+  });
+});

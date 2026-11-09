@@ -6,15 +6,22 @@ import AboutDialog from "./AboutDialog.jsx";
 afterEach(cleanup);
 
 describe("AboutDialog", () => {
-  it("renders with CLI tab active by default", () => {
+  it("opens on the GUI guide by default", () => {
     render(<AboutDialog onClose={() => {}} />);
+    expect(screen.getByText("Dùng giao diện textts")).toBeTruthy();
+    expect(screen.getByText(/Quy trình 3 bước/)).toBeTruthy();
+  });
+
+  it("switches to the CLI tab", () => {
+    render(<AboutDialog onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("tab", { name: "🖥 Chạy riêng lẻ (CLI)" }));
     expect(screen.getByText("Chạy textts bằng dòng lệnh (Không cần GUI)")).toBeTruthy();
     expect(screen.getAllByText(/python tts.py/).length).toBeGreaterThan(0);
   });
 
   it("switches tabs between CLI, AI, Syntax, and About", () => {
     render(<AboutDialog onClose={() => {}} docsUrl="http://127.0.0.1:8000/docs" />);
-    
+
     // Switch to AI tab
     fireEvent.click(screen.getByRole("tab", { name: "🤖 Kết nối với AI" }));
     expect(screen.getByText("Kết nối với AI (ChatGPT, Claude & AI Agents)")).toBeTruthy();

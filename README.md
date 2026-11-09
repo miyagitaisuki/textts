@@ -124,6 +124,14 @@ Kiến trúc:
 - **Main process (Electron):** đọc/ghi `project.json`, chạy `tts.py` như tiến trình con, chuyển tiến trình và lỗi về giao diện.
 - Logic tạo âm thanh chỉ nằm ở Python, giao diện không gọi API TTS trực tiếp.
 
+Quy trình nhanh (xem thêm trong app: **❓ Hướng dẫn** và thanh quy trình ngay dưới thanh công cụ):
+
+1. **Nhập kịch bản**: bấm `Mở file .txt` hoặc `Dán văn bản`.
+2. **Chỉnh vai và câu**: chọn giọng cho từng vai, sửa chữ và cách đọc trong bảng Kịch bản.
+3. **Tạo âm thanh**: bấm `Tạo âm thanh`. File `.mp3` được lưu cạnh dự án. Nếu nút bị khóa, dòng chữ bên cạnh cho biết lý do.
+
+Các chức năng phụ (tìm & thay thế, từ điển cách đọc, cache, cập nhật, máy chủ API cho AI) nằm trong menu **Công cụ ▾**.
+
 Các thao tác chính:
 - **Vai:** chọn giọng, cảm xúc mặc định, tốc độ, cao độ cho từng vai.
 - **Câu thoại:** sửa chữ (dùng `漢字{かな}` để ép cách đọc), chọn vai, cảm xúc/tốc độ riêng. Chọn `theo vai` để dùng giá trị của vai.

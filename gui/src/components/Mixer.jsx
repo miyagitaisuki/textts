@@ -8,6 +8,7 @@ export default function Mixer({ roles, onChange, disabled }) {
   return (
     <section className="mixer">
       <h2>Âm lượng</h2>
+      <p className="section-hint">Chỉnh độ to từng vai (dB): kéo lên để to hơn, kéo xuống để nhỏ hơn. Có hiệu lực khi tạo âm thanh.</p>
       <div className="faders">
         <div className="fader-scale" aria-hidden="true">
           {DB_TICKS.map((v) => (

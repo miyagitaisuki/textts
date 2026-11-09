@@ -76,7 +76,13 @@ export default function RolePanel({
   return (
     <section className="roles">
       <div className="section-head" style={{ marginBottom: 8 }}>
-        <h2>Vai</h2>
+        <div>
+          <h2>Vai (nhân vật)</h2>
+          <p className="section-hint">
+            Mỗi vai là một nhân vật trong hội thoại, có giọng và cách nói riêng. Đặt tên để dễ nhận biết trong bảng Kịch bản.
+            Câu thoại có thể ghi đè cảm xúc hoặc tốc độ riêng.
+          </p>
+        </div>
         {onAddRole && (
           <button
             className="ghost"
@@ -134,8 +140,8 @@ export default function RolePanel({
                   onApply={library.onApply} onSave={library.onSave} onRemove={library.onRemove} />
               </details>
             )}
-            <label>
-              Cao độ: {role.pitch} Hz
+            <label title="Cao độ: âm cao hơn hoặc thấp hơn. 0 là giữ nguyên giọng gốc.">
+              Cao độ: {role.pitch > 0 ? `+${role.pitch}` : role.pitch} Hz (0 = giữ nguyên)
               <input type="range" min={-50} max={50} value={role.pitch} disabled={disabled}
                 onChange={(e) => onChange(id, { pitch: Number(e.target.value) })} />
             </label>

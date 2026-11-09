@@ -154,3 +154,64 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 .guide-steps { margin: 6px 0; padding-left: 20px; }
 .guide-steps li { margin-bottom: 8px; }
 
+
+/* ---- Tinh chỉnh giao diện: quy trình, menu Công cụ, màn hình chào, chú thích ---- */
+kbd { background: #2a2f3a; border: 1px solid #3e4554; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; font-family: ui-monospace, monospace; }
+.toolbar-group { display: flex; gap: 6px; }
+.help-btn { background: #2a2f3a !important; }
+
+.tools-menu { position: relative; }
+.tools-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 360px; max-height: 75vh; overflow-y: auto;
+  background: #1c2029; border: 1px solid #2a2f3a; border-radius: 8px; padding: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  display: flex; flex-direction: column; gap: 2px; }
+.tools-panel .tools-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
+  background: transparent; padding: 8px 10px; border-radius: 6px; color: #e6e8eb; font-size: 13px; }
+.tools-panel .tools-item:hover:not(:disabled) { background: #2a2f3a; }
+.tools-panel .tools-item:disabled { color: #6b7280; background: transparent; }
+.tools-panel .tools-item span { color: #9aa3b2; font-size: 12px; line-height: 1.4; }
+.tools-panel .tools-api { cursor: default; }
+.tools-panel .tools-api-actions { display: flex; gap: 6px; margin-top: 4px; }
+.tools-panel .tools-api-actions button { padding: 5px 10px; }
+
+.workflow { padding: 10px 16px; background: #171b22; border-bottom: 1px solid #2a2f3a; }
+.workflow-steps { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.workflow-step { flex: 1; min-width: 0; }
+.workflow-btn { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: #1f242d; color: #cbd5e1;
+  border: 1px solid #2a2f3a; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.workflow-btn:disabled { cursor: default; opacity: 0.6; }
+.workflow-btn:hover:not(:disabled) { border-color: #3e4554; }
+.workflow-num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: #2a2f3a; font-size: 13px; font-weight: 700; }
+.workflow-text { display: flex; flex-direction: column; min-width: 0; }
+.workflow-label { font-weight: 600; font-size: 14px; }
+.workflow-hint { font-size: 12px; color: #9aa3b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.workflow-step.done .workflow-num { background: #2f7d5b; color: #fff; }
+.workflow-step.current .workflow-btn { background: #1d3327; border-color: #4ade80; color: #f3f4f6; }
+.workflow-step.current .workflow-num { background: #4ade80; color: #0e1014; }
+.workflow-guidance { margin: 8px 0 0; font-size: 13px; color: #cbd5e1; }
+
+.welcome { align-items: center; justify-content: flex-start; opacity: 1; padding: 24px 16px; }
+.welcome-card { width: min(780px, 100%); margin: auto; background: #1c2029; border-radius: 10px; padding: 24px 28px;
+  display: flex; flex-direction: column; gap: 14px; line-height: 1.6; }
+.welcome-card h2 { margin: 0; font-size: 20px; }
+.welcome-lead { margin: 0; color: #9aa3b2; }
+.welcome-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.welcome-steps li { font-size: 14px; }
+.welcome-steps em { font-style: normal; color: #4ade80; }
+.example { margin: 6px 0 0; padding: 8px 10px; background: #0e1014; border-radius: 6px; font-family: "Noto Sans JP", sans-serif; font-size: 14px; white-space: pre-wrap; }
+.welcome-tips { background: #13171f; border: 1px solid #232833; border-radius: 6px; padding: 10px 14px; font-size: 13px; }
+.welcome-tips ul { margin: 6px 0 0; padding-left: 20px; }
+.notice { margin: 0; color: #fbbf24; font-size: 13px; }
+.link-btn { align-self: center; background: none; border: 0; color: #7dd3fc; text-decoration: underline; cursor: pointer; font-size: 13px; padding: 0; }
+
+.section-head { align-items: flex-start; }
+.section-hint { margin: 3px 0 0; font-size: 13px; color: #9aa3b2; line-height: 1.5; max-width: 880px; }
+.section-hint code { font-size: 12px; }
+.count { font-weight: 400; opacity: 0.7; }
+.add-buttons { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.block-hint { font-size: 12px; color: #fbbf24; max-width: 300px; text-align: right; }
+.lines tr.empty-row td { text-align: center; opacity: 0.7; padding: 18px 8px; font-style: italic; }
+.panel-title { margin: 0; font-weight: 600; font-size: 15px; }
+.panel-actions { display: flex; gap: 8px; margin-top: 8px; }
+.paste-panel p { margin: 4px 0 8px; font-size: 13px; }
+.actionbar button.primary:disabled { background: #3a3f4a; color: #9aa3b2; cursor: default; }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function AboutDialog({ onClose, docsUrl, apiRunning, onToggleApi }) {
-  const [activeTab, setActiveTab] = useState("cli");
+  const [activeTab, setActiveTab] = useState("gui");
   const [copiedKey, setCopiedKey] = useState("");
 
   useEffect(() => {
@@ -35,6 +35,14 @@ export default function AboutDialog({ onClose, docsUrl, apiRunning, onToggleApi 
             <button className="ghost close-btn" onClick={onClose} aria-label="Đóng">✕</button>
           </div>
           <div className="about-tabs" role="tablist">
+            <button
+              className={`about-tab ${activeTab === "gui" ? "active" : ""}`}
+              onClick={() => setActiveTab("gui")}
+              role="tab"
+              aria-selected={activeTab === "gui"}
+            >
+              🚀 Dùng giao diện
+            </button>
             <button
               className={`about-tab ${activeTab === "cli" ? "active" : ""}`}
               onClick={() => setActiveTab("cli")}
@@ -71,6 +79,66 @@ export default function AboutDialog({ onClose, docsUrl, apiRunning, onToggleApi 
         </div>
 
         <div className="about-body">
+          {activeTab === "gui" && (
+            <div className="tab-pane">
+              <h3>Dùng giao diện textts</h3>
+
+              <div className="guide-section">
+                <h4>1. Quy trình 3 bước</h4>
+                <ol className="guide-steps">
+                  <li><strong>Nhập kịch bản:</strong> bấm <em>Mở file .txt</em> hoặc <em>Dán văn bản</em>. Mỗi dòng là một câu, bắt đầu bằng số vai (ví dụ <code>1 すみません</code>).</li>
+                  <li><strong>Chỉnh sửa:</strong> chọn giọng cho từng vai ở phần <em>Vai</em>. Sửa chữ, đổi vai, cảm xúc hoặc tốc độ của từng câu trong bảng <em>Kịch bản</em>.</li>
+                  <li><strong>Tạo âm thanh:</strong> bấm <em>Tạo âm thanh</em> ở góc dưới bên phải. File .mp3 được lưu cạnh dự án; sóng âm và thời lượng từng câu hiện ở phần <em>Kết quả</em>.</li>
+                </ol>
+                <p className="muted">Thanh quy trình ngay dưới thanh công cụ cho biết bạn đang ở bước nào. Bấm vào một bước để làm việc của bước đó.</p>
+              </div>
+
+              <div className="guide-section">
+                <h4>2. Thanh công cụ</h4>
+                <ul className="guide-list">
+                  <li><strong>Mở file .txt / Dán văn bản / Mở dự án đã lưu:</strong> cách bắt đầu một kịch bản.</li>
+                  <li><strong>Công cụ ▾:</strong> tìm & thay thế, từ điển cách đọc, cache, kiểm tra cập nhật và bật/tắt máy chủ API cho AI.</li>
+                  <li><strong>↶ ↷:</strong> hoàn tác và làm lại thao tác sửa.</li>
+                  <li><strong>VOICEVOX:</strong> chỉ cần khi dùng giọng VOICEVOX. Giọng Edge không cần.</li>
+                </ul>
+              </div>
+
+              <div className="guide-section">
+                <h4>3. Đọc bảng Kịch bản</h4>
+                <ul className="guide-list">
+                  <li><strong>Đổi vai:</strong> ô đầu dòng. Đổi vai là đổi giọng đọc của câu đó.</li>
+                  <li><strong>Câu thoại:</strong> sửa trực tiếp. Viết <code>{"駅{えき}"}</code> để chỉ cách đọc chữ Hán.</li>
+                  <li><strong>Cách đọc (gợi ý):</strong> cách đọc kana app dự đoán. Bấm <em>Áp dụng</em> để ghi vào câu.</li>
+                  <li><strong>Cảm xúc / Tốc độ:</strong> “theo vai” nghĩa là dùng cài đặt của vai; chọn giá trị khác để ghi đè cho riêng câu đó.</li>
+                  <li><strong>▶ Nghe:</strong> nghe thử đúng câu đó, không cần tạo lại cả file.</li>
+                  <li><strong>+ Khoảng nghỉ / + Hiệu ứng:</strong> chèn khoảng lặng (mili-giây) hoặc file âm thanh hiệu ứng giữa các câu.</li>
+                </ul>
+              </div>
+
+              <div className="guide-section">
+                <h4>4. Màu báo hiệu</h4>
+                <ul className="guide-list">
+                  <li><strong>Nền đỏ (✕):</strong> câu bị lỗi khi tạo âm thanh. Xem nhật ký bên dưới để biết nguyên nhân.</li>
+                  <li><strong>Nền vàng (⚠):</strong> cảnh báo, thường là chữ Hán chưa có cách đọc. Rê chuột lên dòng để xem chi tiết.</li>
+                  <li><strong>“Chưa lưu”:</strong> bạn có thay đổi chưa ghi vào file. Bấm Ctrl+S.</li>
+                </ul>
+              </div>
+
+              <div className="guide-section">
+                <h4>5. Phím tắt</h4>
+                <ul className="guide-list">
+                  <li><kbd>Ctrl</kbd>+<kbd>S</kbd>: lưu &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Z</kbd>: hoàn tác &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> hoặc <kbd>Ctrl</kbd>+<kbd>Y</kbd>: làm lại</li>
+                  <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd>: thêm câu mới &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>F</kbd>: tìm & thay thế</li>
+                </ul>
+              </div>
+
+              <div className="guide-section">
+                <h4>6. Khi nút Tạo âm thanh bị khóa</h4>
+                <p>Dòng chữ nhỏ cạnh nút sẽ nói lý do: chưa mở kịch bản, kịch bản chưa có câu thoại, hoặc app đang xử lý.</p>
+              </div>
+            </div>
+          )}
+
           {activeTab === "cli" && (
             <div className="tab-pane">
               <h3>Chạy textts bằng dòng lệnh (Không cần GUI)</h3>

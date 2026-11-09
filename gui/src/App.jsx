@@ -9,6 +9,8 @@ import ExportDialog from "./components/ExportDialog.jsx";
 import ReadingsDialog from "./components/ReadingsDialog.jsx";
 import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
 import AboutDialog from "./components/AboutDialog.jsx";
+import WorkflowBar from "./components/WorkflowBar.jsx";
+import { generateBlockReason, getWorkflowStep } from "./lib/workflow.js";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -51,6 +53,18 @@ export default function App() {
   const [replaceText, setReplaceText] = useState("");
   const [apiServer, setApiServer] = useState({ running: false, port: 8000, docsUrl: "http://127.0.0.1:8000/docs" });
   const [voicevoxOk, setVoicevoxOk] = useState(false);
+  // Menu "Công cụ" trên thanh trên cùng: các chức năng phụ được gom vào đây cho gọn.
+  const [showTools, setShowTools] = useState(false);
+  const toolsRef = useRef(null);
+
+  useEffect(() => {
+    if (!showTools) return;
+    const onDown = (e) => {
+      if (!toolsRef.current?.contains(e.target)) setShowTools(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showTools]);
 
   useEffect(() => {
     if (window.textts?.getApiServerStatus) {
@@ -114,6 +128,30 @@ export default function App() {
 
   const items = project?.items ?? [];
   const lineCount = useMemo(() => items.filter((it) => it.type === "line").length, [items]);
+  const workflowStep = getWorkflowStep({
+    hasProject: Boolean(project),
+    lineCount,
+    hasOutput: Boolean(output),
+    outputStale,
+  });
+  const blockReason = generateBlockReason({ hasProject: Boolean(project), lineCount, busy });
+
+  function scrollToId(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Bấm vào một bước trên thanh quy trình thì làm đúng việc của bước đó.
+  function onStepClick(key) {
+    if (key === "import") openScript();
+    else if (key === "edit") scrollToId("section-lines");
+    else if (key === "generate") {
+      // Khi chưa đủ điều kiện, đưa người dùng tới phần kịch bản để xem việc cần làm.
+      if (blockReason) scrollToId("section-lines");
+      else generate();
+    }
+    else if (output) scrollToId("section-output");
+    else scrollToId("section-lines");
+  }
 
   function setProject(next) {
     projectRef.current = next;
@@ -506,46 +544,88 @@ export default function App() {
   return (
     <div className="app">
       <header className="toolbar">
-        <button onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
-        <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
-        <button onClick={() => setPasting((v) => !v)} disabled={busy}>Dán kịch bản</button>
-        <button className="ghost" onClick={openProjectFolder} disabled={busy || !filePath}>Mở thư mục dự án</button>
-        <button className="ghost" onClick={checkUpdates} disabled={busy} title="Kiểm tra bản mới trên GitHub">Kiểm tra cập nhật</button>
-        <button className="ghost" onClick={() => setShowReadings(true)} disabled={busy} title="Mở từ điển cách đọc Kanji (readings.yaml)">Từ điển đọc</button>
-        <button className="ghost" onClick={() => setShowCache(true)} disabled={busy} title="Quản lý bộ nhớ đệm cache">Cache</button>
-        <button className="ghost" onClick={() => setShowAbout(true)} disabled={busy} title="Hướng dẫn sử dụng CLI, kết nối AI & Giới thiệu">Hướng dẫn & About</button>
-        <button
-          className={searchOpen ? "ghost active" : "ghost"}
-          onClick={() => setSearchOpen((v) => !v)}
-          disabled={busy || !project}
-          title="Tìm kiếm & Thay thế (Ctrl+F)"
-        >
-          Tìm (Ctrl+F)
-        </button>
-        <button
-          className={apiServer.running ? "ghost api-btn on" : "ghost api-btn"}
-          onClick={toggleApiServer}
-          title={apiServer.running ? "API Server đang bật trên cổng 8000. Bấm để tắt" : "Bật API Server cho AI"}
-        >
-          <span className={`status-dot ${apiServer.running ? "dot-green" : "dot-gray"}`} />
-          API: {apiServer.running ? "Bật (:8000)" : "Tắt"}
-        </button>
-        {apiServer.running && (
-          <button className="ghost" onClick={openDocs} title="Mở trang tài liệu Swagger UI">
-            Docs
+        <div className="toolbar-group" role="group" aria-label="Mở hoặc nhập">
+          <button onClick={openScript} disabled={busy} title="Chọn file kịch bản .txt để tạo dự án mới">
+            Mở file .txt
           </button>
-        )}
+          <button className="ghost" onClick={() => setPasting((v) => !v)} disabled={busy} title="Dán nội dung kịch bản trực tiếp">
+            Dán văn bản
+          </button>
+          <button className="ghost" onClick={openProject} disabled={busy} title="Mở dự án đã lưu (file .json) để sửa tiếp">
+            Mở dự án đã lưu
+          </button>
+        </div>
+        <button className="ghost help-btn" onClick={() => setShowAbout(true)} disabled={busy} title="Hướng dẫn từng bước và cú pháp kịch bản">
+          ❓ Hướng dẫn
+        </button>
+        <span className="toolbar-spacer" />
         <span
           className="voicevox-status"
-          title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
+          title={voicevoxOk
+            ? "VOICEVOX đang chạy: có thể dùng giọng VOICEVOX"
+            : "VOICEVOX chưa chạy. Chỉ cần khi dùng giọng VOICEVOX; giọng Edge không cần"}
         >
           <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
-          VOICEVOX
+          VOICEVOX {voicevoxOk ? "sẵn sàng" : "chưa bật"}
         </span>
-        <span className="toolbar-spacer" />
         <button className="ghost" onClick={undo} disabled={busy || !canUndo} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button>
         <button className="ghost" onClick={redo} disabled={busy || !canRedo} title="Làm lại (Ctrl+Shift+Z)" aria-label="Làm lại">↷</button>
+        <div className="tools-menu" ref={toolsRef}>
+          <button
+            className="ghost"
+            aria-haspopup="menu"
+            aria-expanded={showTools}
+            onClick={() => setShowTools((v) => !v)}
+          >
+            Công cụ ▾
+          </button>
+          {showTools && (
+            <div className="tools-panel" role="menu" onClick={() => setShowTools(false)}>
+              <button className="tools-item" role="menuitem" disabled={busy || !project} onClick={() => setSearchOpen((v) => !v)}>
+                <strong>Tìm & thay thế</strong>
+                <span>Sửa hàng loạt một cụm chữ trong mọi câu (Ctrl+F)</span>
+              </button>
+              <button className="tools-item" role="menuitem" disabled={busy || !filePath} onClick={openProjectFolder}>
+                <strong>Mở thư mục dự án</strong>
+                <span>Xem file .json, .mp3 và phụ đề đã tạo</span>
+              </button>
+              <button className="tools-item" role="menuitem" disabled={busy} onClick={() => setShowReadings(true)}>
+                <strong>Từ điển cách đọc</strong>
+                <span>Lưu cách đọc của các từ khó (readings.yaml) để áp dụng cho mọi kịch bản</span>
+              </button>
+              <button className="tools-item" role="menuitem" disabled={busy} onClick={() => setShowCache(true)}>
+                <strong>Bộ nhớ đệm (cache)</strong>
+                <span>Xem dung lượng và xóa âm thanh đã tạo trước đó để giải phóng ổ đĩa</span>
+              </button>
+              <button className="tools-item" role="menuitem" disabled={busy} onClick={checkUpdates}>
+                <strong>Kiểm tra cập nhật</strong>
+                <span>Tìm phiên bản textts mới trên GitHub</span>
+              </button>
+              <div className="tools-item tools-api" role="none">
+                <strong>
+                  <span className={`status-dot ${apiServer.running ? "dot-green" : "dot-gray"}`} />
+                  Máy chủ API cho AI: {apiServer.running ? "đang bật" : "đang tắt"}
+                </strong>
+                <span>Chỉ bật khi bạn muốn ChatGPT, Claude hoặc agent khác gọi textts. Không cần cho việc dùng thường.</span>
+                <div className="tools-api-actions">
+                  <button className="ghost" role="menuitem" disabled={busy} onClick={toggleApiServer}>
+                    {apiServer.running ? "Tắt API" : "Bật API"}
+                  </button>
+                  {apiServer.running && (
+                    <button className="ghost" role="menuitem" onClick={openDocs}>Mở tài liệu API</button>
+                  )}
+                </div>
+              </div>
+              <button className="tools-item" role="menuitem" onClick={() => setShowAbout(true)}>
+                <strong>Hướng dẫn đầy đủ</strong>
+                <span>Cú pháp kịch bản, dòng lệnh CLI, kết nối AI và thông tin phiên bản</span>
+              </button>
+            </div>
+          )}
+        </div>
       </header>
+
+      <WorkflowBar step={workflowStep} dirty={dirty} disabled={busy} onStepClick={onStepClick} />
 
       {searchOpen && project && (
         <section className="search-bar">
@@ -568,28 +648,62 @@ export default function App() {
 
       {pasting && (
         <section className="paste-panel">
-          <p>Mỗi dòng bắt đầu bằng số vai: <code>1 こんにちは</code>, <code>[2] はい</code>.
-            Dự án mới sẽ được tạo trong thư mục xuất.</p>
+          <p className="panel-title">Dán kịch bản</p>
+          <p className="section-hint">
+            Mỗi dòng là một câu, bắt đầu bằng số vai: <code>1 こんにちは</code> hoặc <code>[2] はい</code>.
+            Chữ Hán có thể kèm cách đọc: <code>{"駅{えき}"}</code>. Sau khi tạo, bạn sẽ chỉnh tiếp trên màn hình chính.
+          </p>
           <textarea rows={8} value={pasteText} disabled={busy}
+            placeholder={"1 すみません、駅はどこですか。\n2 あちらです。"}
             onChange={(e) => setPasteText(e.target.value)} />
           {pasteError && <div className="preset-error" role="alert">{pasteError}</div>}
-          <div>
-            <button onClick={importPasted} disabled={busy}>Tạo dự án</button>
+          <div className="panel-actions">
+            <button onClick={importPasted} disabled={busy || !pasteText.trim()}>Tạo dự án từ văn bản</button>
             <button className="ghost" onClick={() => setPasting(false)}>Hủy</button>
           </div>
         </section>
       )}
 
       {!project ? (
-        <main className="content empty-state">
-          <p>Mở một dự án (project.json), hoặc bắt đầu từ kịch bản.</p>
-          {log && <pre className="log">{log}</pre>}
-          <div className="empty-actions">
-            <button onClick={openScript} disabled={busy}>Mở kịch bản .txt</button>
-            <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán kịch bản</button>
-            <button className="ghost" onClick={openProject} disabled={busy}>Mở dự án (project.json)</button>
-            <button className="ghost" onClick={() => setShowAbout(true)} disabled={busy} title="Xem hướng dẫn chạy CLI và kết nối AI">Hướng dẫn & About</button>
+        <main className="content welcome">
+          <div className="welcome-card">
+            <h2>Bắt đầu với textts</h2>
+            <p className="welcome-lead">Biến kịch bản hội thoại tiếng Nhật thành file âm thanh, qua 3 bước:</p>
+            <ol className="welcome-steps">
+              <li>
+                <strong>Nhập kịch bản.</strong> Bấm <em>Mở file .txt</em> hoặc <em>Dán văn bản</em>.
+                Mỗi dòng là một câu, bắt đầu bằng số vai:
+                <pre className="example">{"1 すみません、駅{えき}はどこですか。\n2 あちらです。\n[pause=800]"}</pre>
+              </li>
+              <li>
+                <strong>Chỉnh vai và câu.</strong> Phần <em>Vai</em> chọn giọng và cảm xúc cho từng nhân vật.
+                Bảng <em>Kịch bản</em> cho phép sửa chữ, đổi vai hoặc thêm câu.
+              </li>
+              <li>
+                <strong>Tạo âm thanh.</strong> Bấm <em>Tạo âm thanh</em> ở góc dưới. Kết quả (.mp3) được lưu cạnh file dự án.
+              </li>
+            </ol>
+            <div className="welcome-tips">
+              <strong>Ghi nhớ</strong>
+              <ul>
+                <li>{"Viết 漢字{かな} để chỉ cách đọc chữ Hán, ví dụ 駅{えき}."}</li>
+                <li><code>[pause=1000]</code> là nghỉ 1 giây; <code>[sfx=đường/dẫn.wav]</code> chèn hiệu ứng âm thanh.</li>
+                <li>Bấm <kbd>Ctrl</kbd>+<kbd>S</kbd> để lưu, <kbd>Ctrl</kbd>+<kbd>Z</kbd> để hoàn tác.</li>
+              </ul>
+            </div>
+            {!outputRoot && (
+              <p className="notice">Lần đầu dùng: app sẽ hỏi bạn chọn thư mục để lưu file kết quả.</p>
+            )}
+            <div className="empty-actions">
+              <button onClick={openScript} disabled={busy}>Mở file .txt</button>
+              <button className="ghost" onClick={() => setPasting(true)} disabled={busy}>Dán văn bản</button>
+              <button className="ghost" onClick={openProject} disabled={busy}>Mở dự án đã lưu</button>
+            </div>
+            <button className="link-btn" onClick={() => setShowAbout(true)}>
+              Xem hướng dẫn đầy đủ (cú pháp, dòng lệnh, kết nối AI)
+            </button>
           </div>
+          {log && <pre className="log">{log}</pre>}
         </main>
       ) : (
         <main className="content">
@@ -605,13 +719,19 @@ export default function App() {
           />
           <Mixer roles={project.roles} onChange={patchRole} disabled={busy} />
 
-          <section>
+          <section id="section-lines">
             <div className="section-head">
-              <h2>Kịch bản</h2>
               <div>
-                <button className="ghost" onClick={addLine} disabled={busy} title="Thêm câu (Ctrl+Enter)">+ Câu thoại</button>
-                <button className="ghost" onClick={addPause} disabled={busy}>+ Nghỉ</button>
-                <button className="ghost" onClick={addSfx} disabled={busy} title="Thêm hiệu ứng âm thanh">+ SFX</button>
+                <h2>Kịch bản <span className="count">({lineCount} câu)</span></h2>
+                <p className="section-hint">
+                  Sửa trực tiếp trong ô chữ. Đổi vai bằng ô đầu dòng. “theo vai” nghĩa là dùng cài đặt của vai đó;
+                  chọn cảm xúc hoặc tốc độ khác để ghi đè riêng cho câu này.
+                </p>
+              </div>
+              <div className="add-buttons">
+                <button className="ghost" onClick={addLine} disabled={busy} title="Thêm câu thoại mới ở cuối (Ctrl+Enter)">+ Câu thoại</button>
+                <button className="ghost" onClick={addPause} disabled={busy} title="Thêm khoảng nghỉ (mili-giây) ở cuối kịch bản">+ Khoảng nghỉ</button>
+                <button className="ghost" onClick={addSfx} disabled={busy} title="Thêm một file âm thanh hiệu ứng (.wav, .mp3) ở cuối kịch bản">+ Hiệu ứng</button>
               </div>
             </div>
             <LineTable
@@ -634,10 +754,25 @@ export default function App() {
           </section>
 
           {output && (
-            <section>
-              <h2>Dòng thời gian</h2>
+            <section id="section-output">
+              <div className="section-head">
+                <div>
+                  <h2>Kết quả: dòng thời gian</h2>
+                  <p className="section-hint">
+                    Mỗi khối là một câu, độ dài theo thời lượng thật. Bấm vào sóng để nghe từ vị trí đó.
+                    Kéo câu để dời về phía sau.
+                  </p>
+                </div>
+                <div className="add-buttons">
+                  <button className="ghost" onClick={() => window.textts?.openFolder?.(filePath)} disabled={busy || !filePath}>
+                    Mở thư mục kết quả
+                  </button>
+                </div>
+              </div>
               {outputStale && (
-                <p className="stale">Bản đầu ra đã cũ so với chỉnh sửa. Bấm "Tạo âm thanh" để cập nhật.</p>
+                <p className="stale">
+                  Bạn đã sửa sau lần tạo gần nhất. Bấm “Tạo âm thanh” để cập nhật file.
+                </p>
               )}
               <Timeline output={output} selectedId={selectedId} onShift={shiftItem} disabled={busy} />
             </section>
@@ -645,7 +780,7 @@ export default function App() {
 
           {previewUrl && (
             <section>
-              <h2>Nghe thử</h2>
+              <h2>Nghe thử một câu</h2>
               <audio controls autoPlay src={previewUrl} />
             </section>
           )}
@@ -660,12 +795,12 @@ export default function App() {
       <footer className="actionbar">
         <div className="status">
           <span className="path" title={filePath}>
-            {filePath || "Chưa mở dự án"}{dirty ? " • chưa lưu" : ""}
+            {filePath ? `Dự án: ${filePath}` : "Chưa có dự án"}{dirty ? " • chưa lưu" : ""}
           </span>
           <span className="out-root" title={outputRoot}>
-            Thư mục xuất: {outputRoot || "chưa chọn"}
+            Lưu file kết quả vào: {outputRoot || "chưa chọn"}
           </span>
-          <button className="ghost" onClick={chooseOutputRoot} disabled={busy}>Đổi…</button>
+          <button className="ghost" onClick={chooseOutputRoot} disabled={busy} title="Chọn thư mục để lưu file .mp3 và phụ đề">Đổi thư mục…</button>
         </div>
         <div className="actions">
           {busy && (
@@ -674,9 +809,13 @@ export default function App() {
               {lastLogLine || "Đang chuẩn bị…"}
             </span>
           )}
-          <button className="ghost" onClick={() => setShowExport(true)} disabled={busy}>Tùy chọn xuất…</button>
-          <button className="ghost" onClick={save} disabled={busy || !project || !dirty} title="Lưu (Ctrl+S)">Lưu</button>
-          <button className="primary" onClick={generate} disabled={busy || !project || lineCount === 0}>
+          {!busy && blockReason && <span className="block-hint">{blockReason}</span>}
+          <button className="ghost" onClick={() => setShowExport(true)} disabled={busy}
+            title="Chọn định dạng MP3/WAV, bản chậm, phụ đề, nhạc nền, chế độ luyện tập">
+            Tùy chọn xuất…
+          </button>
+          <button className="ghost" onClick={save} disabled={busy || !project || !dirty} title="Lưu dự án (Ctrl+S)">Lưu</button>
+          <button className="primary" onClick={generate} disabled={busy || Boolean(blockReason)} title={blockReason || "Tạo file âm thanh từ kịch bản hiện tại"}>
             {busy ? "Đang xử lý…" : "Tạo âm thanh"}
           </button>
         </div>

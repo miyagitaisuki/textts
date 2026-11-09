@@ -28,15 +28,20 @@ export default function LineTable({
     <table className="lines">
       <thead>
         <tr>
-          <th>Vai</th>
-          <th title="Dùng 漢字{かな} để ép cách đọc">Câu thoại</th>
-          <th>Cách đọc gợi ý</th>
-          <th>Cảm xúc</th>
-          <th>Tốc độ</th>
-          <th></th>
+          <th title="Nhân vật nói câu này. Đổi vai để đổi giọng.">Vai</th>
+          <th title={"Nội dung câu. Viết 漢字{かな} để chỉ cách đọc chữ Hán."}>Câu thoại</th>
+          <th title="Cách đọc kana dự đoán. Bấm “Áp dụng” để ghi vào ô câu thoại.">Cách đọc (gợi ý)</th>
+          <th title="Cảm xúc riêng cho câu này. “theo vai” = dùng cảm xúc của vai.">Cảm xúc</th>
+          <th title="Tốc độ riêng cho câu này. “theo vai” = dùng tốc độ của vai.">Tốc độ</th>
+          <th title="Nghe thử, sắp xếp và xóa câu">Thao tác</th>
         </tr>
       </thead>
       <tbody>
+        {items.length === 0 && (
+          <tr className="empty-row">
+            <td colSpan={6}>Kịch bản chưa có câu nào. Bấm “+ Câu thoại” phía trên để thêm, hoặc nhập lại từ file .txt.</td>
+          </tr>
+        )}
         {items.map((it, idx) =>
           it.type === "sfx" ? (
             <tr key={it.id} className="sfx">
