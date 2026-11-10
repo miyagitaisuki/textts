@@ -1,4 +1,8 @@
+import pytest
+
 from core.worksheet import ruby_html, worksheet_html
+
+pytest.importorskip("pyopenjtalk")
 
 
 def test_explicit_reading_is_used():

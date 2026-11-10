@@ -44,8 +44,8 @@ def test_unknown_key_in_roles_yaml_is_rejected():
         Config.model_validate({"roles": {"1": {"voice": "x"}}, "enigne": "edge"})
 
 
-def test_project_from_script_checks_roles_used():
-    script = Path("/tmp/_t_script.txt")
+def test_project_from_script_checks_roles_used(tmp_path):
+    script = tmp_path / "_t_script.txt"
     script.write_text("[1] はい。\n[2] いいえ。", encoding="utf-8")
     with pytest.raises(ValidationError, match="Vai chưa được cấu hình: 2"):
         project_from_script(script, _cfg())

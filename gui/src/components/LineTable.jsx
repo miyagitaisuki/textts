@@ -1,11 +1,22 @@
-// Bảng câu thoại: sửa chữ, vai, cảm xúc/tốc độ riêng của câu; thêm, xóa, đổi thứ tự, nghe thử.
+// Trình soạn thảo kịch bản trực quan dạng Card/Block chuyên nghiệp (Script Editor)
 import { EMOTIONS, SPEEDS, EMOTION_LABELS, SPEED_LABELS } from "./RolePanel.jsx";
 import { indexIssues } from "../lib/library.js";
+import {
+  PlayIcon,
+  PlusIcon,
+  TrashIcon,
+  CopyIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  SparklesIcon,
+  ClockIcon,
+  MusicIcon,
+} from "./Icons.jsx";
 
 const DEFAULT_ROLE_IDS = ["1", "2", "3"];
 
 export default function LineTable({
-  items,
+  items = [],
   selectedId,
   roles = {},
   onSelect,
@@ -15,7 +26,7 @@ export default function LineTable({
   onDuplicate,
   onInsertBelow,
   onPreview,
-  suggestions,
+  suggestions = {},
   onApply,
   disabled,
   errorIds = [],
@@ -24,85 +35,126 @@ export default function LineTable({
   const issueOf = indexIssues(issues);
   const roleIds = Object.keys(roles).length ? Object.keys(roles) : DEFAULT_ROLE_IDS;
 
+  if (!items.length) {
+    return (
+      <div className="script-empty-container">
+        <p>Kịch bản đang trống. Hãy thêm câu thoại đầu tiên!</p>
+      </div>
+    );
+  }
+
   return (
-    <table className="lines">
-      <thead>
-        <tr>
-          <th>Vai</th>
-          <th title="Dùng 漢字{かな} để ép cách đọc">Câu thoại</th>
-          <th>Cách đọc gợi ý</th>
-          <th>Cảm xúc</th>
-          <th>Tốc độ</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((it, idx) =>
-          it.type === "sfx" ? (
-            <tr key={it.id} className="sfx">
-              <td colSpan={5}>
-                Hiệu ứng (SFX): <code>{it.path}</code>
-              </td>
-              <td>
-                <RowActions
-                  idx={idx}
-                  total={items.length}
-                  id={it.id}
-                  onMove={onMove}
-                  onDelete={onDelete}
-                  onDuplicate={onDuplicate}
-                  onInsertBelow={onInsertBelow}
-                  disabled={disabled}
-                />
-              </td>
-            </tr>
-          ) : it.type === "pause" ? (
-            <tr key={it.id} className="pause">
-              <td colSpan={2}>
-                Nghỉ{" "}
-                <input
-                  type="number"
-                  min={0}
-                  step={100}
-                  value={it.ms}
-                  disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { ms: Number(e.target.value) })}
-                />{" "}
-                ms
-              </td>
-              <td colSpan={3}></td>
-              <td>
-                <RowActions
-                  idx={idx}
-                  total={items.length}
-                  id={it.id}
-                  onMove={onMove}
-                  onDelete={onDelete}
-                  onDuplicate={onDuplicate}
-                  onInsertBelow={onInsertBelow}
-                  disabled={disabled}
-                />
-              </td>
-            </tr>
-          ) : (
-            <tr
+    <div className="script-blocks-container" role="feed" aria-label="Danh sách câu thoại">
+      {items.map((it, idx) => {
+        const isSelected = selectedId === it.id;
+        const hasError = errorIds.includes(it.id) || issueOf[it.id]?.level === "error";
+        const hasWarn = !hasError && issueOf[it.id]?.level === "warning";
+        const tooltip = issueOf[it.id]?.message || it.id;
+
+        if (it.type === "sfx") {
+          return (
+            <div
               key={it.id}
               id={`row-${it.id}`}
-              title={issueOf[it.id]?.message || it.id}
-              className={[
-                selectedId === it.id ? "selected" : "",
-                errorIds.includes(it.id) || issueOf[it.id]?.level === "error" ? "error" : "",
-                !errorIds.includes(it.id) && issueOf[it.id]?.level === "warning" ? "warn" : "",
-              ]
-                .join(" ")
-                .trim()}
+              title={tooltip}
+              className={`script-card sfx-card ${isSelected ? "selected" : ""} ${
+                hasError ? "error" : ""
+              } ${hasWarn ? "warn" : ""}`}
               onClick={() => onSelect(it.id)}
             >
-              <td>
+              <div className="card-badge sfx-badge">
+                <MusicIcon size={14} />
+                <span>SFX</span>
+              </div>
+              <div className="card-body sfx-body">
+                <span className="sfx-label">Hiệu ứng âm thanh:</span>
+                <code className="sfx-path">{it.path}</code>
+              </div>
+              <div className="card-actions">
+                <CardActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          );
+        }
+
+        if (it.type === "pause") {
+          return (
+            <div
+              key={it.id}
+              id={`row-${it.id}`}
+              title={tooltip}
+              className={`script-card pause-card ${isSelected ? "selected" : ""} ${
+                hasError ? "error" : ""
+              } ${hasWarn ? "warn" : ""}`}
+              onClick={() => onSelect(it.id)}
+            >
+              <div className="card-badge pause-badge">
+                <ClockIcon size={14} />
+                <span>Nghỉ</span>
+              </div>
+              <div className="card-body pause-body">
+                <span>Khoảng lặng:</span>
+                <div className="pause-input-group">
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={it.ms}
+                    disabled={disabled}
+                    onChange={(e) => onPatch(it.id, { ms: Number(e.target.value) })}
+                  />
+                  <span>ms</span>
+                </div>
+              </div>
+              <div className="card-actions">
+                <CardActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          );
+        }
+
+        // Dòng câu thoại (Speech line)
+        const role = roles[it.role] || {};
+        const roleName = role.name ? role.name : `Vai ${it.role}`;
+        const suggestion = suggestions?.[it.id];
+
+        return (
+          <div
+            key={it.id}
+            id={`row-${it.id}`}
+            title={tooltip}
+            className={`script-card line-card role-border-${it.role} ${
+              isSelected ? "selected" : ""
+            } ${hasError ? "error" : ""} ${hasWarn ? "warn" : ""}`}
+            onClick={() => onSelect(it.id)}
+          >
+            {/* Header câu thoại: Role Selector, ID, Emotion, Speed, Listen */}
+            <div className="card-header">
+              <div className="card-header-left">
+                <span className="line-number-pill">{idx + 1}</span>
                 <select
-                  className={`role-${it.role}`}
+                  className={`role-select role-${it.role}`}
                   value={it.role}
                   disabled={disabled}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onPatch(it.id, { role: e.target.value })}
                 >
                   {roleIds.map((r) => (
@@ -111,69 +163,48 @@ export default function LineTable({
                     </option>
                   ))}
                 </select>
-              </td>
-              <td className="text-cell">
-                <div className="text-field">
-                  {errorIds.includes(it.id) || issueOf[it.id]?.level === "error" ? (
-                    <span className="flag error-flag" aria-label="Lỗi">
-                      ✕
-                    </span>
-                  ) : issueOf[it.id]?.level === "warning" ? (
-                    <span className="flag warn-flag" aria-label="Cảnh báo">
-                      ⚠
-                    </span>
-                  ) : null}
-                  <input
-                    className="text"
-                    value={it.display}
+
+                <div className="card-tags">
+                  <select
+                    className={`tag-select ${it.attrs?.emotion ? "overridden" : "inherit"}`}
+                    value={it.attrs?.emotion ?? ""}
                     disabled={disabled}
-                    onChange={(e) => onPatch(it.id, { display: e.target.value })}
-                  />
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) =>
+                      onPatch(it.id, { attrs: patchAttr(it, "emotion", e.target.value) })
+                    }
+                  >
+                    <option value="">Cảm xúc: Mặc định</option>
+                    {EMOTIONS.map((v) => (
+                      <option key={v} value={v}>
+                        {EMOTION_LABELS[v]}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className={`tag-select ${it.attrs?.speed ? "overridden" : "inherit"}`}
+                    value={it.attrs?.speed ?? ""}
+                    disabled={disabled}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) =>
+                      onPatch(it.id, { attrs: patchAttr(it, "speed", e.target.value) })
+                    }
+                  >
+                    <option value="">Tốc độ: Mặc định</option>
+                    {SPEEDS.map((v) => (
+                      <option key={v} value={v}>
+                        {SPEED_LABELS[v]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </td>
-              <td className="reading">
-                <SuggestionCell
-                  suggestion={suggestions?.[it.id]}
-                  display={it.display}
-                  disabled={disabled}
-                  onApply={() => onApply(it.id)}
-                />
-              </td>
-              <td>
-                <select
-                  className={it.attrs?.emotion ? "" : "inherit"}
-                  value={it.attrs?.emotion ?? ""}
-                  disabled={disabled}
-                  onChange={(e) =>
-                    onPatch(it.id, { attrs: patchAttr(it, "emotion", e.target.value) })
-                  }
-                >
-                  <option value="">theo vai</option>
-                  {EMOTIONS.map((v) => (
-                    <option key={v} value={v}>
-                      {EMOTION_LABELS[v]}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td>
-                <select
-                  className={it.attrs?.speed ? "" : "inherit"}
-                  value={it.attrs?.speed ?? ""}
-                  disabled={disabled}
-                  onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "speed", e.target.value) })}
-                >
-                  <option value="">theo vai</option>
-                  {SPEEDS.map((v) => (
-                    <option key={v} value={v}>
-                      {SPEED_LABELS[v]}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td>
+              </div>
+
+              <div className="card-header-right">
                 <button
-                  className="ghost"
+                  type="button"
+                  className="preview-btn"
                   disabled={disabled}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -181,9 +212,11 @@ export default function LineTable({
                   }}
                   title="Nghe thử câu này"
                 >
-                  ▶ Nghe
+                  <PlayIcon size={12} />
+                  <span>Nghe thử</span>
                 </button>
-                <RowActions
+
+                <CardActions
                   idx={idx}
                   total={items.length}
                   id={it.id}
@@ -193,84 +226,145 @@ export default function LineTable({
                   onInsertBelow={onInsertBelow}
                   disabled={disabled}
                 />
-              </td>
-            </tr>
-          )
-        )}
-      </tbody>
-    </table>
+              </div>
+            </div>
+
+            {/* Nội dung câu thoại */}
+            <div className="card-content-area">
+              {/* Hiển thị Furigana trực quan nếu có chú âm */}
+              {hasRuby(it.display) && (
+                <div className="furigana-live-badge">
+                  {renderRubyElements(it.display)}
+                </div>
+              )}
+
+              <div className="text-input-wrap">
+                {hasError && <span className="flag error-flag" title={tooltip}>✕</span>}
+                {hasWarn && <span className="flag warn-flag" title={tooltip}>⚠</span>}
+                <input
+                  type="text"
+                  className="speech-text-input"
+                  value={it.display}
+                  disabled={disabled}
+                  placeholder="Nhập câu thoại tiếng Nhật (ví dụ: すみません、駅{えき}はどこですか)..."
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onPatch(it.id, { display: e.target.value })}
+                />
+              </div>
+
+              {/* Gợi ý Furigana từ OpenJTalk */}
+              {suggestion && (
+                <div className="suggestion-banner">
+                  <span className="suggestion-label">
+                    <SparklesIcon size={13} /> Gợi ý Furigana:
+                  </span>
+                  <span className="suggestion-text">{suggestion.annotated}</span>
+                  {suggestion.annotated !== it.display && (
+                    <button
+                      type="button"
+                      className="apply-suggestion-btn"
+                      disabled={disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onApply(it.id);
+                      }}
+                      title="Áp dụng cách đọc này vào câu thoại"
+                    >
+                      Áp dụng
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-function SuggestionCell({ suggestion, display, disabled, onApply }) {
-  if (!suggestion) return <span className="muted">—</span>;
-  const canApply = suggestion.annotated !== display;
+function CardActions({ idx, total, id, onMove, onDelete, onDuplicate, onInsertBelow, disabled }) {
   return (
-    <span className="suggest" onClick={(e) => e.stopPropagation()}>
-      <span className="muted">{suggestion.reading}</span>
-      {canApply && (
-        <button className="ghost" disabled={disabled} onClick={onApply} title={suggestion.annotated}>
-          Áp dụng
-        </button>
-      )}
-    </span>
-  );
-}
-
-function patchAttr(item, key, value) {
-  const attrs = { ...(item.attrs || {}) };
-  if (value === "") delete attrs[key];
-  else attrs[key] = value;
-  return attrs;
-}
-
-function RowActions({ idx, total, id, onMove, onDelete, onDuplicate, onInsertBelow, disabled }) {
-  return (
-    <span className="row-actions" onClick={(e) => e.stopPropagation()}>
-      {onInsertBelow && (
-        <button
-          className="ghost"
-          disabled={disabled}
-          onClick={() => onInsertBelow(id)}
-          title="Chèn câu phía dưới"
-        >
-          +
-        </button>
-      )}
-      {onDuplicate && (
-        <button
-          className="ghost"
-          disabled={disabled}
-          onClick={() => onDuplicate(id)}
-          title="Nhân bản câu này"
-        >
-          ⧉
-        </button>
-      )}
+    <div className="card-action-bar" onClick={(e) => e.stopPropagation()}>
       <button
-        className="ghost"
+        type="button"
+        className="icon-action-btn"
         disabled={disabled || idx === 0}
         onClick={() => onMove(id, -1)}
-        title="Dời lên"
+        title="Di chuyển lên trên"
       >
-        ↑
+        <ArrowUpIcon size={14} />
       </button>
       <button
-        className="ghost"
-        disabled={disabled || idx === total - 1}
+        type="button"
+        className="icon-action-btn"
+        disabled={disabled || idx >= total - 1}
         onClick={() => onMove(id, 1)}
-        title="Dời xuống"
+        title="Di chuyển xuống dưới"
       >
-        ↓
+        <ArrowDownIcon size={14} />
       </button>
       <button
-        className="ghost danger"
+        type="button"
+        className="icon-action-btn"
+        disabled={disabled}
+        onClick={() => onDuplicate?.(id)}
+        title="Nhân bản câu này"
+      >
+        <CopyIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="icon-action-btn add-below-btn"
+        disabled={disabled}
+        onClick={() => onInsertBelow?.(id)}
+        title="Chèn câu mới phía dưới"
+      >
+        <PlusIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="icon-action-btn delete-btn"
         disabled={disabled}
         onClick={() => onDelete(id)}
-        title="Xóa dòng"
+        title="Xóa câu này"
       >
-        ✕
+        <TrashIcon size={14} />
       </button>
-    </span>
+    </div>
   );
+}
+
+function patchAttr(it, key, value) {
+  const next = { ...(it.attrs || {}) };
+  if (!value) delete next[key];
+  else next[key] = value;
+  return next;
+}
+
+function hasRuby(text = "") {
+  return /([一-鿿々]+)\{([぀-ヿー]+)\}/.test(text);
+}
+
+function renderRubyElements(text = "") {
+  const RUBY_RE = /([一-鿿々]+)\{([぀-ヿー]+)\}/g;
+  const parts = [];
+  let last = 0;
+  let match;
+  while ((match = RUBY_RE.exec(text)) !== null) {
+    if (match.index > last) {
+      parts.push(text.slice(last, match.index));
+    }
+    parts.push(
+      <ruby key={match.index}>
+        {match[1]}
+        <rt>{match[2]}</rt>
+      </ruby>
+    );
+    last = RUBY_RE.lastIndex;
+  }
+  if (last < text.length) {
+    parts.push(text.slice(last));
+  }
+  return parts;
 }

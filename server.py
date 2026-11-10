@@ -179,8 +179,12 @@ async def preview_script(req: PreviewRequest):
     for it in items:
         if it.get("type") == "line":
             orig = it.get("display", "")
-            ann = annotate(orig)
-            rd = reading(orig)
+            try:
+                ann = annotate(orig)
+                rd = reading(orig)
+            except Exception:
+                ann = orig
+                rd = orig
             it["annotated"] = ann
             it["reading"] = rd
             annotated_lines.append(f"[{it['role']}] {ann}")

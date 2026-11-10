@@ -9,8 +9,12 @@ from core.parser import RUBY_RE
 
 def _auto_ruby(text: str) -> str:
     """Chú âm tự động cho các từ toàn Hán và từ có okurigana chưa có `{かな}` (pyopenjtalk)."""
+    try:
+        tokens = _tokens(text)
+    except Exception:
+        return html.escape(text)
     parts = []
-    for surface, pron in _tokens(text):
+    for surface, pron in tokens:
         if pron is not None and _HAS_KANJI.search(surface):
             ann = annotate_token(surface, pron)
             sub_parts, last = [], 0
