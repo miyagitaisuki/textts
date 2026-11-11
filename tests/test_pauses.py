@@ -91,3 +91,26 @@ def test_sentence_pause_zero_reads_line_in_one_go(tmp_path):
     assert asyncio.run(synth_all(project, provider, tmp_path)) == []
     assert provider.calls == [("はい。そうです！", 1.5)]
     assert Path(project.items[0].audio).exists()
+
+
+def test_build_keeps_pauses_inside_a_line(tmp_path):
+    """build() chỉ cắt lặng ở hai đầu câu thoại: khoảng dừng 800 ms sau 。 phải còn nguyên.
+
+    Trước đây pydub.effects.strip_silence xóa cả khoảng lặng ở giữa, làm câu dính liền.
+    """
+    from pydub.silence import detect_silence
+
+    from core.builder import build
+
+    tone = Sine(440).to_audio_segment(400).apply_gain(-6)
+    line = AudioSegment.silent(150) + tone + AudioSegment.silent(800) + tone + AudioSegment.silent(150)
+    path = tmp_path / "line.wav"
+    line.export(path, format="wav")
+    items = [{"type": "line", "id": "L001", "src_line": 1, "role": "1", "audio": str(path), "plain": "はい。そう。"}]
+    audio, placed = build(items, {"lead_in_ms": 0, "tail_ms": 0})
+    seg = audio[placed[0]["start_ms"]:placed[0]["end_ms"]]
+    inner = [e - s for s, e in detect_silence(seg, min_silence_len=100, silence_thresh=-45)
+             if s > 50 and e < len(seg) - 50]
+    assert inner and abs(inner[0] - 800) <= 20
+    # Hai đầu vẫn được cắt, chỉ giữ ~40 ms đệm.
+    assert abs(len(seg) - (400 + 800 + 400 + 2 * 40)) <= 20

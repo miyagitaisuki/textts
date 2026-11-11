@@ -1,7 +1,8 @@
 """Ghép các đoạn âm thanh theo thứ tự, chèn khoảng nghỉ và xuất phụ đề."""
 from __future__ import annotations
 
-from pydub import AudioSegment, effects
+from pydub import AudioSegment
+from pydub.silence import detect_leading_silence
 
 DEFAULT_TIMING = {
     "lead_in_ms": 300,
@@ -10,6 +11,18 @@ DEFAULT_TIMING = {
     "question_gap_ms": 300,
     "tail_ms": 500,
 }
+
+
+def trim_edges(seg: AudioSegment, pad_ms: int = 40, thresh_db: float = -45.0) -> AudioSegment:
+    """Bỏ khoảng lặng ở đầu và cuối đoạn âm thanh, giữ lại `pad_ms` mỗi bên.
+
+    Chỉ cắt hai đầu: khoảng dừng bên trong (sau 。 do textts chèn, hay chỗ ngắt ở 、 của engine)
+    được giữ nguyên. Không dùng pydub.effects.strip_silence vì hàm đó xóa cả khoảng lặng ở giữa.
+    """
+    start = max(0, detect_leading_silence(seg, silence_threshold=thresh_db) - pad_ms)
+    tail = max(0, detect_leading_silence(seg.reverse(), silence_threshold=thresh_db) - pad_ms)
+    end = max(start, len(seg) - tail)
+    return seg[start:end]
 
 
 def _fmt_srt_time(ms: int) -> str:
@@ -55,7 +68,7 @@ def build(
             continue
 
         seg = AudioSegment.from_file(it["audio"])
-        seg = effects.strip_silence(seg, silence_len=150, silence_thresh=-45, padding=40)
+        seg = trim_edges(seg)
         gain = gains.get(it["role"], 0.0)
         if gain:
             seg = seg + gain

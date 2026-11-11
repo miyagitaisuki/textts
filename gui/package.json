@@ -1,6 +1,6 @@
 {
   "name": "textts-gui",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Giao diện soạn và tạo hội thoại TTS tiếng Nhật (Electron + React)",
   "author": "ThS. Nguyễn Thanh Quang - Giảng viên chuyên ngành Nhật Bản học, Trường Đại học Quy Nhơn",

@@ -19,7 +19,6 @@ from pathlib import Path
 
 import yaml
 from pydub import AudioSegment
-from pydub.silence import detect_leading_silence
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -27,7 +26,7 @@ from core.audio import add_background, loudness_normalize, peaks, role_levels, t
 from core.lint import lint_project
 from core.paths import sfx_path
 from core.readings import load_readings
-from core.builder import build, practice_items, to_srt
+from core.builder import build, practice_items, to_srt, trim_edges
 from core.models import (
     Config,
     LineItem,
@@ -90,20 +89,13 @@ def split_sentences(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def _trim(seg: AudioSegment, pad_ms: int = 40, thresh_db: float = -45.0) -> AudioSegment:
-    """Bỏ khoảng lặng đầu/cuối đoạn engine trả về để khoảng nghỉ giữa các câu đúng như cài đặt."""
-    start = max(0, detect_leading_silence(seg, silence_threshold=thresh_db) - pad_ms)
-    end = max(start, len(seg) - max(0, detect_leading_silence(seg.reverse(), silence_threshold=thresh_db) - pad_ms))
-    return seg[start:end]
-
-
 def join_sentences(paths: list[Path], pause_ms: int, out: Path) -> None:
     """Ghép các câu đã tổng hợp, chèn `pause_ms` lặng giữa từng câu, ghi WAV ra `out`."""
     joined = AudioSegment.empty()
     for i, p in enumerate(paths):
         if i:
             joined += AudioSegment.silent(pause_ms)
-        joined += _trim(AudioSegment.from_file(p))
+        joined += trim_edges(AudioSegment.from_file(p))
     joined.export(out, format="wav")
 
 
