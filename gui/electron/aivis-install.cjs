@@ -1,15 +1,14 @@
 // Tải AivisSpeech Engine và bộ giọng JVNV theo yêu cầu của người dùng (không nằm trong bộ cài).
-// Mỗi file tải về đều được kiểm tra SHA-256 trước khi giải nén. Mọi phụ thuộc (fetch, spawn) được truyền vào để kiểm thử.
+// Mỗi phần tải về đều được kiểm tra SHA-256; giải nén bằng 7za.exe (xem archive-install.cjs).
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
-const { Readable } = require("stream");
-const { pipeline } = require("stream/promises");
-const { spawn: defaultSpawn } = require("child_process");
+const { installArchiveParts, downloadVerified } = require("./archive-install.cjs");
 
-// Đã cấu hình đủ nguồn để tải chưa.
+// Cấu hình đủ nguồn để tải: engine là các phần archive đã ghim SHA-256;
+// models là danh sách file .aivmx đã ghim SHA-256 (mỗi file tải trực tiếp, không giải nén).
 function isConfigured(cfg) {
-  return Boolean(cfg?.engine?.url && cfg?.engine?.sha256 && cfg?.models?.url && cfg?.models?.sha256);
+  const okParts = (list) => Array.isArray(list) && list.length > 0 && list.every((p) => p?.url && p?.sha256 && p?.name);
+  return okParts(cfg?.engine?.parts) && okParts(cfg?.models?.files);
 }
 
 // Tìm file theo tên trong cây thư mục (archive có thể có thư mục gốc bao quanh). Trả về đường dẫn hoặc null.
@@ -32,45 +31,6 @@ function countModels(modelsDir) {
   return fs.readdirSync(modelsDir).filter((f) => f.toLowerCase().endsWith(".aivmx")).length;
 }
 
-function sha256File(file) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = fs.createReadStream(file);
-    stream.on("error", reject);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
-}
-
-// Tải file về dest rồi kiểm tra SHA-256. Ném lỗi nếu mạng lỗi hoặc hash không khớp (và xóa file hỏng).
-async function downloadVerified({ url, sha256, dest, fetchImpl = fetch }) {
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const res = await fetchImpl(url, { redirect: "follow" });
-  if (!res.ok || !res.body) throw new Error(`Tải thất bại (HTTP ${res.status})`);
-  await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(dest));
-  const actual = await sha256File(dest);
-  if (actual !== sha256.toLowerCase()) {
-    fs.rmSync(dest, { force: true });
-    throw new Error(`SHA-256 không khớp (nhận ${actual})`);
-  }
-  return dest;
-}
-
-// Giải nén .zip bằng tar.exe có sẵn trên Windows 10+.
-function extractArchive({ archive, dest, spawnFn = defaultSpawn }) {
-  fs.mkdirSync(dest, { recursive: true });
-  return new Promise((resolve, reject) => {
-    const child = spawnFn("tar", ["-xf", archive, "-C", dest], { windowsHide: true });
-    let stderr = "";
-    child.stderr?.on("data", (c) => (stderr += c.toString()));
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) resolve(dest);
-      else reject(new Error(`Giải nén thất bại (mã ${code}): ${stderr.trim().slice(0, 300)}`));
-    });
-  });
-}
-
 // Trạng thái hiện tại để giao diện hiển thị đúng nút.
 function aivisStatus({ cfg, installDir, modelsDir }) {
   return {
@@ -80,45 +40,42 @@ function aivisStatus({ cfg, installDir, modelsDir }) {
   };
 }
 
-// Cài đặt đầy đủ: tải + kiểm tra + giải nén engine, rồi tải + kiểm tra + giải nén model vào thư mục Models của engine.
-async function installAivis({ cfg, installDir, modelsDir, downloadDir, fetchImpl, spawnFn, log = () => {} }) {
+// Cài đặt đầy đủ: engine vào installDir, rồi bộ model JVNV được giải nén vào thư mục tạm
+// và các file .aivmx được chép vào thư mục Models mà engine đọc.
+async function installAivis({ cfg, installDir, modelsDir, downloadDir, sevenZip, fetchImpl, spawnFn, log = () => {} }) {
   if (!isConfigured(cfg)) throw new Error("Chưa cấu hình nguồn tải AivisSpeech");
-  fs.mkdirSync(downloadDir, { recursive: true });
 
   log("INFO", "[AivisSpeech] Đang tải engine");
-  const engineZip = path.join(downloadDir, "aivis-engine.zip");
-  await downloadVerified({ url: cfg.engine.url, sha256: cfg.engine.sha256, dest: engineZip, fetchImpl });
-  await extractArchive({ archive: engineZip, dest: installDir, spawnFn });
-  fs.rmSync(engineZip, { force: true });
+  await installArchiveParts({
+    parts: cfg.engine.parts,
+    installDir,
+    downloadDir: path.join(downloadDir, "engine"),
+    sevenZip,
+    fetchImpl,
+    spawnFn,
+    log,
+  });
 
-  log("INFO", "[AivisSpeech] Đang tải bộ giọng JVNV");
-  const modelsZip = path.join(downloadDir, "aivis-models.zip");
-  await downloadVerified({ url: cfg.models.url, sha256: cfg.models.sha256, dest: modelsZip, fetchImpl });
-  await extractArchive({ archive: modelsZip, dest: downloadDir, spawnFn });
-  fs.rmSync(modelsZip, { force: true });
-  // Chép file .aivmx (kể cả trong thư mục con) vào thư mục Models mà engine đọc.
+  // Model .aivmx tải trực tiếp, kiểm tra SHA-256 rồi chép vào thư mục Models của engine.
+  log("INFO", "[AivisSpeech] Đang tải bộ giọng");
   fs.mkdirSync(modelsDir, { recursive: true });
-  copyAivmx(downloadDir, modelsDir);
+  const modelDl = path.join(downloadDir, "models");
+  for (const file of cfg.models.files) {
+    const dest = path.join(modelDl, file.name);
+    await downloadVerified({ url: file.url, sha256: file.sha256, dest, fetchImpl });
+    fs.copyFileSync(dest, path.join(modelsDir, file.name));
+    fs.rmSync(dest, { force: true });
+  }
+  fs.rmSync(modelDl, { recursive: true, force: true });
 
   log("INFO", "[AivisSpeech] Cài đặt xong");
   return aivisStatus({ cfg, installDir, modelsDir });
-}
-
-function copyAivmx(srcDir, destDir) {
-  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-    const full = path.join(srcDir, entry.name);
-    if (entry.isDirectory()) copyAivmx(full, destDir);
-    else if (entry.name.toLowerCase().endsWith(".aivmx")) fs.copyFileSync(full, path.join(destDir, entry.name));
-  }
 }
 
 module.exports = {
   isConfigured,
   findFile,
   countModels,
-  sha256File,
-  downloadVerified,
-  extractArchive,
   aivisStatus,
   installAivis,
 };

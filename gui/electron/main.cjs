@@ -476,6 +476,8 @@ const { voicevoxInstalled, installVoicevox } = require("./voicevox-install.cjs")
 const { findFile } = require("./aivis-install.cjs");
 const VOICEVOX_DIR = path.join(app.getPath("userData"), "voicevox");
 const VOICEVOX_DOWNLOAD_DIR = path.join(app.getPath("userData"), "voicevox-download");
+// 7za.exe đi kèm bộ cài để giải nén engine tải theo yêu cầu. TEXTTS_7Z chỉ dùng khi chạy từ mã nguồn.
+const SEVEN_ZIP = process.env.TEXTTS_7Z || path.join(process.resourcesPath, "7z", "7za.exe");
 let voicevoxEngine = null;
 let voicevoxBoot = null;
 let voicevoxBusy = false;
@@ -531,6 +533,7 @@ ipcMain.handle("voicevox:install", async () => {
       cfg: voicevoxCfg,
       installDir: VOICEVOX_DIR,
       downloadDir: VOICEVOX_DOWNLOAD_DIR,
+      sevenZip: SEVEN_ZIP,
       spawnFn: spawn,
       log: (level, msg) => logger.log(level, msg),
     });
@@ -594,6 +597,7 @@ ipcMain.handle("aivis:install", async () => {
       installDir: AIVIS_DIR,
       modelsDir: AIVIS_MODELS_DIR,
       downloadDir: AIVIS_DOWNLOAD_DIR,
+      sevenZip: SEVEN_ZIP,
       spawnFn: spawn,
       log: (level, msg) => logger.log(level, msg),
     });
