@@ -1995,3 +1995,17 @@ kbd {
 .sound-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--radius-sm); }
 .sound-row:hover { background: var(--bg-card-hover); }
 .sound-row .sound-name { flex: 1; font-size: 13px; }
+
+/* Ô tên file xuất cạnh nút Tạo & lưu */
+.output-name-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.output-name-input {
+  width: 96px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 13px;
+}
+.output-name-input:focus { outline: none; border-color: var(--border-focus); }
+.preview-pill { color: var(--accent-blue); }

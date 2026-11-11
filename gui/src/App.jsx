@@ -80,6 +80,8 @@ export default function App() {
   const [suggestions, setSuggestions] = useState({});
   const [output, setOutput] = useState(null);
   const [outputStale, setOutputStale] = useState(false);
+  // Đường dẫn file âm thanh đã lưu gần nhất ("" nếu đang nghe bản thử hoặc chưa xuất).
+  const [outputPath, setOutputPath] = useState("");
   const [errorIds, setErrorIds] = useState([]);
   const [voices, setVoices] = useState([]);
   const [issues, setIssues] = useState([]);
@@ -459,12 +461,11 @@ export default function App() {
         continue;
       }
       const prepared = await prepareImport(r);
-      const outputPath = r.filePath.replace(/\.json$/, `.${exportOpts.format}`);
-      const res = await window.textts?.generate?.(r.filePath, outputPath, generateOptions());
+      const res = await window.textts?.generate?.(r.filePath, "", exportOpts.format, generateOptions());
       if (res?.code === 0) {
         done.push(r.script);
         last = prepared;
-        setLog((prev) => prev + `xong → ${outputPath}`);
+        setLog((prev) => prev + `xong → ${res.outputPath}`);
       } else {
         failed.push(r.script);
         setLog((prev) => prev + `lỗi (mã ${res?.code})\n${(res?.log || "").trim().split("\n").slice(-5).join("\n")}`);
@@ -532,7 +533,7 @@ export default function App() {
     setOutput(null);
     setOutputStale(false);
     refreshSuggestions(res.data);
-    loadOutputFor(res.filePath);
+    loadOutputFor(res.filePath, exportOpts.format, res.data?.output_name || "");
   }
 
   // Lấy danh sách giọng của engine (Edge/VOICEVOX/AivisSpeech) qua tts.py --list-voices.
@@ -613,11 +614,44 @@ export default function App() {
     return false;
   }
 
-  async function loadOutputFor(projectPath, format = "mp3") {
+  // Nạp bản âm thanh đã lưu của dự án (thư mục riêng theo tên file) để phát và vẽ timeline.
+  async function loadOutputFor(projectPath, format = "mp3", outputName = "") {
     if (!window.textts?.loadOutput) return;
-    const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, `.${format}`));
+    const audio = window.textts.locateOutput
+      ? await window.textts.locateOutput(projectPath, outputName, format)
+      : projectPath.replace(/\.json$/, `.${format}`);
+    await loadSavedOutput(audio);
+  }
+
+  async function loadSavedOutput(audio) {
+    const res = audio ? await window.textts.loadOutput(audio) : null;
     setOutput(res);
+    setOutputPath(res ? audio : "");
     setOutputStale(false);
+    setHasWorksheet(Boolean(res) && Boolean(await window.textts?.worksheetExists?.(audio)));
+  }
+
+  function setOutputName(name) {
+    edit((p) => ({ ...p, output_name: name }));
+  }
+
+  // Nghe thử toàn bài từ dữ liệu đang sửa: không lưu dự án, không ghi file âm thanh nào.
+  async function previewAll() {
+    if (!projectRef.current || !filePath || !window.textts?.previewAll) return;
+    setBusy(true);
+    setLog("Nghe thử toàn bài (không lưu file)\n");
+    const res = await window.textts.previewAll(filePath, projectRef.current, generateOptions());
+    setBusy(false);
+    if (!res?.ok) {
+      setLog((prev) => prev + `\n${res?.error || "Không tạo được bản nghe thử"}`);
+      addToast(res?.error || "Không tạo được bản nghe thử", "error");
+      return;
+    }
+    setOutput({ timeline: res.timeline, dataUrl: res.dataUrl });
+    setOutputPath("");
+    setOutputStale(false);
+    setTimelineOpen(true);
+    setTimeout(() => audioRef.current?.play().catch(() => {}), 0);
   }
 
   function patchRole(id, patch) {
@@ -850,8 +884,8 @@ export default function App() {
     setBusy(true);
     setLog("");
     const format = exportOpts.format;
-    const outputPath = projPath.replace(/\.json$/, `.${format}`);
-    const res = await window.textts?.generate?.(projPath, outputPath, generateOptions(overrides));
+    const outputName = projPath === filePath ? projectRef.current?.output_name || "" : "";
+    const res = await window.textts?.generate?.(projPath, outputName, format, generateOptions(overrides));
     setLog((prev) => prev + `\n${res?.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res?.code})`);
 
     const failed = [...(res?.log || "").matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
@@ -862,10 +896,8 @@ export default function App() {
     }
 
     if (res?.code === 0) {
-      await loadOutputFor(projPath, format);
-      setOutputStale(false);
-      window.textts?.worksheetExists?.(projPath).then(setHasWorksheet);
-      addToast("Tạo âm thanh thành công!", "success");
+      await loadSavedOutput(res.outputPath);
+      addToast(`Đã lưu: ${res.outputPath}`, "success");
       setTimelineOpen(true);
     }
     setBusy(false);
@@ -1002,8 +1034,10 @@ export default function App() {
                   </div>
                 </RibbonGroup>
                 <RibbonGroup label="Âm thanh">
-                  <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo âm thanh"
-                    title="Tạo file âm thanh theo tùy chọn xuất đã lưu (Ctrl+G)" onClick={generate} disabled={busy || !project} />
+                  <RibbonButton icon={<PlayIcon size={20} />} label="Nghe thử toàn bài"
+                    title="Nghe thử toàn bài với thay đổi hiện tại, không ghi file nào" onClick={previewAll} disabled={busy || !project} />
+                  <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo & lưu"
+                    title="Tạo và lưu âm thanh vào thư mục riêng mang tên file (Ctrl+G)" onClick={generate} disabled={busy || !project} />
                   <RibbonButton icon={<HardDriveIcon size={20} />} label="Xuất tất cả"
                     title="Xuất một lần: âm thanh + phụ đề SRT + bản chậm 0.8× + phiếu học tập + từng câu riêng (Ctrl+Shift+G)"
                     onClick={exportAll} disabled={busy || !project} />
@@ -1290,6 +1324,11 @@ export default function App() {
           onTogglePlay={togglePlay}
           onSeek={seek}
           onGenerate={generate}
+          onPreviewAll={previewAll}
+          outputName={project?.output_name || ""}
+          defaultOutputName={filePath ? filePath.split(/[\\/]/).pop().replace(/\.json$/, "") : ""}
+          onOutputNameChange={setOutputName}
+          isPreview={Boolean(output) && !outputPath}
           onOpenExport={() => setShowExport(true)}
           onOpenOutputFolder={openProjectFolder}
           onChooseOutputRoot={chooseOutputRoot}
@@ -1310,7 +1349,7 @@ export default function App() {
           onChange={setExportOpts}
           roles={project?.roles || {}}
           onPickAudio={() => pickFromSoundLibrary("bgm")}
-          onOpenWorksheet={() => window.textts?.openWorksheet?.(filePath)}
+          onOpenWorksheet={() => outputPath && window.textts?.openWorksheet?.(outputPath)}
           hasWorksheet={hasWorksheet}
           disabled={busy}
           onClose={() => setShowExport(false)}

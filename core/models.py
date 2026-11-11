@@ -103,6 +103,7 @@ class Project(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = SCHEMA_VERSION
     title: str = ""
+    output_name: str = ""  # tên file xuất theo giáo trình, vd. "1-02" (trống = tên dự án)
     engine: str
     timing: Timing = Field(default_factory=Timing)
     roles: dict[str, Role]

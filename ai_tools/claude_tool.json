@@ -8,6 +8,10 @@
         "type": "string",
         "description": "Tên bài học hoặc chủ đề, ví dụ 'Bai_10_Hoi_Duong' (không dấu, viết liền hoặc dùng gạch dưới)"
       },
+      "filename": {
+        "type": "string",
+        "description": "Tên file theo giáo trình, đúng số track in trong sách, ví dụ '1-02' cho ♪1-02. Mọi file của bài được lưu trong thư mục riêng mang tên này."
+      },
       "script": {
         "type": "string",
         "description": "Kịch bản hội thoại tiếng Nhật. Mỗi câu thoại trên một dòng, bắt đầu bằng số vai ví dụ '[1] すみません' hoặc '1 すみません'. Có thể dùng 漢字{かな} để chỉ định rõ cách đọc, [pause=1000] để tạo khoảng lặng 1 giây."

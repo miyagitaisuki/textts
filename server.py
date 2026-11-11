@@ -34,7 +34,8 @@ from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
 from tts import PROVIDERS, cache_key, synth_all, write_audio, write_timeline
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_OUTPUT_DIR = ROOT / "output" / "api"
+# Không ghi vào thư mục cài đặt (bị xóa khi cập nhật). App truyền thư mục xuất người dùng chọn qua TEXTTS_OUTPUT_DIR.
+DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "textts"
 DEFAULT_CACHE_DIR = ROOT / "cache"
 VOICEVOX_DEFAULT_URL = "http://127.0.0.1:50021"
 AIVIS_DEFAULT_URL = "http://127.0.0.1:10101"
@@ -82,7 +83,12 @@ class DialogueOptions(BaseModel):
 
 
 class DialogueRequest(BaseModel):
-    title: str = Field("hoi_thoai", description="Tiêu đề bài học / tên file")
+    title: str = Field("hoi_thoai", description="Tiêu đề bài học (in trên phiếu học tập)")
+    filename: str | None = Field(
+        None,
+        description="Tên file theo giáo trình, ví dụ '1-02' (số track ghi trong sách). "
+        "Mọi file của lần xuất nằm trong thư mục riêng <thư mục xuất>/<filename>/. Bỏ trống thì dùng title.",
+    )
     script: str = Field(..., description="Kịch bản tiếng Nhật. Mỗi dòng bắt đầu bằng vai: [1] ... hoặc 1 ...")
     engine: Literal["voicevox", "edge", "aivis"] = Field("voicevox", description="Engine TTS sử dụng (voicevox, aivis, edge)")
     roles: dict[str, RoleInput] | None = Field(
@@ -334,41 +340,44 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
         audio = loudness_normalize(audio, req.options.lufs)
 
     # 7. Xuất file
-    base_name = sanitize_filename(req.title)
+    base_name = sanitize_filename(req.filename or req.title)
+    export_dir = output_dir / base_name  # mỗi bài một thư mục riêng, xuất lại cùng tên thì ghi đè
+    export_dir.mkdir(parents=True, exist_ok=True)
+    url_prefix = f"{urllib.parse.quote(base_name)}/"
     fmt = req.options.format
     audio_filename = f"{base_name}.{fmt}"
-    audio_path = output_dir / audio_filename
+    audio_path = export_dir / audio_filename
     write_audio(audio, audio_path, fmt)
 
     timeline_filename = f"{base_name}.timeline.json"
-    timeline_path = output_dir / timeline_filename
+    timeline_path = export_dir / timeline_filename
     write_timeline(audio, placed, timeline_path)
 
     base_url = str(request.base_url).rstrip("/")
     files_info: dict[str, Any] = {
         "audio": str(audio_path),
-        "audio_url": f"{base_url}/files/{audio_filename}",
+        "audio_url": f"{base_url}/files/{url_prefix}{audio_filename}",
         "timeline_json": str(timeline_path),
-        "timeline_url": f"{base_url}/files/{timeline_filename}",
+        "timeline_url": f"{base_url}/files/{url_prefix}{timeline_filename}",
     }
 
     # Xuất phụ đề SRT
     if req.options.srt:
         srt_filename = f"{base_name}.srt"
-        srt_path = output_dir / srt_filename
+        srt_path = export_dir / srt_filename
         srt_path.write_text(to_srt(placed), encoding="utf-8")
         files_info["srt"] = str(srt_path)
-        files_info["srt_url"] = f"{base_url}/files/{srt_filename}"
+        files_info["srt_url"] = f"{base_url}/files/{url_prefix}{srt_filename}"
 
     # Xuất bản chậm 0.8x
     if req.options.slow:
         slow_rate = 0.8
         slow_audio = time_stretch(audio, slow_rate)
         slow_filename = f"{base_name}_slow.{fmt}"
-        slow_path = output_dir / slow_filename
+        slow_path = export_dir / slow_filename
         write_audio(slow_audio, slow_path, fmt)
         files_info["slow_audio"] = str(slow_path)
-        files_info["slow_url"] = f"{base_url}/files/{slow_filename}"
+        files_info["slow_url"] = f"{base_url}/files/{url_prefix}{slow_filename}"
 
         if req.options.srt:
             scaled = [
@@ -380,23 +389,25 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
                 for it in placed
             ]
             slow_srt_filename = f"{base_name}_slow.srt"
-            slow_srt_path = output_dir / slow_srt_filename
+            slow_srt_path = export_dir / slow_srt_filename
             slow_srt_path.write_text(to_srt(scaled), encoding="utf-8")
             files_info["slow_srt"] = str(slow_srt_path)
-            files_info["slow_srt_url"] = f"{base_url}/files/{slow_srt_filename}"
+            files_info["slow_srt_url"] = f"{base_url}/files/{url_prefix}{slow_srt_filename}"
 
     # Xuất phiếu học tập Furigana HTML
     if req.options.worksheet:
         html_content = worksheet_html(req.title, [it.model_dump() for it in project.items])
         html_filename = f"{base_name}.html"
-        html_path = output_dir / html_filename
+        html_path = export_dir / html_filename
         html_path.write_text(html_content, encoding="utf-8")
         files_info["worksheet_html"] = str(html_path)
-        files_info["worksheet_url"] = f"{base_url}/files/{html_filename}"
+        files_info["worksheet_url"] = f"{base_url}/files/{url_prefix}{html_filename}"
 
     return {
         "ok": True,
         "title": req.title,
+        "filename": base_name,
+        "folder": str(export_dir),
         "duration_s": round(len(audio) / 1000, 2),
         "line_count": len([it for it in project.items if isinstance(it, LineItem)]),
         "files": files_info,

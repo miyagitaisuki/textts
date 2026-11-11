@@ -7,6 +7,11 @@ export default function TransportBar({
   onTogglePlay,
   onSeek,
   onGenerate,
+  onPreviewAll,
+  outputName = "",
+  defaultOutputName = "",
+  onOutputNameChange,
+  isPreview = false,
   onOpenExport,
   onOpenOutputFolder,
   onChooseOutputRoot,
@@ -76,6 +81,12 @@ export default function TransportBar({
 
       {/* Trạng thái & Thao tác chính */}
       <div className="transport-right">
+        {isPreview && !busy && (
+          <span className="stale-pill preview-pill" title="Đang nghe bản thử: chưa ghi file nào. Bấm “Tạo & lưu” để lưu.">
+            ● Bản nghe thử (chưa lưu)
+          </span>
+        )}
+
         {outputStale && (
           <span className="stale-pill" title="Kịch bản có thay đổi. Hãy tạo lại âm thanh để cập nhật">
             ● Bản nghe chưa cập nhật
@@ -113,14 +124,37 @@ export default function TransportBar({
           Tùy chọn xuất…
         </button>
 
+        <label className="output-name-field" title="Tên file theo giáo trình, ví dụ 1-02 cho ♪1-02. Các file được lưu chung một thư mục mang tên này.">
+          <span>Tên file</span>
+          <input
+            type="text"
+            className="output-name-input"
+            placeholder={defaultOutputName || "vd. 1-02"}
+            value={outputName}
+            disabled={busy}
+            onChange={(e) => onOutputNameChange?.(e.target.value)}
+            aria-label="Tên file xuất"
+          />
+        </label>
+
+        <button
+          type="button"
+          className="export-trigger-btn"
+          disabled={busy || lineCount === 0}
+          onClick={onPreviewAll}
+          title="Nghe thử toàn bài với thay đổi hiện tại, không ghi file nào"
+        >
+          ▶ Nghe thử toàn bài
+        </button>
+
         <button
           type="button"
           className="generate-primary-btn"
           disabled={busy || lineCount === 0}
           onClick={onGenerate}
-          title="Tạo file âm thanh hoàn chỉnh cho toàn bộ kịch bản"
+          title="Tạo và lưu file âm thanh vào thư mục riêng mang tên file (Ctrl+G)"
         >
-          {busy ? "Đang xử lý…" : "Tạo âm thanh"}
+          {busy ? "Đang xử lý…" : "Tạo & lưu"}
         </button>
       </div>
     </footer>

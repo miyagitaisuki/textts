@@ -86,7 +86,12 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "title": {"type": "string", "description": "Tên bài/tên file, không dấu, ví dụ phong_van_xin_viec"},
+                "title": {"type": "string", "description": "Tên bài học, in trên phiếu học tập, ví dụ 'Thuê nhà'"},
+                "filename": {
+                    "type": "string",
+                    "description": "Tên file theo giáo trình, đúng số track in trong sách (ví dụ '1-02' cho ♪1-02). "
+                    "Luôn đặt khi soạn giáo trình; các file được lưu chung một thư mục riêng mang tên này.",
+                },
                 "script": {
                     "type": "string",
                     "description": "Kịch bản tiếng Nhật, mỗi câu thoại một dòng bắt đầu bằng số vai: "
@@ -269,6 +274,7 @@ def tool_create_audio(args: dict) -> str:
         raise ToolError(f"engine phải là một trong {', '.join(ENGINES)}")
     body: dict = {
         "title": str(args.get("title") or "hoi_thoai"),
+        **({"filename": str(args["filename"])} if args.get("filename") else {}),
         "script": script,
         "engine": engine,
         "options": {

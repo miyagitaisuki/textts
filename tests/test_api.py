@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -99,6 +100,18 @@ def test_generate_dialogue_mocked(mock_vv_alive, mock_synth, tmp_path):
         assert "slow_audio" in data["files"]
         assert "worksheet_html" in data["files"]
         assert len(data["timeline"]) == 2
+        # Không có filename: thư mục riêng mang tên title.
+        assert Path(data["files"]["audio"]).parent == tmp_path / "Bai_Test_API"
+
+        # Có filename theo giáo trình: mọi file nằm trong <thư mục xuất>/1-02/ và mang tên 1-02.
+        res = client.post("/api/v1/dialogue", json={**payload, "filename": "1-02"})
+        data = res.json()
+        folder = tmp_path / "1-02"
+        assert data["filename"] == "1-02" and Path(data["folder"]) == folder
+        for key in ("audio", "srt", "slow_audio", "worksheet_html", "timeline_json"):
+            assert Path(data["files"][key]).parent == folder
+            assert Path(data["files"][key]).name.startswith("1-02")
+        assert data["files"]["audio_url"].endswith("/files/1-02/1-02.wav")
 
 
 @patch("server.synth_all", new_callable=AsyncMock)
