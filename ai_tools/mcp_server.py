@@ -37,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent  # thư mục chứa server.py (resources/engine trong bộ cài)
 API_URL = (os.environ.get("TEXTTS_API_URL") or "http://127.0.0.1:8000").rstrip("/")
 SERVER_NAME = "textts"
-SERVER_VERSION = "1.1.2"
+SERVER_VERSION = "1.2.0"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 ENGINES = ["voicevox", "aivis", "edge"]
 
