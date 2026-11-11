@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld("textts", {
   getApiServerStatus: () => ipcRenderer.invoke("apiServer:status"),
   toggleApiServer: () => ipcRenderer.invoke("apiServer:toggle"),
   getVoicevoxStatus: () => ipcRenderer.invoke("voicevox:status"),
+  getAivisStatus: () => ipcRenderer.invoke("aivis:status"),
+  installAivis: () => ipcRenderer.invoke("aivis:install"),
+  startAivis: () => ipcRenderer.invoke("aivis:start"),
   openExternalUrl: (url) => ipcRenderer.invoke("url:openExternal", { url }),
   onLog: (callback) => {
     const listener = (_evt, text) => callback(text);

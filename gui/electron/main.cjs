@@ -504,6 +504,62 @@ ipcMain.handle("voicevox:status", async () => {
   return { ok, url: VOICEVOX_URL, managed: Boolean(voicevoxEngine?.managed) };
 });
 
+// --- AivisSpeech: tải theo yêu cầu (không đóng gói), chạy engine khi cần ---
+const aivisCfg = require("./aivis-config.cjs");
+const aivisInstall = require("./aivis-install.cjs");
+const AIVIS_DIR = path.join(app.getPath("userData"), "aivis");
+const AIVIS_DOWNLOAD_DIR = path.join(app.getPath("userData"), "aivis-download");
+// Thư mục Models mà AivisSpeech Engine đọc mặc định trên Windows.
+const AIVIS_MODELS_DIR = path.join(app.getPath("appData"), "AivisSpeech-Engine", "Models");
+let aivisEngine = null;
+let aivisBusy = false;
+
+async function aivisState() {
+  const status = aivisInstall.aivisStatus({ cfg: aivisCfg, installDir: AIVIS_DIR, modelsDir: AIVIS_MODELS_DIR });
+  const running = await pingUrl(`${aivisCfg.AIVIS_URL}/version`);
+  return { ...status, running, managed: Boolean(aivisEngine?.managed), url: aivisCfg.AIVIS_URL, busy: aivisBusy };
+}
+
+ipcMain.handle("aivis:status", async () => aivisState());
+
+ipcMain.handle("aivis:install", async () => {
+  if (aivisBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };
+  aivisBusy = true;
+  try {
+    await aivisInstall.installAivis({
+      cfg: aivisCfg,
+      installDir: AIVIS_DIR,
+      modelsDir: AIVIS_MODELS_DIR,
+      downloadDir: AIVIS_DOWNLOAD_DIR,
+      spawnFn: spawn,
+      log: (level, msg) => logger.log(level, msg),
+    });
+    return { ok: true, state: await aivisState() };
+  } catch (err) {
+    logger.log("ERROR", `[AivisSpeech] Cài đặt thất bại: ${err?.message ?? err}`);
+    return { ok: false, error: err?.message ?? String(err) };
+  } finally {
+    aivisBusy = false;
+  }
+});
+
+ipcMain.handle("aivis:start", async () => {
+  if (await pingUrl(`${aivisCfg.AIVIS_URL}/version`)) return { ok: true, state: await aivisState() };
+  const exe = aivisInstall.findFile(AIVIS_DIR, "run.exe");
+  if (!exe) return { ok: false, error: "Chưa cài AivisSpeech" };
+  aivisEngine = await startEngine({
+    url: aivisCfg.AIVIS_URL,
+    exe,
+    ping: (u) => pingUrl(u),
+    spawn,
+    log: (level, msg) => logger.log(level, msg.replace("[VOICEVOX]", "[AivisSpeech]")),
+    onSpawn: (child) => {
+      aivisEngine = { ready: false, managed: true, child };
+    },
+  });
+  return { ok: aivisEngine.ready, state: await aivisState() };
+});
+
 ipcMain.handle("apiServer:status", async () => {
   const isHealthy = await pingUrl(`${API_URL}/api/v1/health`);
   return {
@@ -568,6 +624,8 @@ app.on("before-quit", () => {
   // Chỉ tắt VOICEVOX do textts khởi động; engine người dùng tự mở từ trước được giữ nguyên.
   stopEngine(voicevoxEngine);
   voicevoxEngine = null;
+  stopEngine(aivisEngine);
+  aivisEngine = null;
 });
 
 app.whenReady().then(() => {

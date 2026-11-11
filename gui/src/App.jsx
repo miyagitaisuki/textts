@@ -10,6 +10,7 @@ import {
 import Inspector from "./components/Inspector.jsx";
 import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
+import AivisButton from "./components/AivisButton.jsx";
 import Timeline from "./components/Timeline.jsx";
 import TransportBar from "./components/TransportBar.jsx";
 import ToastContainer from "./components/Toast.jsx";
@@ -740,6 +741,8 @@ export default function App() {
           <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
           <span>VOICEVOX</span>
         </span>
+
+        <AivisButton />
 
         <span className="nav-spacer" />
 
