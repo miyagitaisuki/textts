@@ -1850,3 +1850,11 @@ input, textarea, select {
   width: 16px;
   color: var(--text-subtle);
 }
+
+.engine-message {
+  max-width: 260px;
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

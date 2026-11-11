@@ -185,3 +185,46 @@ test("stopEngine skips a child that already exited", () => {
   stopEngine({ managed: true, child }, { platform: "win32", exec: (...a) => calls.push(a) });
   assert.equal(calls.length, 0);
 });
+
+test("startEngine reports the exit code and the engine's last output when it dies early", async () => {
+  const child = fakeChild();
+  const logs = [];
+  const result = await startEngine({
+    url: "http://127.0.0.1:10101",
+    exe: "C:/aivis/run.exe",
+    name: "AivisSpeech",
+    ping: async () => false,
+    spawn: () => {
+      setImmediate(() => {
+        child.stderr.emit("data", Buffer.from("OSError: [Errno 10048] address already in use\n"));
+        child.exitCode = 1;
+        child.emit("exit", 1);
+      });
+      return child;
+    },
+    log: (level, msg) => logs.push(msg),
+    sleep: () => new Promise((r) => setImmediate(r)),
+    timeoutMs: 5_000,
+  });
+  assert.equal(result.ready, false);
+  assert.equal(result.alive, false);
+  assert.match(result.error, /AivisSpeech đã thoát \(mã 1\)/);
+  assert.deepEqual(result.lastLines, ["OSError: [Errno 10048] address already in use"]);
+  assert.ok(logs.some((m) => m.startsWith("[AivisSpeech]")));
+});
+
+test("startEngine says the engine is still starting when it outlives the timeout", async () => {
+  const child = fakeChild();
+  const result = await startEngine({
+    url: URL_,
+    exe: "C:/vv/run.exe",
+    ping: async () => false,
+    spawn: () => child,
+    log: () => {},
+    sleep: noSleep,
+    timeoutMs: 0,
+  });
+  assert.equal(result.ready, false);
+  assert.equal(result.alive, true);
+  assert.match(result.error, /chưa phản hồi sau 0 giây \(vẫn đang khởi động\)/);
+});

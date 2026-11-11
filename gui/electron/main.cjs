@@ -556,6 +556,8 @@ ipcMain.handle("voicevox:start", async () => {
   if (await pingUrl(`${VOICEVOX_URL}/version`)) return { ok: true, state: await voicevoxState() };
   const exe = findFile(VOICEVOX_DIR, "run.exe");
   if (!exe) return { ok: false, error: "Chưa tải VOICEVOX" };
+  if (voicevoxBoot) await voicevoxBoot; // lần tự khởi động khi mở app có thể chưa xong
+  if (await pingUrl(`${VOICEVOX_URL}/version`)) return { ok: true, state: await voicevoxState() };
   voicevoxEngine = await startEngine({
     url: VOICEVOX_URL,
     exe,
@@ -566,8 +568,32 @@ ipcMain.handle("voicevox:start", async () => {
       voicevoxEngine = { ready: false, managed: true, child };
     },
   });
-  return { ok: voicevoxEngine.ready, state: await voicevoxState() };
+  return { ok: voicevoxEngine.ready, error: engineError(voicevoxEngine), state: await voicevoxState() };
 });
+
+// Engine do textts khởi động và tiến trình vẫn còn chạy.
+function engineAlive(engine) {
+  const child = engine?.child;
+  return Boolean(engine?.managed && child && child.exitCode === null && child.signalCode === null);
+}
+
+// Chờ một tiến trình engine đã chạy trả lời /version.
+async function waitEngineReady(url, child, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) return false;
+    if (await pingUrl(`${url}/version`)) return true;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+
+// Thông báo lỗi kèm vài dòng log cuối của engine (nếu có).
+function engineError(result) {
+  if (result.ready) return undefined;
+  const tail = (result.lastLines ?? []).slice(-3).join(" | ");
+  return [result.error ?? "engine chưa phản hồi", tail].filter(Boolean).join(" — ");
+}
 
 // --- AivisSpeech: tải theo yêu cầu (không đóng gói), chạy engine khi cần ---
 const aivisCfg = require("./aivis-config.cjs");
@@ -616,21 +642,44 @@ ipcMain.handle("aivis:install", async () => {
   }
 });
 
+// AivisSpeech nạp BERT và các model .aivmx khi khởi động: lần đầu có thể mất vài phút.
+const AIVIS_READY_TIMEOUT_MS = 5 * 60_000;
+let aivisStarting = null;
+
 ipcMain.handle("aivis:start", async () => {
   if (await pingUrl(`${aivisCfg.AIVIS_URL}/version`)) return { ok: true, state: await aivisState() };
   const exe = aivisInstall.findFile(AIVIS_DIR, "run.exe");
   if (!exe) return { ok: false, error: "Chưa cài AivisSpeech" };
-  aivisEngine = await startEngine({
-    url: aivisCfg.AIVIS_URL,
-    exe,
-    ping: (u) => pingUrl(u),
-    spawn,
-    log: (level, msg) => logger.log(level, msg.replace("[VOICEVOX]", "[AivisSpeech]")),
-    onSpawn: (child) => {
-      aivisEngine = { ready: false, managed: true, child };
-    },
-  });
-  return { ok: aivisEngine.ready, state: await aivisState() };
+  // Đang khởi động (lần bấm trước chưa xong, hoặc đã quá thời gian chờ nhưng tiến trình vẫn chạy):
+  // chờ tiếp tiến trình đó thay vì chạy thêm một bản tranh cổng.
+  if (!aivisStarting && engineAlive(aivisEngine)) {
+    aivisStarting = waitEngineReady(aivisCfg.AIVIS_URL, aivisEngine.child, AIVIS_READY_TIMEOUT_MS).then((ready) => ({
+      ...aivisEngine,
+      ready,
+      error: ready ? undefined : "AivisSpeech vẫn chưa phản hồi; xem log trong Nhật ký ứng dụng",
+    }));
+  }
+  if (!aivisStarting) {
+    aivisStarting = startEngine({
+      url: aivisCfg.AIVIS_URL,
+      exe,
+      name: "AivisSpeech",
+      timeoutMs: AIVIS_READY_TIMEOUT_MS,
+      ping: (u) => pingUrl(u),
+      spawn,
+      log: (level, msg) => logger.log(level, msg),
+      onSpawn: (child) => {
+        aivisEngine = { ready: false, managed: true, child };
+      },
+    });
+  }
+  try {
+    const result = await aivisStarting;
+    if (result.child || !aivisEngine) aivisEngine = result;
+    return { ok: Boolean(result.ready), error: engineError(result), state: await aivisState() };
+  } finally {
+    aivisStarting = null;
+  }
 });
 
 ipcMain.handle("apiServer:status", async () => {
