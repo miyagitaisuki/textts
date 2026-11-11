@@ -147,6 +147,24 @@ ipcMain.handle("script:open", async () => {
   return createProjectFromScript({ scriptPath: path.resolve(picked.filePaths[0]) });
 });
 
+// Chọn nhiều kịch bản .txt một lần (xử lý hàng loạt): mỗi file thành một dự án trong thư mục xuất.
+// Trả về [{ script, filePath, data } | { script, error }] theo thứ tự đã chọn, hoặc null nếu hủy.
+ipcMain.handle("script:openMany", async () => {
+  const picked = await dialog.showOpenDialog({
+    title: "Chọn nhiều kịch bản .txt để xử lý hàng loạt",
+    filters: [{ name: "Kịch bản", extensions: ["txt"] }],
+    properties: ["openFile", "multiSelections"],
+  });
+  if (picked.canceled || picked.filePaths.length === 0) return null;
+  const results = [];
+  for (const file of picked.filePaths) {
+    const script = path.basename(file);
+    const res = await createProjectFromScript({ scriptPath: path.resolve(file) });
+    results.push({ script, ...res });
+  }
+  return results;
+});
+
 // Kịch bản dán trực tiếp từ giao diện.
 ipcMain.handle("script:importText", async (_evt, { text }) => {
   if (typeof text !== "string" || !text.trim()) return { error: "Kịch bản trống" };

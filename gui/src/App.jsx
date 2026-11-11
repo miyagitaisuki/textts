@@ -39,8 +39,25 @@ import {
   ServerIcon,
   ExternalLinkIcon,
   RefreshIcon,
+  CopyIcon,
 } from "./components/Icons.jsx";
 import Ribbon, { RibbonButton, RibbonGroup } from "./components/Ribbon.jsx";
+import { applyMemory, fillMissingVoices, loadMemory, rememberProject, saveMemory } from "./lib/voiceMemory.js";
+
+const ENGINE_LABELS = { edge: "Edge TTS", voicevox: "VOICEVOX", aivis: "AivisSpeech" };
+// "Xuất tất cả": bản chính + phụ đề + bản chậm + phiếu học tập + từng câu riêng.
+const EXPORT_ALL = { srt: true, slow: true, worksheet: true, exportLines: true };
+const SHORTCUTS = [
+  ["Alt + ↑ / ↓", "Chọn câu trước / sau"],
+  ["F5", "Nghe thử câu đang chọn"],
+  ["Space / Ctrl + Space", "Phát / dừng bản đã xuất"],
+  ["Ctrl + G", "Tạo âm thanh"],
+  ["Ctrl + Shift + G", "Xuất tất cả"],
+  ["Ctrl + Enter", "Thêm câu thoại"],
+  ["Ctrl + S", "Lưu"],
+  ["Ctrl + Z / Ctrl + Y", "Hoàn tác / Làm lại"],
+  ["Ctrl + F", "Tìm & thay"],
+];
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -70,6 +87,10 @@ export default function App() {
   const [pasting, setPasting] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState("");
+  const memoryRef = useRef(loadMemory(window.localStorage));
+  const [pasteEngine, setPasteEngine] = useState(() => memoryRef.current.engine || "edge");
+  // Dự án vừa nạp từ đĩa: không ghi nhớ giọng cho tới khi người dùng sửa.
+  const loadedRef = useRef(null);
   const [showExport, setShowExport] = useState(false);
   const [showReadings, setShowReadings] = useState(false);
   const [showCache, setShowCache] = useState(false);
@@ -141,7 +162,7 @@ export default function App() {
   // Spacebar để Play/Pause
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.code === "Space") {
+      if (e.code === "Space" && !e.ctrlKey && !e.metaKey) {
         const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
         if (typing) return;
         e.preventDefault();
@@ -233,6 +254,13 @@ export default function App() {
     if (filePath) loadVoices(projectEngine);
   }, [filePath, projectEngine, voicevoxOk]);
 
+  // Ghi nhớ engine và giọng mỗi khi người dùng đổi cấu hình vai, để lần nhập kịch bản sau tự gán lại.
+  useEffect(() => {
+    if (!project || project === loadedRef.current) return;
+    memoryRef.current = rememberProject(memoryRef.current, project);
+    saveMemory(window.localStorage, memoryRef.current);
+  }, [project?.roles, project?.engine]);
+
   function setProject(next) {
     projectRef.current = next;
     setProjectState(next);
@@ -275,10 +303,28 @@ export default function App() {
     function onKey(e) {
       if (busy || !projectRef.current) return;
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
       const key = e.key.toLowerCase();
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
-      if (key === "s") {
+      if (e.altKey && !mod && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        selectAdjacentLine(e.key === "ArrowUp" ? -1 : 1);
+        return;
+      }
+      if (e.key === "F5") {
+        e.preventDefault();
+        if (selectedLineId()) preview(selectedLineId());
+        else addToast("Chọn một câu thoại để nghe thử (Alt + ↑/↓)", "info");
+        return;
+      }
+      if (!mod) return;
+      if (key === " " || e.code === "Space") {
+        e.preventDefault();
+        togglePlay();
+      } else if (key === "g") {
+        e.preventDefault();
+        if (e.shiftKey) exportAll();
+        else generate();
+      } else if (key === "s") {
         e.preventDefault();
         save();
       } else if (key === "enter") {
@@ -298,6 +344,22 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  function selectedLineId() {
+    const it = projectRef.current?.items.find((x) => x.id === selectedId);
+    return it?.type === "line" ? it.id : null;
+  }
+
+  // Chọn câu thoại trước/sau câu đang chọn và cuộn tới đó.
+  function selectAdjacentLine(step) {
+    const lines = (projectRef.current?.items ?? []).filter((it) => it.type === "line");
+    if (!lines.length) return;
+    const idx = lines.findIndex((it) => it.id === selectedId);
+    const next = idx < 0 ? (step > 0 ? 0 : lines.length - 1) : Math.min(lines.length - 1, Math.max(0, idx + step));
+    const id = lines[next].id;
+    setSelectedId(id);
+    setTimeout(() => document.getElementById(`row-${id}`)?.scrollIntoView({ block: "nearest" }), 0);
+  }
 
   async function refreshSuggestions(proj) {
     const lines = (proj?.items ?? []).filter((it) => it.type === "line");
@@ -339,11 +401,80 @@ export default function App() {
       addToast("Lỗi khi mở kịch bản", "error");
       return;
     }
-    applyProject(res);
-    addToast("Đã nhập kịch bản mới", "success");
+    const prepared = await prepareImport(res);
+    applyProject(prepared);
+    addToast(importMessage("Đã nhập kịch bản mới", prepared), "success");
   }
 
-  async function importPasted() {
+  // Dự án vừa tạo từ kịch bản: dùng engine và giọng đã nhớ cho từng nhân vật, rồi ghi lại file.
+  // engineChoice: engine người dùng chọn lúc nhập (mặc định engine dùng lần trước).
+  async function prepareImport(res, engineChoice) {
+    let engine = engineChoice || memoryRef.current.engine || "edge";
+    let fallback = "";
+    let values = [];
+    if (engine !== "edge") {
+      values = ((await window.textts?.listVoices?.(engine)) ?? []).map((v) => v.value);
+      if (!values.length) {
+        fallback = `${ENGINE_LABELS[engine] ?? engine} chưa bật nên tạm dùng Edge TTS`;
+        engine = "edge";
+      }
+    }
+    const { project, applied } = applyMemory(res.data, memoryRef.current, engine);
+    const data = engine === "edge" ? project : fillMissingVoices(project, values);
+    if (JSON.stringify(data) !== JSON.stringify(res.data)) {
+      await window.textts?.saveProject?.(res.filePath, data);
+    }
+    return { ...res, data, applied, fallback };
+  }
+
+  function importMessage(prefix, prepared) {
+    const parts = [prefix];
+    if (prepared.applied?.length) parts.push(`đã gán giọng đã nhớ cho ${prepared.applied.length} vai`);
+    if (prepared.fallback) parts.push(prepared.fallback);
+    return parts.join(" · ");
+  }
+
+  // Xử lý hàng loạt: chọn nhiều kịch bản .txt, mỗi file thành một dự án và xuất âm thanh theo tùy chọn đã lưu.
+  async function batchExport() {
+    if (!(await ensureOutputRoot())) return;
+    const results = await window.textts?.openManyScripts?.();
+    if (!results?.length) return;
+    setBusy(true);
+    setLog(`Xử lý hàng loạt ${results.length} kịch bản\n`);
+    const done = [];
+    const failed = [];
+    let last = null;
+    for (const [i, r] of results.entries()) {
+      setLog((prev) => prev + `\n[${i + 1}/${results.length}] ${r.script}: `);
+      if (r.error) {
+        failed.push(r.script);
+        setLog((prev) => prev + `lỗi phân tích kịch bản: ${r.error}`);
+        continue;
+      }
+      const prepared = await prepareImport(r);
+      const outputPath = r.filePath.replace(/\.json$/, `.${exportOpts.format}`);
+      const res = await window.textts?.generate?.(r.filePath, outputPath, generateOptions());
+      if (res?.code === 0) {
+        done.push(r.script);
+        last = prepared;
+        setLog((prev) => prev + `xong → ${outputPath}`);
+      } else {
+        failed.push(r.script);
+        setLog((prev) => prev + `lỗi (mã ${res?.code})\n${(res?.log || "").trim().split("\n").slice(-5).join("\n")}`);
+      }
+    }
+    setBusy(false);
+    if (last) {
+      applyProject(last);
+      loadOutputFor(last.filePath, exportOpts.format);
+    }
+    addToast(
+      `Hàng loạt: xong ${done.length}/${results.length} kịch bản${failed.length ? `, lỗi: ${failed.join(", ")}` : ""}`,
+      failed.length ? "error" : "success",
+    );
+  }
+
+  async function importPasted(andGenerate = false) {
     setPasteError("");
     if (!pasteText.trim()) {
       setPasteError("Chưa có nội dung kịch bản để tạo dự án.");
@@ -360,8 +491,10 @@ export default function App() {
     }
     setPasting(false);
     setPasteText("");
-    applyProject(res);
-    addToast("Tạo dự án thành công từ kịch bản dán", "success");
+    const prepared = await prepareImport(res, pasteEngine);
+    applyProject(prepared);
+    addToast(importMessage("Tạo dự án thành công từ kịch bản dán", prepared), "success");
+    if (andGenerate === true) await generate(prepared.filePath);
   }
 
   async function openProjectFolder() {
@@ -378,6 +511,7 @@ export default function App() {
   }
 
   function applyProject(res) {
+    loadedRef.current = res.data;
     setProject(res.data);
     setFilePath(res.filePath);
     setDirty(false);
@@ -412,23 +546,17 @@ export default function App() {
       return;
     }
     const values = list.map((v) => v.value);
-    edit((p) => {
-      const ids = Object.keys(p.roles);
-      const roles = {};
-      ids.forEach((id, i) => {
-        const role = p.roles[id];
-        const keep = values.length ? values.includes(String(role.voice)) : engine === "edge";
-        roles[id] = keep ? role : { ...role, voice: values.length ? values[i % values.length] : "ja-JP-NanamiNeural" };
-      });
-      return { ...p, engine, roles };
-    });
+    // Giọng đã nhớ cho engine này được dùng trước; vai còn lại nhận giọng có trong engine.
+    edit((p) => fillMissingVoices(applyMemory(p, memoryRef.current, engine).project, values));
     setVoices(list);
-    addToast(`Đã chuyển sang ${engine === "edge" ? "Edge TTS" : engine === "voicevox" ? "VOICEVOX" : "AivisSpeech"}`, "success");
+    addToast(`Đã chuyển sang ${ENGINE_LABELS[engine] ?? engine}`, "success");
   }
 
-  async function save() {
-    if (!projectRef.current || !filePath) return false;
-    const res = await window.textts?.saveProject?.(filePath, projectRef.current);
+  // targetPath: đường dẫn dự án (mặc định dự án đang mở). Khi gọi từ onClick, tham số là sự kiện nên bỏ qua.
+  async function save(targetPath) {
+    const path = typeof targetPath === "string" ? targetPath : filePath;
+    if (!projectRef.current || !path) return false;
+    const res = await window.textts?.saveProject?.(path, projectRef.current);
     if (res?.ok) {
       setDirty(false);
       setIssues(res.issues ?? []);
@@ -646,24 +774,32 @@ export default function App() {
     }
   }
 
-  async function generate() {
-    if (!(await save())) return;
+  // Tham số cho tts:generate từ tùy chọn xuất đã lưu (+ ghi đè, ví dụ "Xuất tất cả").
+  function generateOptions(overrides = {}) {
+    const o = { ...exportOpts, ...overrides };
+    return {
+      lufs: o.lufs,
+      slow: o.slow,
+      srt: o.srt,
+      rolePlay: o.rolePlay,
+      shadow: o.shadow,
+      shadowGap: o.shadowGap,
+      exportLines: o.exportLines,
+      worksheet: o.worksheet,
+      bgmPath: o.bgmPath,
+      bgmDb: o.bgmDb,
+    };
+  }
+
+  // targetPath: dự án cần xuất (mặc định dự án đang mở); overrides: ghi đè tùy chọn xuất.
+  async function generate(targetPath, overrides = {}) {
+    const projPath = typeof targetPath === "string" ? targetPath : filePath;
+    if (!(await save(projPath))) return false;
     setBusy(true);
     setLog("");
     const format = exportOpts.format;
-    const outputPath = filePath.replace(/\.json$/, `.${format}`);
-    const res = await window.textts?.generate?.(filePath, outputPath, {
-      lufs: exportOpts.lufs,
-      slow: exportOpts.slow,
-      srt: exportOpts.srt,
-      rolePlay: exportOpts.rolePlay,
-      shadow: exportOpts.shadow,
-      shadowGap: exportOpts.shadowGap,
-      exportLines: exportOpts.exportLines,
-      worksheet: exportOpts.worksheet,
-      bgmPath: exportOpts.bgmPath,
-      bgmDb: exportOpts.bgmDb,
-    });
+    const outputPath = projPath.replace(/\.json$/, `.${format}`);
+    const res = await window.textts?.generate?.(projPath, outputPath, generateOptions(overrides));
     setLog((prev) => prev + `\n${res?.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res?.code})`);
 
     const failed = [...(res?.log || "").matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
@@ -674,13 +810,39 @@ export default function App() {
     }
 
     if (res?.code === 0) {
-      await loadOutputFor(filePath, format);
+      await loadOutputFor(projPath, format);
       setOutputStale(false);
-      window.textts?.worksheetExists?.(filePath).then(setHasWorksheet);
+      window.textts?.worksheetExists?.(projPath).then(setHasWorksheet);
       addToast("Tạo âm thanh thành công!", "success");
       setTimelineOpen(true);
     }
     setBusy(false);
+    return res?.code === 0;
+  }
+
+  function exportAll() {
+    return generate(undefined, EXPORT_ALL);
+  }
+
+  // Áp toàn bộ gợi ý furigana cho mọi câu còn chữ Hán chưa chú âm (một lần hoàn tác được).
+  function applyAllSuggestions() {
+    const cur = projectRef.current;
+    if (!cur) return;
+    const changed = cur.items.filter(
+      (it) => it.type === "line" && suggestions?.[it.id]?.annotated && suggestions[it.id].annotated !== it.display,
+    );
+    if (!changed.length) {
+      addToast("Không còn chữ Hán nào cần chú âm", "info");
+      return;
+    }
+    const ids = new Set(changed.map((it) => it.id));
+    const next = {
+      ...cur,
+      items: cur.items.map((it) => (ids.has(it.id) ? { ...it, display: suggestions[it.id].annotated } : it)),
+    };
+    edit(() => next);
+    refreshSuggestions(next);
+    addToast(`Đã chú âm ${changed.length} câu. Hãy rà lại chỗ đọc đặc biệt (tên riêng, từ nhiều cách đọc).`, "success");
   }
 
   function applySuggestion(id) {
@@ -761,6 +923,9 @@ export default function App() {
                     <RibbonButton size="small" icon={<FolderIcon size={14} />} label="Mở thư mục"
                       title="Mở thư mục chứa file dự án" onClick={openProjectFolder} disabled={busy || !filePath} />
                   </div>
+                  <RibbonButton icon={<CopyIcon size={20} />} label="Hàng loạt"
+                    title="Chọn nhiều kịch bản .txt: mỗi file thành một dự án và được xuất âm thanh theo tùy chọn đã lưu"
+                    onClick={batchExport} disabled={busy} />
                 </RibbonGroup>
                 <RibbonGroup label="Chèn">
                   <RibbonButton icon={<PlusIcon size={20} />} label="Câu thoại" title="Thêm câu thoại mới (Ctrl+Enter)"
@@ -773,6 +938,9 @@ export default function App() {
                 <RibbonGroup label="Chỉnh sửa">
                   <RibbonButton icon={<SearchIcon size={20} />} label="Tìm & thay" title="Tìm kiếm & Thay thế (Ctrl+F)"
                     active={searchOpen} onClick={() => setSearchOpen((v) => !v)} disabled={busy || !project} />
+                  <RibbonButton icon={<BookOpenIcon size={20} />} label="Tự chú âm"
+                    title="Thêm furigana gợi ý cho mọi chữ Hán chưa chú âm trong kịch bản (hoàn tác được)"
+                    onClick={applyAllSuggestions} disabled={busy || !project} />
                   <div className="ribbon-stack">
                     <RibbonButton size="small" icon={<UndoIcon size={14} />} label="Hoàn tác" title="Hoàn tác (Ctrl+Z)"
                       onClick={undo} disabled={busy || !canUndo} />
@@ -782,7 +950,10 @@ export default function App() {
                 </RibbonGroup>
                 <RibbonGroup label="Âm thanh">
                   <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo âm thanh"
-                    title="Tạo file âm thanh cho toàn bộ kịch bản" onClick={generate} disabled={busy || !project} />
+                    title="Tạo file âm thanh theo tùy chọn xuất đã lưu (Ctrl+G)" onClick={generate} disabled={busy || !project} />
+                  <RibbonButton icon={<HardDriveIcon size={20} />} label="Xuất tất cả"
+                    title="Xuất một lần: âm thanh + phụ đề SRT + bản chậm 0.8× + phiếu học tập + từng câu riêng (Ctrl+Shift+G)"
+                    onClick={exportAll} disabled={busy || !project} />
                   <RibbonButton icon={<SlidersIcon size={20} />} label="Tùy chọn xuất"
                     title="Tùy chọn xuất file (SRT, MP3, Chậm 0.8x, Phiếu học tập)"
                     onClick={() => setShowExport(true)} disabled={busy || !project} />
@@ -846,6 +1017,22 @@ export default function App() {
               </RibbonGroup>
             ),
           },
+          {
+            id: "keys",
+            label: "Phím tắt",
+            content: (
+              <RibbonGroup label="Phím tắt">
+                <dl className="shortcut-list">
+                  {SHORTCUTS.map(([k, d]) => (
+                    <div key={k}>
+                      <dt><kbd>{k}</kbd></dt>
+                      <dd>{d}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </RibbonGroup>
+            ),
+          },
         ]}
       />
 
@@ -892,9 +1079,27 @@ export default function App() {
               {pasteError}
             </div>
           )}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="nav-btn primary" onClick={importPasted} disabled={busy}>
-              Tạo dự án mới
+          <div className="paste-actions">
+            <label className="paste-engine">
+              Engine đọc
+              <select value={pasteEngine} disabled={busy} onChange={(e) => setPasteEngine(e.target.value)}>
+                {Object.entries(ENGINE_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </label>
+            <span className="muted paste-note">Giọng của từng nhân vật dùng lại lựa chọn lần trước.</span>
+            <span className="nav-spacer" />
+            <button className="nav-btn" onClick={() => importPasted(false)} disabled={busy}>
+              Tạo dự án
+            </button>
+            <button
+              className="nav-btn primary"
+              onClick={() => importPasted(true)}
+              disabled={busy}
+              title="Tạo dự án rồi xuất âm thanh ngay theo tùy chọn xuất đã lưu"
+            >
+              Tạo dự án & xuất âm thanh
             </button>
             <button className="nav-btn ghost" onClick={() => setPasting(false)}>
               Hủy
