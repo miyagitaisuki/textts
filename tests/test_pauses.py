@@ -34,8 +34,8 @@ def test_split_sentences():
 
 def test_recommended_defaults_match():
     t = Timing()
-    assert (t.turn_gap_ms, t.same_speaker_gap_ms, t.question_gap_ms) == (700, 400, 300)
-    assert t.sentence_pause_ms == 400 and t.comma_pause_scale == 1.5
+    assert (t.turn_gap_ms, t.same_speaker_gap_ms, t.question_gap_ms) == (1400, 800, 300)
+    assert t.sentence_pause_ms == 800 and t.comma_pause_scale == 1.5
     for k, v in DEFAULT_TIMING.items():
         assert getattr(t, k) == v
 

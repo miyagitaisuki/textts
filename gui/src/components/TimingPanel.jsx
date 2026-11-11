@@ -4,10 +4,10 @@
 // Mức đề xuất cho bài nghe của người học (khớp với mặc định trong core/models.py).
 export const RECOMMENDED_TIMING = {
   lead_in_ms: 300,
-  turn_gap_ms: 700,
-  same_speaker_gap_ms: 400,
+  turn_gap_ms: 1400,
+  same_speaker_gap_ms: 800,
   question_gap_ms: 300,
-  sentence_pause_ms: 400,
+  sentence_pause_ms: 800,
   comma_pause_scale: 1.5,
   tail_ms: 500,
 };
