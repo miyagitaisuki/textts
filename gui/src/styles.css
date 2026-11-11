@@ -2246,13 +2246,21 @@ kbd {
 .vb-toolbar .vb-search { flex: 1; min-width: 200px; }
 .vb-toolbar label.check { flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
 .vb-note { margin: 0; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--bg-warn); color: var(--accent-amber); font-size: 12px; }
-.vb-table { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 120px; }
-.vb-row { display: grid; grid-template-columns: 64px minmax(140px, 1.2fr) minmax(90px, 0.9fr) 70px 64px minmax(130px, 1.2fr) minmax(150px, 1.6fr) 52px; align-items: center; gap: 6px; padding: 3px 4px; border-radius: var(--radius-sm); }
-.vb-row:hover { background: var(--bg-card-hover); }
-.vb-row.is-hidden { opacity: 0.5; }
-.vb-head { position: sticky; top: 0; z-index: 1; background: var(--bg-surface); font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.03em; }
-.vb-head:hover { background: var(--bg-surface); }
-.vb-row input, .vb-row select { width: 100%; min-width: 0; padding: 5px 8px !important; font-size: 12px; }
+.vb-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 120px; padding-right: 4px; }
+.vb-card { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); }
+.vb-card.is-hidden { opacity: 0.5; }
+.vb-main { display: grid; grid-template-columns: 64px minmax(150px, 1.2fr) minmax(120px, 1fr) 140px 170px 52px; align-items: end; gap: 8px; }
+.vb-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding-left: 72px; }
+.vb-field { display: flex; flex-direction: column; gap: 2px; font-size: 11px !important; color: var(--text-subtle) !important; min-width: 0; }
+.vb-field input, .vb-field select { width: 100%; min-width: 0; padding: 5px 8px !important; font-size: 12px; }
+.vb-desc { flex: 1 1 100%; }
+.vb-multi { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 12px; }
+.vb-multi-label { color: var(--text-subtle); font-size: 11px; margin-right: 2px; }
+.vb-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 8px; border-radius: var(--radius-full); background: var(--bg-selected); border: 1px solid var(--border-subtle); color: var(--text-main); }
+.vb-chip button { border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0 3px; font-size: 13px; line-height: 1; }
+.vb-chip button:hover { color: var(--accent-red); }
+.modal .vb-add { width: 34px; padding: 2px 4px !important; border-radius: var(--radius-full); text-align: center; color: var(--accent-emerald); font-weight: 700; cursor: pointer; appearance: none; }
+.vb-hide { align-self: end; }
 .vb-actions { display: flex; gap: 2px; }
 .vb-actions button { padding: 2px 6px; }
 .vb-star { color: var(--text-subtle); }

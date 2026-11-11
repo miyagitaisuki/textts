@@ -3,13 +3,51 @@
 // và được AI đọc (GIONG.md / API) để chọn giọng hợp vai.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normalize } from "./CommandPalette.jsx";
+import { AGE_GROUPS, GENDERS, MULTI_FIELDS, ageGroupOf } from "../lib/voiceOptions.js";
+
+// Chọn nhiều giá trị: các chip đã chọn (bấm × để bỏ) + menu "＋" để thêm, có "Khác…" để tự gõ.
+export function MultiPick({ label, options, values = [], onChange, disabled }) {
+  const rest = options.filter((o) => !values.includes(o));
+  return (
+    <div className="vb-multi" role="group" aria-label={label}>
+      <span className="vb-multi-label">{label}</span>
+      {values.map((v) => (
+        <span key={v} className="vb-chip">
+          {v}
+          <button type="button" aria-label={`Bỏ ${v}`} title="Bỏ" disabled={disabled} onClick={() => onChange(values.filter((x) => x !== v))}>
+            ×
+          </button>
+        </span>
+      ))}
+      <select
+        className="vb-add"
+        value=""
+        disabled={disabled}
+        aria-label={`Thêm ${label}`}
+        title={`Thêm ${label.toLowerCase()}`}
+        onChange={(e) => {
+          let v = e.target.value;
+          if (v === "__other") v = (window.prompt(`${label}: nhập giá trị khác`) || "").trim();
+          if (v && !values.includes(v)) onChange([...values, v]);
+        }}
+      >
+        <option value="">＋</option>
+        {rest.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value="__other">Khác…</option>
+      </select>
+    </div>
+  );
+}
 
 const ENGINES = [
   ["voicevox", "VOICEVOX"],
   ["aivis", "AivisSpeech"],
   ["edge", "Edge TTS"],
 ];
-const STYLE_HINTS = ["trẻ con", "học sinh", "thanh niên", "trung niên", "người già", "vui tươi", "buồn", "trầm", "ấm áp", "nghiêm", "dễ thương", "lạnh lùng", "thì thầm", "nhân viên", "giáo viên", "kể chuyện"];
 
 function rowsFor(engine, data) {
   if (!data) return [];
@@ -63,7 +101,9 @@ export default function VoiceBankDialog({ api = window.textts, initialEngine = "
       .filter((r) => {
         if (!words.length) return true;
         const m = r.meta;
-        const hay = normalize([r.label, r.value, m.nickname, m.gender, m.age, (m.styles || []).join(" "), m.description].join(" "));
+        const hay = normalize(
+          [r.label, r.value, m.nickname, m.gender, ageGroupOf(m.age).label, ...(m.styles || []), ...(m.tone || []), ...(m.personality || []), ...(m.suits || []), m.description].join(" ")
+        );
         return words.every((w) => hay.includes(w));
       })
       .sort((a, b) => Number(Boolean(b.meta.favorite)) - Number(Boolean(a.meta.favorite)));
@@ -103,8 +143,8 @@ export default function VoiceBankDialog({ api = window.textts, initialEngine = "
       <div className="modal voice-bank-modal" role="dialog" aria-modal="true" aria-label="Ngân hàng giọng" onClick={(e) => e.stopPropagation()}>
         <h2>Ngân hàng giọng</h2>
         <p className="muted">
-          Đặt biệt danh, giới tính, tuổi và chất giọng để chọn vai nhanh. AI đọc các ghi chú này (file GIONG.md và
-          API) để tự chọn giọng hợp vai. Ghi chú được lưu ngay khi rời ô.
+          Chọn giới tính, độ tuổi từ menu; chất giọng, tính cách, vai phù hợp bấm ＋ để thêm nhiều giá trị. AI đọc các
+          ghi chú này (file GIONG.md và API) để tự chọn giọng hợp vai. Mọi thay đổi được lưu ngay.
         </p>
         <div className="vb-toolbar">
           <div className="sound-tabs" role="tablist">
@@ -130,62 +170,73 @@ export default function VoiceBankDialog({ api = window.textts, initialEngine = "
         )}
         {!data && <p className="muted">Đang lấy danh sách giọng…</p>}
 
-        <div className="vb-table" role="table" aria-label="Danh sách giọng">
-          <div className="vb-row vb-head" role="row">
-            <span />
-            <span>Giọng gốc</span>
-            <span>Biệt danh</span>
-            <span>Giới tính</span>
-            <span>Tuổi</span>
-            <span>Chất giọng (phẩy ngăn cách)</span>
-            <span>Mô tả cho AI</span>
-            <span />
-          </div>
+        <div className="vb-list" aria-label="Danh sách giọng">
           {rows.map((r) => {
             const m = r.meta;
+            // dữ liệu cũ chỉ có styles gõ tay: hiện ở Tính cách
+            const groupVals = (k) =>
+              Array.isArray(m[k]) ? m[k] : k === "personality" && !m.tone && !m.suits && Array.isArray(m.styles) ? m.styles : [];
             return (
-              <div key={r.value} className={`vb-row ${m.hidden ? "is-hidden" : ""}`} role="row">
-                <span className="vb-actions">
-                  <button type="button" className="ghost" title="Nghe thử" aria-label={`Nghe thử ${r.label}`} onClick={() => play(r)} disabled={data && !data.online}>
-                    {playing === r.value ? "■" : "▶"}
+              <div key={r.value} className={`vb-card ${m.hidden ? "is-hidden" : ""}`}>
+                <div className="vb-main">
+                  <span className="vb-actions">
+                    <button type="button" className="ghost" title="Nghe thử" aria-label={`Nghe thử ${r.label}`} onClick={() => play(r)} disabled={data && !data.online}>
+                      {playing === r.value ? "■" : "▶"}
+                    </button>
+                    <button type="button" className={`ghost vb-star ${m.favorite ? "on" : ""}`} title="Yêu thích (lên đầu danh sách chọn giọng)" aria-pressed={Boolean(m.favorite)} onClick={() => save(r, { favorite: !m.favorite })}>
+                      ★
+                    </button>
+                  </span>
+                  <span className="vb-label" title={`Mã giọng: ${r.value}`}>
+                    {r.label}
+                    <small>{r.value}</small>
+                  </span>
+                  <label className="vb-field">
+                    Biệt danh
+                    <input value={m.nickname || ""} placeholder="vd. Bé Mai" onChange={(e) => edit(r.value, { nickname: e.target.value })} onBlur={() => drafts[r.value] && save(r)} aria-label={`Biệt danh ${r.label}`} />
+                  </label>
+                  <label className="vb-field">
+                    Giới tính
+                    <select value={m.gender || ""} onChange={(e) => save(r, { gender: e.target.value })} aria-label={`Giới tính ${r.label}`}>
+                      {GENDERS.map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="vb-field">
+                    Độ tuổi
+                    <select
+                      value={ageGroupOf(m.age).age ?? ""}
+                      onChange={(e) => save(r, { age: e.target.value === "" ? null : Number(e.target.value) })}
+                      aria-label={`Độ tuổi ${r.label}`}
+                    >
+                      {AGE_GROUPS.map((g) => (
+                        <option key={g.label} value={g.age ?? ""}>
+                          {g.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="button" className="ghost vb-hide" title={m.hidden ? "Bỏ ẩn" : "Ẩn khỏi ô chọn giọng và khỏi gợi ý của AI"} onClick={() => save(r, { hidden: !m.hidden })}>
+                    {m.hidden ? "Hiện" : "Ẩn"}
                   </button>
-                  <button type="button" className={`ghost vb-star ${m.favorite ? "on" : ""}`} title="Yêu thích (lên đầu danh sách chọn giọng)" aria-pressed={Boolean(m.favorite)} onClick={() => save(r, { favorite: !m.favorite })}>
-                    ★
-                  </button>
-                </span>
-                <span className="vb-label" title={`Mã giọng: ${r.value}`}>
-                  {r.label}
-                  <small>{r.value}</small>
-                </span>
-                <input value={m.nickname || ""} placeholder="vd. Bé Mai" onChange={(e) => edit(r.value, { nickname: e.target.value })} onBlur={() => drafts[r.value] && save(r)} aria-label={`Biệt danh ${r.label}`} />
-                <select value={m.gender || ""} onChange={(e) => save(r, { gender: e.target.value })} aria-label={`Giới tính ${r.label}`}>
-                  <option value="">—</option>
-                  <option value="nam">nam</option>
-                  <option value="nữ">nữ</option>
-                </select>
-                <input type="number" min={0} max={120} value={m.age ?? ""} placeholder="?" onChange={(e) => edit(r.value, { age: e.target.value })} onBlur={() => drafts[r.value] && save(r)} aria-label={`Tuổi ${r.label}`} />
-                <input
-                  list="vb-style-hints"
-                  value={Array.isArray(m.styles) ? m.styles.join(", ") : m.styles || ""}
-                  placeholder="trẻ con, vui tươi"
-                  onChange={(e) => edit(r.value, { styles: e.target.value })}
-                  onBlur={() => drafts[r.value] && save(r)}
-                  aria-label={`Chất giọng ${r.label}`}
-                />
-                <input value={m.description || ""} placeholder="vd. bé gái tinh nghịch, hợp vai con" onChange={(e) => edit(r.value, { description: e.target.value })} onBlur={() => drafts[r.value] && save(r)} aria-label={`Mô tả ${r.label}`} />
-                <button type="button" className="ghost" title={m.hidden ? "Bỏ ẩn" : "Ẩn khỏi ô chọn giọng và khỏi gợi ý của AI"} onClick={() => save(r, { hidden: !m.hidden })}>
-                  {m.hidden ? "Hiện" : "Ẩn"}
-                </button>
+                </div>
+                <div className="vb-extra">
+                  {MULTI_FIELDS.map((f) => (
+                    <MultiPick key={f.key} label={f.label} options={f.options} values={groupVals(f.key)} onChange={(vals) => save(r, { [f.key]: vals })} />
+                  ))}
+                  <label className="vb-field vb-desc">
+                    Ghi chú thêm (không bắt buộc)
+                    <input value={m.description || ""} placeholder="vd. bé gái tinh nghịch, hợp vai con" onChange={(e) => edit(r.value, { description: e.target.value })} onBlur={() => drafts[r.value] && save(r)} aria-label={`Mô tả ${r.label}`} />
+                  </label>
+                </div>
               </div>
             );
           })}
           {data && rows.length === 0 && total > 0 && <p className="muted">Không có giọng nào khớp bộ lọc.</p>}
         </div>
-        <datalist id="vb-style-hints">
-          {STYLE_HINTS.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
 
         <div className="modal-actions">
           <button onClick={onClose}>Đóng</button>

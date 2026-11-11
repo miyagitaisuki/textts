@@ -39,3 +39,17 @@ describe("VoiceBankDialog", () => {
     expect(screen.getByLabelText("Biệt danh ずんだもん")).toBeTruthy();
   });
 });
+
+describe("VoiceBankDialog dropdowns", () => {
+  it("adds a personality with the ＋ menu and sets age from a dropdown", async () => {
+    const api = makeApi();
+    render(<VoiceBankDialog api={api} initialEngine="voicevox" onClose={() => {}} />);
+    const add = await screen.findAllByLabelText("Thêm Tính cách / cảm xúc");
+    fireEvent.change(add[1], { target: { value: "hiền lành" } }); // hàng thứ 2: 四国めたん
+    await waitFor(() =>
+      expect(api.setVoiceBank).toHaveBeenCalledWith(expect.objectContaining({ voice: "2", meta: expect.objectContaining({ personality: ["hiền lành"] }) }))
+    );
+    fireEvent.change(screen.getByLabelText("Độ tuổi 四国めたん"), { target: { value: "72" } });
+    await waitFor(() => expect(api.setVoiceBank).toHaveBeenLastCalledWith(expect.objectContaining({ meta: expect.objectContaining({ age: 72 }) })));
+  });
+});

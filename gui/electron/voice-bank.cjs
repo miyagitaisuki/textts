@@ -29,14 +29,22 @@ function writeBank(dir, bank) {
 const list = (v) =>
   (Array.isArray(v) ? v : String(v ?? "").split(/[,、，]/)).map((x) => String(x).trim()).filter(Boolean);
 
+const MULTI = ["tone", "personality", "suits"];
+
 function cleanMeta(meta = {}, label = "") {
   const age = meta.age === "" || meta.age === null || meta.age === undefined ? null : Number(meta.age);
+  const groups = Object.fromEntries(MULTI.map((k) => [k, [...new Set(list(meta[k]))]]));
+  // Dữ liệu cũ chỉ có "styles" gõ tay: chuyển vào nhóm Tính cách để vẫn sửa được bằng menu.
+  if (MULTI.every((k) => meta[k] === undefined)) groups.personality = [...new Set(list(meta.styles))];
+  // styles = mọi giá trị đã chọn, để AI/tìm kiếm chỉ cần đọc một trường
+  const styles = [...new Set(MULTI.flatMap((k) => groups[k]))];
   return {
     label: String(label || meta.label || ""),
     nickname: String(meta.nickname ?? "").trim(),
     gender: GENDERS.has(meta.gender) ? meta.gender : "",
     age: Number.isFinite(age) && age >= 0 && age <= 120 ? Math.round(age) : null,
-    styles: list(meta.styles),
+    ...groups,
+    styles,
     description: String(meta.description ?? "").trim(),
     favorite: Boolean(meta.favorite),
     hidden: Boolean(meta.hidden),
