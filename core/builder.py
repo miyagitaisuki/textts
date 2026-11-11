@@ -4,6 +4,8 @@ from __future__ import annotations
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
+from core.audio import apply_fx
+
 DEFAULT_TIMING = {
     "lead_in_ms": 2000,
     "turn_gap_ms": 600,
@@ -50,6 +52,7 @@ def build(
     prev_role: str | None = None
     prev_plain: str | None = None
     placed: list[dict] = []
+    pending_overlays: list[AudioSegment] = []  # sfx overlay chờ trộn tại vị trí câu kế tiếp
 
     for it in items:
         if it["type"] == "pause":
@@ -63,38 +66,74 @@ def build(
             prev_role = pause_role
             prev_plain = None
             continue
+        if it["type"] == "bgm":
+            # Cảnh mới: âm nền đổi từ đây (được trộn sau khi ghép xong, xem core.audio.apply_scenes)
+            if markers is not None:
+                markers.append({"id": it.get("id", ""), "type": "scene", "start_ms": len(out),
+                                "layers": it.get("resolved_layers", [])})
+            continue
         if it["type"] == "sfx":
+            sfx = AudioSegment.from_file(it["path"]) + float(it.get("volume_db") or 0)
             start = len(out)
-            out += AudioSegment.from_file(it["path"])
+            if it.get("overlay"):
+                # chồng lên câu kế tiếp: không chiếm thời gian, lời thoại bắt đầu cùng lúc
+                pending_overlays.append(sfx)
+                end = start + len(sfx)
+            else:
+                out += sfx
+                end = len(out)
+                prev_role = None
+                prev_plain = None
             if markers is not None:
                 markers.append({"id": it.get("id", ""), "type": "sfx", "path": str(it["path"]),
-                                "start_ms": start, "end_ms": len(out)})
-            prev_role = None
-            prev_plain = None
+                                "start_ms": start, "end_ms": end, "overlay": bool(it.get("overlay"))})
             continue
 
         seg = AudioSegment.from_file(it["audio"])
         seg = trim_edges(seg)
-        gain = gains.get(it["role"], 0.0)
+        attrs = it.get("attrs") or {}
+        seg = apply_fx(seg, attrs.get("fx"))
+        gain = gains.get(it["role"], 0.0) + _num(attrs.get("vol"))
         if gain:
             seg = seg + gain
+        overlap = int(_num(attrs.get("overlap")))
 
-        if prev_role is not None:
-            gap = t["same_speaker_gap_ms"] if it["role"] == prev_role else t["turn_gap_ms"]
-            if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
-                gap += t["question_gap_ms"]  # chờ trả lời sau câu hỏi
-            out += AudioSegment.silent(gap)
+        if overlap > 0 and placed:
+            # Nói chen: bắt đầu trước khi câu trước kết thúc (không sớm hơn đầu câu trước)
+            start = max(placed[-1]["start_ms"], len(out) - overlap)
+        else:
+            if prev_role is not None:
+                gap = t["same_speaker_gap_ms"] if it["role"] == prev_role else t["turn_gap_ms"]
+                if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
+                    gap += t["question_gap_ms"]  # chờ trả lời sau câu hỏi
+                out += AudioSegment.silent(gap)
+            start = len(out)
         if it.get("delay_ms"):
-            out += AudioSegment.silent(it["delay_ms"])
-
-        start = len(out)
-        out += seg
-        placed.append({**it, "start_ms": start, "end_ms": len(out)})
+            start += it["delay_ms"]
+        end = start + len(seg)
+        if end > len(out):
+            out += AudioSegment.silent(end - len(out), frame_rate=out.frame_rate)
+        out = out.overlay(seg, position=start)
+        for ov in pending_overlays:
+            if start + len(ov) > len(out):
+                out += AudioSegment.silent(start + len(ov) - len(out), frame_rate=out.frame_rate)
+            out = out.overlay(ov, position=start)
+        pending_overlays.clear()
+        placed.append({**it, "start_ms": start, "end_ms": end})
         prev_role = it["role"]
         prev_plain = it.get("plain", "")
 
+    for ov in pending_overlays:  # sfx overlay ở cuối bài: phát luôn tại chỗ
+        out += ov
     out += AudioSegment.silent(t["tail_ms"])
     return out, placed
+
+
+def _num(v) -> float:
+    try:
+        return float(v) if v not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def practice_items(

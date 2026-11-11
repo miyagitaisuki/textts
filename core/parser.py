@@ -7,6 +7,17 @@ Cú pháp:
         (dòng thụt đầu: nối vào câu trước)
     [pause=1500]
 
+Đạo diễn (thuộc tính trong {...} của câu):
+    emotion=happy|sad|angry|surprised, speed=slow|fast, pitch=-20..20
+    fx=phone|whisper|far|radio|echo   hiệu ứng giọng (qua điện thoại, thì thầm, ở xa, loa thông báo, vang)
+    vol=-6                            to/nhỏ hơn (dB)
+    overlap=400                       nói chen: bắt đầu trước khi câu trước kết thúc 400 ms
+Bản dịch: [1] こんにちは。 // Xin chào.
+Cảnh & hiệu ứng:
+    [sfx=chuong-cua]                  chèn hiệu ứng (chiếm thời gian)
+    [sfx=chuong-cua, overlay, vol=-6] chồng lên câu kế tiếp
+    [bgm=quan-ca-phe]                 đổi âm nền từ đây; nhiều lớp: [bgm=mua+duong-pho@-26]; tắt: [bgm=off]
+
 Cũng nhận dạng dạng rút gọn không có ngoặc, khi số đứng ngay đầu dòng:
     1 すみません、駅はどこですか。
     2: はい、あちらです。
@@ -22,6 +33,8 @@ LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
 BARE_LINE_RE = re.compile(r"^(\d+)[ \t:：.、]+(.+)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
 SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
+BGM_RE = re.compile(r"^\s*\[\s*bgm\s*=\s*(.*?)\s*\]\s*$", re.I)
+TRANSLATION_SEP = " // "
 # 漢字{かな}, 漢字(かな) hoặc 漢字（かな）: giữ chữ Hán để hiển thị, gửi kana cho engine.
 # Chỉ nhận khi trong ngoặc toàn là kana và ngay trước ngoặc là chữ Hán, để không nuốt ghi chú thường.
 RUBY_RE = re.compile(r"([一-鿿々]+)(?:\{([぀-ヿー]+)\}|[(（]([぀-ヿー]+)[)）])")
@@ -58,6 +71,24 @@ def parse_attrs(raw: str | None) -> dict[str, str]:
     return attrs
 
 
+def parse_sfx(spec: str, line_no: int) -> dict:
+    """"chuong-cua, overlay, vol=-6" -> {"path": "chuong-cua", "overlay": True, "volume_db": -6.0}."""
+    parts = [p.strip() for p in spec.split(",")]
+    out: dict = {"path": parts[0]}
+    for p in parts[1:]:
+        low = p.lower()
+        if low in ("overlay", "chong", "chồng"):
+            out["overlay"] = True
+        elif low.startswith(("vol=", "volume=")):
+            try:
+                out["volume_db"] = float(low.split("=", 1)[1])
+            except ValueError:
+                raise ScriptError(f"Dòng {line_no}: âm lượng không hợp lệ: {p}") from None
+        elif p:
+            raise ScriptError(f"Dòng {line_no}: tùy chọn sfx không rõ: {p} (dùng overlay, vol=-6)")
+    return out
+
+
 def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict]:
     items: list[dict] = []
     cur: dict | None = None
@@ -68,7 +99,12 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
             items.append({"type": "pause", "ms": int(m[1]), "src_line": line_no})
             cur = None
         elif m := SFX_RE.match(raw):
-            items.append({"type": "sfx", "path": m[1], "src_line": line_no})
+            items.append({"type": "sfx", "src_line": line_no, **parse_sfx(m[1], line_no)})
+            cur = None
+        elif m := BGM_RE.match(raw):
+            spec = m[1].strip()
+            layers = [] if spec.lower() in ("", "off", "none", "tat", "tắt") else [x.strip() for x in spec.split("+") if x.strip()]
+            items.append({"type": "bgm", "layers": layers, "src_line": line_no})
             cur = None
         elif m := LINE_RE.match(raw):
             cur = {
@@ -103,6 +139,10 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
     for i, it in enumerate(items):
         it["id"] = f"L{i + 1:03d}"
         if it["type"] == "line":
+            text, sep, tr = it["text"].partition(TRANSLATION_SEP)
+            if sep:
+                it["text"] = text.strip()
+                it["translation"] = tr.strip()
             it["display"] = apply_readings(it["text"], readings or {})  # giữ furigana để hiển thị
             it["tts_text"] = to_tts_text(it["display"])  # gửi kana cho engine
             it["plain"] = to_plain(it["display"])        # bản không furigana cho phụ đề

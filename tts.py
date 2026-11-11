@@ -25,6 +25,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from core.audio import add_background, limit_peak, loudness_normalize, peaks, role_levels, time_stretch
 from core.lint import lint_project
 from core.paths import sfx_path
+from core.levels import timing_for
+from core.render import build_items_for, finish, missing_scene_sounds, used_sound_paths
 from core.sounds import SoundNotFound, credits_for, parse_layer, resolve_bgm
 from core.readings import load_readings
 from core.builder import build, practice_items, to_srt, trim_edges
@@ -192,6 +194,59 @@ async def sample_voice(provider: TTSProvider, req: SynthRequest, cache_dir: Path
     AudioSegment.from_file(cached).export(output, format=output.suffix.lstrip(".").lower() or "mp3")
 
 
+async def add_translations(project: Project, build_items: list[dict], voice: str, cache_dir: Path) -> list[dict]:
+    """Chèn bản dịch (đọc bằng Edge) sau mỗi câu có '// bản dịch'."""
+    lines = [it for it in project.items if isinstance(it, LineItem) and it.translation]
+    if not lines:
+        raise RuntimeError("chưa có bản dịch: viết sau mỗi câu ' // bản dịch tiếng Việt'")
+    edge = PROVIDERS["edge"]()
+    paths = await asyncio.gather(*(synth_cached(edge, SynthRequest(text=it.translation, voice=voice), cache_dir)
+                                   for it in lines))
+    by_id = {it.id: str(p) for it, p in zip(lines, paths)}
+    out = []
+    for it in build_items:
+        out.append(it)
+        if it.get("type") == "line" and it["id"] in by_id:
+            out += [{"type": "pause", "ms": 450},
+                    {"type": "sfx", "id": f"{it['id']}-vi", "path": by_id[it["id"]], "translation": True},
+                    {"type": "pause", "ms": 600}]
+    return out
+
+
+def run_check(project: Project, cache_dir: Path) -> int:
+    """--check: tổng hợp (có cache) rồi nghe lại từng câu, in JSON kết quả. Mã thoát 1 nếu có câu đáng ngờ."""
+    from core import qc
+
+    errors = asyncio.run(synth_all(project, PROVIDERS[project.engine](), cache_dir))
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 2
+    lines = [{"id": it.id, "text": it.tts_text, "display": it.display, "audio": it.audio}
+             for it in project.items if isinstance(it, LineItem) and it.audio]
+    try:
+        results = qc.check_lines(lines)
+    except qc.QCUnavailable as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    print(json.dumps(results, ensure_ascii=False))
+    return 0 if all(r["ok"] for r in results) else 1
+
+
+async def synth_cached(provider: TTSProvider, req: SynthRequest, cache_dir: Path) -> Path:
+    """Tổng hợp một câu lẻ (vd. bản dịch tiếng Việt) vào cache, trả về đường dẫn file."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
+    cached = cache_dir / f"{key}.{provider.ext}"
+    if not cached.exists() or cached.stat().st_size == 0:
+        tmp = cached.with_suffix(".part")
+        try:
+            await provider.synthesize(req, str(tmp))
+            tmp.replace(cached)
+        finally:
+            tmp.unlink(missing_ok=True)
+    return cached
+
+
 def dry_run(project: Project) -> None:
     for it in project.items:
         if isinstance(it, SfxItem):
@@ -324,6 +379,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="bản shadowing: sau mỗi câu luyện tập chèn khoảng lặng để nhắc lại")
     ap.add_argument("--shadow-gap", type=int, default=1500, metavar="MS",
                     help="khoảng lặng thêm sau mỗi câu khi dùng --shadow (mặc định 1500 ms)")
+    ap.add_argument("--level", choices=["N5", "N4", "N3", "N2", "N1"],
+                    help="nhịp đọc theo trình độ: N5 chậm và nghỉ lâu ... N1 gần tự nhiên")
+    ap.add_argument("--bilingual", action="store_true",
+                    help="bản song ngữ: đọc bản dịch (sau '//' của mỗi câu) ngay sau câu đó, giọng Edge (cần Internet)")
+    ap.add_argument("--translation-voice", default="vi-VN-HoaiMyNeural", help="giọng Edge đọc bản dịch")
+    ap.add_argument("--check", action="store_true",
+                    help="tự kiểm tra phát âm: nghe lại từng câu (Whisper), in JSON các câu đáng ngờ rồi thoát")
     ap.add_argument("--worksheet", type=Path, metavar="FILE.html",
                     help="xuất phiếu học tập HTML có furigana (không cần tạo âm thanh)")
     ap.add_argument("--export-lines", type=Path, metavar="DIR",
@@ -395,12 +457,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.worksheet:
         args.worksheet.parent.mkdir(parents=True, exist_ok=True)
         args.worksheet.write_text(
-            worksheet_html(project.title, [it.model_dump() for it in project.items]),
+            worksheet_html(project.title, [it.model_dump() for it in project.items],
+                           roles={k: {"name": r.name} for k, r in project.roles.items()}),
             encoding="utf-8",
         )
         print(f"Đã xuất phiếu học tập {args.worksheet}")
         if args.dry_run or not args.output:
             return 0
+
+    if args.level:  # nhịp đọc theo trình độ (khoảng nghỉ áp ngay; tốc độ áp sau khi ghép)
+        project.timing = project.timing.model_copy(update=timing_for(args.level, project.timing.model_dump())[0])
+
+    if args.check:
+        return run_check(project, args.cache_dir)
 
     if args.dry_run or not args.output:
         dry_run(project)
@@ -416,6 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         str(sfx_path(it.path, base)) for it in project.items
         if isinstance(it, SfxItem) and not sfx_path(it.path, base).is_file()
     ]
+    missing_files += missing_scene_sounds(project)
     bgm_layers: list[tuple[Path, float]] = []
     for spec in args.bgm:
         ref, db = parse_layer(spec, args.bgm_db)
@@ -454,13 +524,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Đã xuất câu {args.preview} ra {args.output}")
         return 0
 
-    build_items = [
-        {**it.model_dump(), "path": str(sfx_path(it.path, base))}
-        if isinstance(it, SfxItem) else it.model_dump()
-        for it in project.items
-    ]
+    build_items = build_items_for(project, base)
     gains = {k: r.gain_db for k, r in project.roles.items()}
     timing = project.timing.model_dump()
+    if args.bilingual:
+        try:
+            build_items = asyncio.run(add_translations(project, build_items, args.translation_voice, args.cache_dir))
+        except (RuntimeError, OSError) as exc:
+            print(f"Lỗi bản song ngữ: {exc}", file=sys.stderr)
+            return 2
     markers: list[dict] = []
     audio, placed = build(build_items, timing, role_gains=gains, markers=markers)
     if args.role_play or args.shadow:
@@ -476,8 +548,14 @@ def main(argv: list[str] | None = None) -> int:
             role_gains=gains,
             markers=markers,
         )
-    for bgm_file, db in bgm_layers:  # nhiều lớp nền chồng lên nhau, mỗi lớp một âm lượng
-        audio = add_background(audio, AudioSegment.from_file(bgm_file), gain_db=db)
+    _, rate = timing_for(args.level, timing)
+    if rate != 1.0:  # tốc độ đọc theo trình độ: co giãn, dời mốc thời gian tương ứng
+        audio = time_stretch(audio, rate)
+        placed = [{**p, "start_ms": round(p["start_ms"] / rate), "end_ms": round(p["end_ms"] / rate)} for p in placed]
+        markers = [{**m, "start_ms": round(m["start_ms"] / rate),
+                    **({"end_ms": round(m["end_ms"] / rate)} if "end_ms" in m else {})} for m in markers]
+    layers = [{"path": str(f), "db": db} for f, db in bgm_layers]
+    audio = finish(audio, markers, layers)  # nền theo cảnh + các lớp nền suốt bài
     if args.lufs is not None:
         audio = loudness_normalize(audio, args.lufs)
 
@@ -485,10 +563,9 @@ def main(argv: list[str] | None = None) -> int:
     write_audio(audio, args.output, fmt)
     print(f"Đã xuất {args.output} ({len(audio) / 1000:.1f} s, {len(placed)} câu)")
     timeline_path = args.output.with_name(f"{args.output.stem}.timeline.json")
-    write_timeline(audio, placed, timeline_path, markers=markers,
-                   bgm=[{"path": str(f), "db": db} for f, db in bgm_layers])
+    write_timeline(audio, placed, timeline_path, markers=markers, bgm=layers)
     print(f"Đã xuất dữ liệu timeline {timeline_path}")
-    used = [f for f, _ in bgm_layers] + [m["path"] for m in markers]
+    used = used_sound_paths(markers, layers)
     credit_lines = credits_for(used)
     if credit_lines:  # âm có giấy phép yêu cầu ghi công (vd. CC BY): ghi kèm bài
         credits_path = args.output.with_name(f"{args.output.stem}.credits.txt")
@@ -530,7 +607,8 @@ def write_timeline(audio, placed: list[dict], path: Path, markers: list[dict] | 
                    bgm: list[dict] | None = None) -> None:
     """Vị trí từng câu, hiệu ứng sfx, nhạc nền và dữ liệu sóng, để giao diện vẽ timeline nhiều track."""
     data = {
-        "sfx": markers or [],
+        "sfx": [m for m in markers or [] if m.get("type") == "sfx"],
+        "scenes": [m for m in markers or [] if m.get("type") == "scene"],
         "bgm": bgm or [],  # các lớp nền: [{"path", "db"}]
         "duration_ms": len(audio),
         "peaks": peaks(audio, bins=600),

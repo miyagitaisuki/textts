@@ -117,7 +117,7 @@ def test_cli_stacks_several_background_layers(tmp_path, monkeypatch):
     }), encoding="utf-8")
     out = tmp_path / "o.wav"
     added = []
-    real = tts.add_background
+    real = __import__("core.audio", fromlist=["x"]).add_background
 
     def spy(speech, bgm, gain_db=-18.0, **kw):
         added.append(gain_db)
@@ -126,7 +126,9 @@ def test_cli_stacks_several_background_layers(tmp_path, monkeypatch):
     async def no_synth(*a, **k):
         return []
 
-    monkeypatch.setattr(tts, "add_background", spy)
+    import core.render
+
+    monkeypatch.setattr(core.render, "add_background", spy)
     monkeypatch.setattr(tts, "synth_all", no_synth)
     code = tts.main(["--project", str(proj), "-o", str(out), "--bgm", "mua", "--bgm", "xe@-30"])
     assert code == 0

@@ -128,3 +128,55 @@ def role_levels(
             levels.append(round(float(np.clip((db - floor_db) / -floor_db, 0.0, 1.0)), 3))
         result[role] = levels
     return result
+
+
+# --- Hiệu ứng giọng cho "đạo diễn" kịch bản ({fx=...}) ---------------------------------------
+FX_NAMES = ("phone", "whisper", "far", "radio", "echo")
+
+
+def _echo(seg: AudioSegment, taps: tuple[tuple[int, float], ...]) -> AudioSegment:
+    out = seg + AudioSegment.silent(max(d for d, _ in taps) + 200, frame_rate=seg.frame_rate)
+    for delay, db in taps:
+        out = out.overlay(seg + db, position=delay)
+    return out
+
+
+def apply_fx(seg: AudioSegment, fx: str | None) -> AudioSegment:
+    """phone: qua điện thoại; whisper: thì thầm; far: ở xa/phòng bên; radio: loa thông báo; echo: phòng vang."""
+    if not fx:
+        return seg
+    fx = fx.strip().lower()
+    if fx == "phone":
+        return (seg.high_pass_filter(350).low_pass_filter(3200) + 4).compress_dynamic_range() if hasattr(
+            seg, "compress_dynamic_range") else seg.high_pass_filter(350).low_pass_filter(3200) + 4
+    if fx == "whisper":
+        return seg.high_pass_filter(600) - 9
+    if fx == "far":
+        return _echo(seg.low_pass_filter(2200) - 9, ((90, -10), (190, -16)))
+    if fx == "radio":
+        return _echo(seg.high_pass_filter(450).low_pass_filter(4200) + 2, ((140, -12), (300, -18), (480, -24)))
+    if fx == "echo":
+        return _echo(seg, ((180, -9), (360, -14), (540, -20)))
+    raise ValueError(f"Hiệu ứng không hỗ trợ: {fx} (dùng {', '.join(FX_NAMES)})")
+
+
+def apply_scenes(speech: AudioSegment, scenes: list[dict], crossfade_ms: int = 900) -> AudioSegment:
+    """Âm nền theo cảnh: mỗi mục {start_ms, layers: [{path, db}]} có hiệu lực tới cảnh kế tiếp (layers rỗng = tắt)."""
+    if not scenes:
+        return speech
+    scenes = sorted(scenes, key=lambda s: s["start_ms"])
+    out = speech
+    for i, sc in enumerate(scenes):
+        start = max(0, int(sc["start_ms"]))
+        end = int(scenes[i + 1]["start_ms"]) if i + 1 < len(scenes) else len(speech)
+        if end - start < 200:
+            continue
+        for layer in sc.get("layers", []):
+            bed = AudioSegment.from_file(layer["path"])
+            bed = bed.set_frame_rate(speech.frame_rate).set_channels(speech.channels).set_sample_width(speech.sample_width)
+            if len(bed) == 0:
+                continue
+            seg = (bed * (((end - start) // len(bed)) + 1))[: end - start] + float(layer.get("db", -20))
+            fade = min(crossfade_ms, len(seg) // 2)
+            out = out.overlay(seg.fade_in(fade).fade_out(fade), position=start)
+    return out

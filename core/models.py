@@ -67,6 +67,7 @@ class LineItem(BaseModel):
     plain: str
     cache_key: str | None = None
     audio: str | None = None
+    translation: str = ""  # bản dịch (sau "//" trong kịch bản), dùng cho bản song ngữ và phiếu học tập
 
     @model_validator(mode="after")
     def _derive_reading(self) -> "LineItem":
@@ -92,9 +93,21 @@ class SfxItem(BaseModel):
     type: Literal["sfx"] = "sfx"
     src_line: int
     path: str = Field(min_length=1)
+    overlay: bool = False  # chồng lên câu kế tiếp (không chiếm thời gian riêng), vd. chuông reo khi đang nói
+    volume_db: float = Field(0.0, ge=-40, le=12)
 
 
-Item = Annotated[Union[LineItem, PauseItem, SfxItem], Field(discriminator="type")]
+class BgmItem(BaseModel):
+    """Đổi nhạc/âm nền từ vị trí này (cảnh mới): [bgm=quan-ca-phe] / [bgm=mua+duong-pho@-26] / [bgm=off]."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    type: Literal["bgm"] = "bgm"
+    src_line: int
+    layers: list[str] = Field(default_factory=list)  # "tên@dB"; rỗng = tắt nền
+
+
+Item = Annotated[Union[LineItem, PauseItem, SfxItem, BgmItem], Field(discriminator="type")]
 
 
 class Project(BaseModel):
