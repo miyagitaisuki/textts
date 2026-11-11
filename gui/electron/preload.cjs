@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("textts", {
   getApiServerStatus: () => ipcRenderer.invoke("apiServer:status"),
   toggleApiServer: () => ipcRenderer.invoke("apiServer:toggle"),
   getVoicevoxStatus: () => ipcRenderer.invoke("voicevox:status"),
+  installVoicevox: () => ipcRenderer.invoke("voicevox:install"),
+  startVoicevox: () => ipcRenderer.invoke("voicevox:start"),
   getAivisStatus: () => ipcRenderer.invoke("aivis:status"),
   installAivis: () => ipcRenderer.invoke("aivis:install"),
   startAivis: () => ipcRenderer.invoke("aivis:start"),

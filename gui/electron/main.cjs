@@ -11,7 +11,7 @@ const logger = require("./logger.cjs");
 const { friendlyPythonError } = require("./python-errors.cjs");
 const { resolvePython, buildChildEnv } = require("./runtime.cjs");
 const { buildMenu } = require("./menu.cjs");
-const { resolveEngineExe, startEngine, stopEngine } = require("./voicevox-engine.cjs");
+const { startEngine, stopEngine } = require("./voicevox-engine.cjs");
 
 logger.installCrashHandlers();
 
@@ -470,13 +470,19 @@ async function pingUrl(url, timeoutMs = 1500) {
   }
 }
 
-// VOICEVOX đi kèm bộ cài: app tự khởi động khi sẵn sàng (xem voicevox-engine.cjs).
-// voicevoxBoot là promise của lần khởi động; voicevox:status chờ nó xong rồi mới báo trạng thái.
+// --- VOICEVOX: tải theo yêu cầu (không đóng gói trong bộ cài, xem voicevox-install.cjs) ---
+const voicevoxCfg = require("./voicevox-config.cjs");
+const { voicevoxInstalled, installVoicevox } = require("./voicevox-install.cjs");
+const { findFile } = require("./aivis-install.cjs");
+const VOICEVOX_DIR = path.join(app.getPath("userData"), "voicevox");
+const VOICEVOX_DOWNLOAD_DIR = path.join(app.getPath("userData"), "voicevox-download");
 let voicevoxEngine = null;
 let voicevoxBoot = null;
+let voicevoxBusy = false;
 
+// Nếu VOICEVOX đã được cài trước đó thì tự khởi động khi mở app; chưa cài thì chỉ kiểm tra cổng.
 function bootVoicevox() {
-  const exe = resolveEngineExe(process.resourcesPath);
+  const exe = findFile(VOICEVOX_DIR, "run.exe");
   voicevoxBoot = startEngine({
     url: VOICEVOX_URL,
     exe,
@@ -498,10 +504,60 @@ function bootVoicevox() {
   return voicevoxBoot;
 }
 
+async function voicevoxState() {
+  const ok = await pingUrl(`${VOICEVOX_URL}/version`);
+  return {
+    ok,
+    running: ok,
+    configured: true,
+    installed: voicevoxInstalled(VOICEVOX_DIR),
+    url: VOICEVOX_URL,
+    managed: Boolean(voicevoxEngine?.managed),
+    busy: voicevoxBusy,
+    version: voicevoxCfg.version,
+  };
+}
+
 ipcMain.handle("voicevox:status", async () => {
   if (voicevoxBoot) await voicevoxBoot;
-  const ok = await pingUrl(`${VOICEVOX_URL}/version`);
-  return { ok, url: VOICEVOX_URL, managed: Boolean(voicevoxEngine?.managed) };
+  return voicevoxState();
+});
+
+ipcMain.handle("voicevox:install", async () => {
+  if (voicevoxBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };
+  voicevoxBusy = true;
+  try {
+    await installVoicevox({
+      cfg: voicevoxCfg,
+      installDir: VOICEVOX_DIR,
+      downloadDir: VOICEVOX_DOWNLOAD_DIR,
+      spawnFn: spawn,
+      log: (level, msg) => logger.log(level, msg),
+    });
+    return { ok: true, state: await voicevoxState() };
+  } catch (err) {
+    logger.log("ERROR", `[VOICEVOX] Cài đặt thất bại: ${err?.message ?? err}`);
+    return { ok: false, error: err?.message ?? String(err) };
+  } finally {
+    voicevoxBusy = false;
+  }
+});
+
+ipcMain.handle("voicevox:start", async () => {
+  if (await pingUrl(`${VOICEVOX_URL}/version`)) return { ok: true, state: await voicevoxState() };
+  const exe = findFile(VOICEVOX_DIR, "run.exe");
+  if (!exe) return { ok: false, error: "Chưa tải VOICEVOX" };
+  voicevoxEngine = await startEngine({
+    url: VOICEVOX_URL,
+    exe,
+    ping: (u) => pingUrl(u),
+    spawn,
+    log: (level, msg) => logger.log(level, msg),
+    onSpawn: (child) => {
+      voicevoxEngine = { ready: false, managed: true, child };
+    },
+  });
+  return { ok: voicevoxEngine.ready, state: await voicevoxState() };
 });
 
 // --- AivisSpeech: tải theo yêu cầu (không đóng gói), chạy engine khi cần ---
@@ -517,7 +573,14 @@ let aivisBusy = false;
 async function aivisState() {
   const status = aivisInstall.aivisStatus({ cfg: aivisCfg, installDir: AIVIS_DIR, modelsDir: AIVIS_MODELS_DIR });
   const running = await pingUrl(`${aivisCfg.AIVIS_URL}/version`);
-  return { ...status, running, managed: Boolean(aivisEngine?.managed), url: aivisCfg.AIVIS_URL, busy: aivisBusy };
+  return {
+    ...status,
+    installed: status.engineInstalled && status.modelCount > 0,
+    running,
+    managed: Boolean(aivisEngine?.managed),
+    url: aivisCfg.AIVIS_URL,
+    busy: aivisBusy,
+  };
 }
 
 ipcMain.handle("aivis:status", async () => aivisState());

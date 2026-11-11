@@ -316,7 +316,7 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
               <div className="guide-section">
                 <h4>Ghi công VOICEVOX</h4>
                 <p>
-                  textts đi kèm <strong>VOICEVOX ENGINE</strong> phiên bản 0.26.1 (bản CPU cho Windows) và tự khởi động engine khi mở ứng dụng. Engine dùng giấy phép LGPL v3 hoặc giấy phép riêng, mã nguồn tại{" "}
+                  textts có nút tải <strong>VOICEVOX ENGINE</strong> phiên bản 0.26.1 (bản CPU cho Windows, tải theo yêu cầu) và tự khởi động engine khi đã cài. Engine dùng giấy phép LGPL v3 hoặc giấy phép riêng, mã nguồn tại{" "}
                   <a
                     href="#"
                     onClick={(e) => {
