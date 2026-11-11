@@ -10,6 +10,9 @@ export default function SoundLibraryDialog({ kind = "sfx", api = window.textts, 
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(null);
+  const [editing, setEditing] = useState(null); // { file, description, tags, related, credit }
+  // Nguồn ghi công cho file sắp thêm (vd. "OtoLogic (CC BY 4.0)"), nhớ cho lần sau.
+  const [credit, setCredit] = useState(() => window.localStorage?.getItem("textts.soundCredit") || "");
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -80,10 +83,27 @@ export default function SoundLibraryDialog({ kind = "sfx", api = window.textts, 
     }
   }
 
-  async function addMine() {
-    const r = await api.importSounds(kind);
+  async function addMine(folder = false) {
+    window.localStorage?.setItem("textts.soundCredit", credit);
+    const r = await api.importSounds(kind, { folder, credit });
     if (r?.items) setItems(r.items);
     setTab("mine");
+  }
+
+  function startEdit(it) {
+    setEditing({
+      file: it.path,
+      description: it.description || "",
+      tags: (it.tags || []).join(", "),
+      related: (it.related || []).join(", "),
+      credit: it.credit || "",
+    });
+  }
+
+  async function saveEdit() {
+    const r = await api.describeSound(editing);
+    if (r?.items) setItems(r.items);
+    setEditing(null);
   }
 
   async function removeMine(it) {
@@ -123,11 +143,29 @@ export default function SoundLibraryDialog({ kind = "sfx", api = window.textts, 
             </button>
           )}
           {tab === "mine" && (
-            <button className="ghost" onClick={addMine}>
-              ＋ Thêm file…
-            </button>
+            <>
+              <button className="ghost" onClick={() => addMine(false)}>
+                ＋ Thêm file…
+              </button>
+              <button className="ghost" onClick={() => addMine(true)} title="Thêm mọi file âm thanh trong một thư mục (kể cả thư mục con)">
+                ＋ Thêm cả thư mục…
+              </button>
+            </>
           )}
         </div>
+        {tab === "mine" && (
+          <div className="sound-mine-tools">
+            <label title="Ghi vào mục lục của các file sắp thêm; bài xuất ra sẽ kèm file .credits.txt ghi nguồn">
+              Nguồn / ghi công cho file thêm vào
+              <input value={credit} placeholder="vd. OtoLogic (CC BY 4.0)" onChange={(e) => setCredit(e.target.value)} />
+            </label>
+            {api?.openSoundFolder && (
+              <button className="ghost" onClick={() => api.openSoundFolder()} title="Mở thư mục thư viện (có file MUC_LUC.md cho AI đọc)">
+                Mở thư mục thư viện
+              </button>
+            )}
+          </div>
+        )}
 
         {error && <p className="error-text">{error}</p>}
         {tab === "pack" && (
@@ -144,7 +182,8 @@ export default function SoundLibraryDialog({ kind = "sfx", api = window.textts, 
             <section key={category}>
               <h3>{category}</h3>
               {list.map((it) => (
-                <div className="sound-row" key={it.id}>
+                <div key={it.id}>
+                <div className="sound-row">
                   <button
                     className="ghost"
                     title={playing === it.id ? "Dừng" : "Nghe thử"}
@@ -154,17 +193,59 @@ export default function SoundLibraryDialog({ kind = "sfx", api = window.textts, 
                   >
                     {playing === it.id ? "■" : "▶"}
                   </button>
-                  <span className="sound-name">{it.name}</span>
+                  <span className="sound-name">
+                    {it.name}
+                    {(it.description || it.credit) && (
+                      <small className="sound-desc">
+                        {[it.description, it.credit].filter(Boolean).join(" · ")}
+                      </small>
+                    )}
+                  </span>
                   {it.duration && <span className="muted">{it.duration.toFixed(1)} s</span>}
                   {!it.downloaded && <span className="muted">{busyId === it.id ? "đang tải…" : "chưa tải"}</span>}
                   <button disabled={Boolean(busyId)} onClick={() => choose(it)}>
                     Chọn
                   </button>
                   {it.source === "mine" && (
-                    <button className="ghost danger" title="Xóa khỏi thư viện" onClick={() => removeMine(it)}>
-                      ✕
-                    </button>
+                    <>
+                      <button className="ghost" title="Ghi mô tả, từ khóa để AI hiểu âm này" onClick={() => startEdit(it)}>
+                        ✎
+                      </button>
+                      <button className="ghost danger" title="Xóa khỏi thư viện" onClick={() => removeMine(it)}>
+                        ✕
+                      </button>
+                    </>
                   )}
+                </div>
+                {editing?.file === it.path && (
+                  <div className="sound-meta-form">
+                    <label>
+                      Mô tả (AI đọc để chọn âm)
+                      <input
+                        autoFocus
+                        value={editing.description}
+                        placeholder="vd. Tiếng sấm rền xa, mưa giông"
+                        onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      Từ khóa (cách nhau bằng dấu phẩy)
+                      <input value={editing.tags} placeholder="sấm, giông, 雷" onChange={(e) => setEditing({ ...editing, tags: e.target.value })} />
+                    </label>
+                    <label>
+                      Dùng tạm cho
+                      <input value={editing.related} placeholder="bão, trời tối, căng thẳng" onChange={(e) => setEditing({ ...editing, related: e.target.value })} />
+                    </label>
+                    <label>
+                      Nguồn / ghi công
+                      <input value={editing.credit} placeholder="vd. OtoLogic (CC BY 4.0)" onChange={(e) => setEditing({ ...editing, credit: e.target.value })} />
+                    </label>
+                    <div className="sound-meta-actions">
+                      <button className="ghost" onClick={() => setEditing(null)}>Hủy</button>
+                      <button onClick={saveEdit}>Lưu mô tả</button>
+                    </div>
+                  </div>
+                )}
                 </div>
               ))}
             </section>

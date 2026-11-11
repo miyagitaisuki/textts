@@ -25,7 +25,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from core.audio import add_background, limit_peak, loudness_normalize, peaks, role_levels, time_stretch
 from core.lint import lint_project
 from core.paths import sfx_path
-from core.sounds import SoundNotFound, parse_layer, resolve_bgm
+from core.sounds import SoundNotFound, credits_for, parse_layer, resolve_bgm
 from core.readings import load_readings
 from core.builder import build, practice_items, to_srt, trim_edges
 from core.models import (
@@ -488,6 +488,12 @@ def main(argv: list[str] | None = None) -> int:
     write_timeline(audio, placed, timeline_path, markers=markers,
                    bgm=[{"path": str(f), "db": db} for f, db in bgm_layers])
     print(f"Đã xuất dữ liệu timeline {timeline_path}")
+    used = [f for f, _ in bgm_layers] + [m["path"] for m in markers]
+    credit_lines = credits_for(used)
+    if credit_lines:  # âm có giấy phép yêu cầu ghi công (vd. CC BY): ghi kèm bài
+        credits_path = args.output.with_name(f"{args.output.stem}.credits.txt")
+        credits_path.write_text("Âm thanh sử dụng:\n" + "\n".join(credit_lines) + "\n", encoding="utf-8")
+        print(f"Đã ghi nguồn âm thanh {credits_path}")
 
     if args.srt:
         srt_path = args.output.with_suffix(".srt")

@@ -329,15 +329,28 @@ ipcMain.handle("soundlib:download", async (evt, { ids } = {}) => {
   }
 });
 
-ipcMain.handle("soundlib:import", async (_evt, { kind } = {}) => {
+// Thêm file (hoặc cả thư mục, folder=true) vào thư viện cá nhân; credit ghi nguồn cho các file vừa thêm.
+ipcMain.handle("soundlib:import", async (_evt, { kind, folder = false, credit = "" } = {}) => {
   const res = await dialog.showOpenDialog({
     title: kind === "bgm" ? "Thêm nhạc/âm nền vào thư viện" : "Thêm hiệu ứng vào thư viện",
-    filters: [{ name: "Âm thanh", extensions: ["mp3", "wav", "ogg", "m4a"] }],
-    properties: ["openFile", "multiSelections"],
+    filters: folder ? undefined : [{ name: "Âm thanh", extensions: ["mp3", "wav", "ogg", "m4a"] }],
+    properties: folder ? ["openDirectory"] : ["openFile", "multiSelections"],
   });
   if (res.canceled) return { ok: true, added: [], ...soundLib.listLibrary(soundLibArgs()) };
-  const added = soundLib.importToMine({ libDir: SOUND_LIB_DIR, kind, files: res.filePaths });
+  const files = folder ? soundLib.audioFilesIn(res.filePaths[0]) : res.filePaths;
+  const added = soundLib.importToMine({ libDir: SOUND_LIB_DIR, kind, files, credit });
   return { ok: true, added, ...soundLib.listLibrary(soundLibArgs()) };
+});
+
+ipcMain.handle("soundlib:describe", async (_evt, meta = {}) => {
+  soundLib.setMeta({ libDir: SOUND_LIB_DIR, ...meta });
+  return soundLib.listLibrary(soundLibArgs());
+});
+
+ipcMain.handle("soundlib:openFolder", async () => {
+  fs.mkdirSync(SOUND_LIB_DIR, { recursive: true });
+  soundLib.writeCatalog(SOUND_LIB_DIR);
+  return shell.openPath(SOUND_LIB_DIR);
 });
 
 ipcMain.handle("soundlib:remove", async (_evt, { file }) => {

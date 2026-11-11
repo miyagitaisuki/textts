@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from core.audio import add_background, loudness_normalize, time_stretch
 from core.appdata import output_root
-from core.sounds import SoundNotFound, find_sound, list_sounds
+from core.sounds import SoundNotFound, catalog_text, credits_for, find_sound, list_sounds, ref_of, search_sounds
 from core.builder import build, practice_items, to_srt
 from core.models import Config, LineItem, Project, Role, SfxItem, Timing, load_config
 from core.normalize import annotate, reading
@@ -186,27 +186,40 @@ async def get_speakers(engine: Literal["voicevox", "aivis", "edge"] = "voicevox"
             )
 
 
-@app.get("/api/v1/sounds", summary="Liệt kê âm trong thư viện (nhạc/âm nền bgm và hiệu ứng sfx)")
-async def sounds(kind: Literal["sfx", "bgm"] | None = None):
-    """Âm dùng được cho options.bgm (kind=bgm) và dòng [sfx=<mã>] trong kịch bản (kind=sfx).
+@app.get("/api/v1/sounds", summary="Mục lục âm thanh: nhạc/âm nền (bgm) và hiệu ứng (sfx), tìm theo nghĩa")
+async def sounds(kind: Literal["sfx", "bgm"] | None = None, q: str | None = None):
+    """Mục lục để AI chọn âm mà không cần nghe: tên, mô tả, từ khóa, "dùng tạm cho".
 
-    Gồm gói CC0 của textts (tự tải khi dùng) và âm giáo viên tự thêm vào thư viện trong app.
+    Có `q` (vd. "tiếng sấm") thì trả kết quả xếp theo độ phù hợp; mỗi kết quả có `match`:
+    "khớp" hoặc "gần đúng" (âm gần giống dùng tạm được, vd. không có sấm thì dùng mưa).
+    Dùng `ref` cho options.bgm hoặc dòng [sfx=<ref>] trong kịch bản.
     """
-    items = list_sounds(kind)
-    return {
-        "ok": True,
-        "items": [
-            {
-                "ref": it["id"].split("-", 1)[1] if it["source"] == "pack" else it["name"],
-                "kind": it["kind"],
-                "name": it["name"],
-                "category": it["category"],
-                "source": "thư viện của giáo viên" if it["source"] == "mine" else "gói textts",
-                "duration_s": it["duration"],
-            }
-            for it in items
-        ],
-    }
+    items = search_sounds(q, kind) if q else list_sounds(kind)
+
+    def view(it: dict) -> dict:
+        out = {
+            "ref": ref_of(it),
+            "kind": it["kind"],
+            "name": it["name"],
+            "description": it.get("description", ""),
+            "tags": it.get("tags", []),
+            "substitute_for": it.get("related", []),
+            "category": it["category"],
+            "source": (it.get("credit") or "thư viện của giáo viên") if it["source"] == "mine" else "gói textts (CC0)",
+            "duration_s": it["duration"],
+        }
+        if "match" in it:
+            out["match"] = it["match"]
+        return out
+
+    return {"ok": True, "query": q, "items": [view(it) for it in items]}
+
+
+@app.get("/api/v1/sounds/catalog", summary="Mục lục thư viện âm thanh dạng Markdown (cho AI đọc)")
+async def sounds_catalog():
+    from fastapi.responses import PlainTextResponse
+
+    return PlainTextResponse(catalog_text(), media_type="text/markdown; charset=utf-8")
 
 
 @app.post("/api/v1/preview-script", summary="Phân tích kịch bản và gợi ý Furigana cho chữ Hán")
@@ -404,6 +417,7 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
     timeline_filename = f"{base_name}.timeline.json"
     timeline_path = export_dir / timeline_filename
     write_timeline(audio, placed, timeline_path, bgm=bgm_layers)
+    credit_lines = credits_for([l["path"] for l in bgm_layers] + [it["path"] for it in build_items if it.get("type") == "sfx"])
 
     base_url = str(request.base_url).rstrip("/")
     files_info: dict[str, Any] = {
@@ -412,6 +426,10 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
         "timeline_json": str(timeline_path),
         "timeline_url": f"{base_url}/files/{url_prefix}{timeline_filename}",
     }
+    if credit_lines:  # âm có giấy phép yêu cầu ghi công (vd. CC BY)
+        credits_path = export_dir / f"{base_name}.credits.txt"
+        credits_path.write_text("Âm thanh sử dụng:\n" + "\n".join(credit_lines) + "\n", encoding="utf-8")
+        files_info["credits"] = str(credits_path)
 
     # Xuất phụ đề SRT
     if req.options.srt:
@@ -460,6 +478,7 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
         "title": req.title,
         "filename": base_name,
         "bgm": bgm_layers,
+        "credits": credit_lines,
         "folder": str(export_dir),
         "duration_s": round(len(audio) / 1000, 2),
         "line_count": len([it for it in project.items if isinstance(it, LineItem)]),

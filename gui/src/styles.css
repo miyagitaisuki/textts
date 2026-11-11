@@ -2231,3 +2231,10 @@ kbd {
 .bgm-layer { display: grid; grid-template-columns: minmax(0, 1fr) 120px 52px 28px; align-items: center; gap: 6px; }
 .bgm-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
 .bgm-layer-db { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; }
+.sound-row .sound-name { display: flex; flex-direction: column; min-width: 0; }
+.sound-desc { color: var(--text-subtle); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sound-mine-tools { display: flex; align-items: flex-end; gap: 8px; }
+.sound-mine-tools label { flex: 1; }
+.sound-meta-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 10px 10px 36px; background: var(--bg-card); border-radius: var(--radius-sm); }
+.sound-meta-form label:first-child { grid-column: 1 / -1; }
+.sound-meta-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; }

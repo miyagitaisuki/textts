@@ -8,7 +8,7 @@ afterEach(cleanup);
 const items = [
   { id: "sfx-a", kind: "sfx", source: "pack", name: "Chuông cửa", category: "Nhà cửa", downloaded: false, path: null, duration: 2.1 },
   { id: "bgm-b", kind: "bgm", source: "pack", name: "Mưa", category: "Thiên nhiên", downloaded: true, path: "/lib/pack/v1/bgm-b.mp3" },
-  { id: "my-sfx-c", kind: "sfx", source: "mine", name: "của tôi", category: "Của tôi", downloaded: true, path: "/lib/my/sfx/c.mp3" },
+  { id: "my-sfx-c", kind: "sfx", source: "mine", name: "của tôi", category: "Của tôi", downloaded: true, path: "/lib/my/sfx/c.mp3", description: "", tags: [], related: [], credit: "" },
 ];
 
 function makeApi() {
@@ -20,6 +20,7 @@ function makeApi() {
     }),
     importSounds: vi.fn(),
     removeSound: vi.fn(),
+    describeSound: vi.fn().mockResolvedValue({ items }),
     readSound: vi.fn(),
     pickAudioFile: vi.fn().mockResolvedValue("/other.wav"),
   };
@@ -52,5 +53,23 @@ describe("SoundLibraryDialog", () => {
     render(<SoundLibraryDialog kind="bgm" api={makeApi()} onPick={onPick} onClose={() => {}} />);
     fireEvent.click(screen.getByText("Chọn file khác trên máy…"));
     await waitFor(() => expect(onPick).toHaveBeenCalledWith("/other.wav"));
+  });
+});
+
+describe("SoundLibraryDialog descriptions", () => {
+  it("lets the teacher describe a personal sound for the AI", async () => {
+    const api = makeApi();
+    render(<SoundLibraryDialog kind="sfx" api={api} onPick={() => {}} onClose={() => {}} />);
+    await screen.findByText("Chuông cửa");
+    fireEvent.click(screen.getByText("Thư viện của tôi"));
+    fireEvent.click(screen.getByTitle("Ghi mô tả, từ khóa để AI hiểu âm này"));
+    fireEvent.change(screen.getByPlaceholderText("vd. Tiếng sấm rền xa, mưa giông"), { target: { value: "Tiếng sấm" } });
+    fireEvent.change(screen.getByPlaceholderText("sấm, giông, 雷"), { target: { value: "sấm, 雷" } });
+    fireEvent.click(screen.getByText("Lưu mô tả"));
+    await waitFor(() =>
+      expect(api.describeSound).toHaveBeenCalledWith(
+        expect.objectContaining({ file: "/lib/my/sfx/c.mp3", description: "Tiếng sấm", tags: "sấm, 雷" })
+      )
+    );
   });
 });

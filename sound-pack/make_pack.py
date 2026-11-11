@@ -339,6 +339,34 @@ BGM = [
 ]
 
 
+# Mục lục cho AI đọc (không cần nghe): mô tả, từ khóa, và "dùng tạm cho" những âm gần giống.
+META = {
+    "sfx-chuong-cua": ("Chuông cửa nhà kiểu Nhật ピンポーン, hai nốt", "chuông cửa, khách đến, nhà, インターホン", "chuông, có người đến, interphone"),
+    "sfx-go-cua": ("Ba tiếng gõ cửa gỗ", "gõ cửa, cửa, ノック", "khách đến, vào phòng"),
+    "sfx-dien-thoai-reo": ("Điện thoại bàn reo hai hồi", "điện thoại, reo, gọi điện, 電話", "chuông điện thoại di động, cuộc gọi"),
+    "sfx-tin-nhan": ("Tiếng báo tin nhắn/thông báo điện thoại ngắn", "tin nhắn, thông báo, điện thoại di động, LINE", "email, nhắc lịch"),
+    "sfx-chuong-truong": ("Chuông trường Nhật キーンコーンカーンコーン, báo giờ học", "chuông trường, giờ học, tan học, trường học", "chuông nhà thờ, chuông báo giờ"),
+    "sfx-thong-bao-bat-dau": ("Chuông bốn nốt đi lên trước thông báo ở nhà ga/sân bay/siêu thị", "thông báo, nhà ga, sân bay, loa", "bắt đầu, phát thanh"),
+    "sfx-thong-bao-ket-thuc": ("Chuông bốn nốt đi xuống sau thông báo", "kết thúc thông báo, nhà ga, loa", "hết giờ, kết thúc"),
+    "sfx-dung": ("Âm 'đúng rồi' ピンポン cho câu đố", "đúng, chính xác, quiz", "thành công, chọn đúng"),
+    "sfx-sai": ("Âm 'sai rồi' ブー cho câu đố", "sai, quiz, buzzer", "lỗi, thất bại"),
+    "sfx-vo-tay": ("Tràng vỗ tay của nhóm người, khoảng 4 giây", "vỗ tay, khen, chúc mừng", "hoan hô, khán giả, kết thúc buổi"),
+    "sfx-lat-trang": ("Tiếng lật trang sách/giấy", "lật trang, sách, giấy", "thư viện, đọc sách, tài liệu"),
+    "sfx-buoc-chan": ("Tiếng bước chân đi bộ trên sàn cứng", "bước chân, đi bộ, đến gần", "người đi vào, hành lang"),
+    "sfx-chup-anh": ("Tiếng màn trập máy ảnh", "chụp ảnh, máy ảnh, camera", "điện thoại chụp hình"),
+    "sfx-cham-coc": ("Tiếng cốc thủy tinh chạm nhau", "chạm cốc, cụng ly, 乾杯", "nhà hàng, tiệc, quán nhậu, bát đĩa"),
+    "bgm-quan-ca-phe": ("Quán cà phê: người nói rì rầm, thỉnh thoảng tiếng cốc", "quán cà phê, quán ăn, rì rầm, cốc", "nhà hàng, căn tin, quán nhậu, sảnh khách sạn"),
+    "bgm-dam-dong": ("Đám đông nói chuyện rì rầm, không có tiếng cốc", "đám đông, sảnh chờ, rì rầm", "nhà ga, sân bay, bệnh viện, văn phòng, siêu thị, lớp học giờ ra chơi"),
+    "bgm-mua": ("Mưa rơi đều, hạt mưa lộp độp", "mưa, trời mưa, 雨", "sấm, bão, giông, mưa phùn, mái hiên"),
+    "bgm-gio": ("Gió thổi từng đợt", "gió, ngoài trời, lạnh", "bão, mùa đông, đồi núi, tuyết"),
+    "bgm-song-bien": ("Sóng biển vỗ bờ từng đợt", "biển, sóng, bãi biển", "hồ, sông, cảng, du lịch biển"),
+    "bgm-cong-vien": ("Công viên: chim hót, gió nhẹ", "công viên, chim hót, thiên nhiên, buổi sáng", "vườn, rừng, dã ngoại, sân trường, ngoại ô"),
+    "bgm-nhac-nhe": ("Nhạc nền nhẹ nhàng kiểu piano, chậm", "nhạc nền, nhẹ nhàng, thư giãn", "mở đầu bài, kể chuyện, cảm động"),
+    "bgm-nhac-vui": ("Nhạc nền vui tươi kiểu marimba, nhịp nhanh", "nhạc nền, vui, sôi động", "trò chơi, lễ hội, quảng cáo, trẻ em"),
+    "bgm-duong-pho": ("Đường phố: tiếng xe ù nền, ô tô chạy ngang, thỉnh thoảng còi", "đường phố, xe cộ, ô tô, giao thông, còi", "ngã tư, bến xe buýt, thành phố, taxi"),
+}
+
+
 def write_mp3(x: np.ndarray, path: Path, bitrate: str) -> None:
     pcm = (np.clip(x, -1, 1) * 32767).astype(np.int16)
     with tempfile.TemporaryDirectory() as tmp:
@@ -365,6 +393,9 @@ def main() -> None:
                 "id": f"{kind}-{slug}", "kind": kind, "name": name, "category": category, "file": file,
                 "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
                 "duration": round(len(x) / SR, 2),
+                "description": META[f"{kind}-{slug}"][0],
+                "tags": [w.strip() for w in META[f"{kind}-{slug}"][1].split(",")],
+                "related": [w.strip() for w in META[f"{kind}-{slug}"][2].split(",")],
             })
             print(f"{file:32s} {len(x) / SR:5.1f}s {len(data) / 1024:6.0f} KB")
     MANIFEST.write_text(json.dumps({

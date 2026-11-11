@@ -77,3 +77,26 @@ test("only files inside the library can be read", () => {
   assert.throws(() => lib.readAsDataUrl({ libDir, file: path.join(libDir, "..", "x.mp3") }));
   assert.throws(() => lib.readAsDataUrl({ libDir, file: path.join(libDir, "my", "bgm", "..", "..", "..", "etc.mp3") }));
 });
+
+test("teacher descriptions, credits and the MUC_LUC.md catalog", () => {
+  const libDir = tmp();
+  const srcDir = tmp();
+  fs.mkdirSync(path.join(srcDir, "sub"));
+  fs.writeFileSync(path.join(srcDir, "Wind_Chimes01.mp3"), bytes);
+  fs.writeFileSync(path.join(srcDir, "sub", "Thunder01.wav"), bytes);
+  fs.writeFileSync(path.join(srcDir, "readme.txt"), "x");
+  const files = lib.audioFilesIn(srcDir);
+  assert.strictEqual(files.length, 2);
+  const added = lib.importToMine({ libDir, kind: "sfx", files, credit: "OtoLogic (CC BY 4.0)" });
+  lib.setMeta({ libDir, file: added[0], description: "Chuông gió leng keng", tags: "chuông gió, 風鈴", related: "", credit: "OtoLogic (CC BY 4.0)" });
+  const mine = lib.listLibrary({ libDir, manifest }).items.filter((i) => i.source === "mine");
+  const chime = mine.find((m) => m.name === "Wind_Chimes01");
+  assert.deepStrictEqual(chime.tags, ["chuông gió", "風鈴"]);
+  assert.strictEqual(mine.find((m) => m.name === "Thunder01").credit, "OtoLogic (CC BY 4.0)");
+  const catalog = fs.readFileSync(path.join(libDir, "MUC_LUC.md"), "utf-8");
+  assert.match(catalog, /\| Wind_Chimes01 \| Chuông gió leng keng \| chuông gió, 風鈴 \|/);
+  assert.match(catalog, /Thunder01 \| \(chưa có mô tả\)/);
+  lib.removeMine({ libDir, file: added[0] });
+  assert.doesNotMatch(fs.readFileSync(path.join(libDir, "MUC_LUC.md"), "utf-8"), /Wind_Chimes01/);
+  assert.throws(() => lib.setMeta({ libDir, file: path.join(srcDir, "x.mp3") }), /thư viện cá nhân/);
+});

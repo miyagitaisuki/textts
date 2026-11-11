@@ -134,3 +134,33 @@ def test_cli_stacks_several_background_layers(tmp_path, monkeypatch):
     tl = json.loads(out.with_name("o.timeline.json").read_text(encoding="utf-8"))
     assert [Path(l["path"]).name for l in tl["bgm"]] == ["mua.wav", "xe.wav"]
     assert AudioSegment.from_file(out).duration_seconds > 0
+
+
+def test_search_reads_the_index_and_offers_near_substitutes(tmp_path):
+    m = _manifest()
+    m["items"][1].update(description="Mưa rơi đều", tags=["mưa", "trời mưa"], related=["sấm", "bão"])
+    from core.sounds import search_sounds
+
+    near = search_sounds("tiếng sấm động", "bgm", lib=tmp_path, manifest=m)
+    assert [(r["ref"], r["match"]) for r in near] == [("mua", "gần đúng")]
+    assert search_sounds("trời mưa", "bgm", lib=tmp_path, manifest=m)[0]["match"] == "khớp"
+    assert search_sounds("tàu điện", "bgm", lib=tmp_path, manifest=m) == []
+    # tên không có → lỗi gợi ý âm dùng tạm
+    with pytest.raises(SoundNotFound, match="dùng tạm: mua"):
+        find_sound("sấm", "bgm", lib=tmp_path, manifest=m, download=False)
+
+
+def test_teacher_descriptions_and_credits(tmp_path):
+    import json
+
+    from core.sounds import catalog_text, credits_for, search_sounds
+
+    f = _mine(tmp_path, "sfx", "Wind_Chimes01.mp3")
+    (tmp_path / "my" / "index.json").write_text(json.dumps({
+        "sfx/Wind_Chimes01.mp3": {"description": "Chuông gió leng keng mùa hè", "tags": ["chuông gió", "風鈴"],
+                                  "credit": "OtoLogic (CC BY 4.0)"},
+    }, ensure_ascii=False), encoding="utf-8")
+    hit = search_sounds("chuông gió", "sfx", lib=tmp_path, manifest=_manifest())
+    assert hit[0]["ref"] == "Wind_Chimes01" and hit[0]["match"] == "khớp"
+    assert "Chuông gió leng keng" in catalog_text(tmp_path, _manifest())
+    assert credits_for([f, tmp_path / "x.mp3"], tmp_path) == ["Wind_Chimes01: OtoLogic (CC BY 4.0)"]

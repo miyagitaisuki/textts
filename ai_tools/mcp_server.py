@@ -49,7 +49,10 @@ Quy trình nên dùng:
    Chú âm chữ Hán khó bằng 漢字{かな} (ví dụ 面接{めんせつ}). Khoảng lặng thêm: dòng "[pause=1500]".
    Khoảng lặng giữa các câu được chèn tự động, không cần thêm [pause] cho mỗi câu.
 4. Bối cảnh & hiệu ứng: khi người dùng nêu bối cảnh (công viên, quán cà phê, trời mưa, nhà ga...) hoặc
-   kịch bản có tiếng động (chuông cửa, điện thoại, gõ cửa...), gọi textts_list_sounds để xem thư viện:
+   kịch bản có tiếng động (chuông cửa, điện thoại, gõ cửa...), gọi textts_list_sounds (có thể kèm 'query',
+   vd. query="tiếng sấm") để đọc mục lục: mỗi âm có mô tả, từ khóa và "dùng tạm cho". Không cần nghe file.
+   Không có âm "khớp" thì dùng âm "gần đúng" phù hợp nhất (vd. không có sấm thì dùng mưa) và nói rõ với
+   người dùng là đang dùng tạm âm nào.
    - Nhạc/âm nền: đặt 'bgm' của textts_create_audio là danh sách lớp nền hợp bối cảnh
      (ưu tiên âm "thư viện của giáo viên" nếu khớp). Có thể chồng nhiều lớp cùng lúc, ví dụ đường phố
      trời mưa: [{"ref": "mua", "db": -20}, {"ref": "duong-pho", "db": -26}]; lớp phụ nên nhỏ hơn lớp chính.
@@ -83,7 +86,14 @@ TOOLS = [
         "giáo viên tự thêm. Trường 'ref' dùng cho 'bgm' của textts_create_audio hoặc dòng [sfx=<ref>] trong kịch bản.",
         "inputSchema": {
             "type": "object",
-            "properties": {"kind": {"type": "string", "enum": ["bgm", "sfx"], "description": "Bỏ trống để lấy cả hai"}},
+            "properties": {
+                "kind": {"type": "string", "enum": ["bgm", "sfx"], "description": "Bỏ trống để lấy cả hai"},
+                "query": {
+                    "type": "string",
+                    "description": "Âm cần tìm, mô tả bằng lời (vd. 'tiếng sấm', 'quán ăn đông người'). "
+                    "Kết quả ghi 'khớp' hoặc 'gần đúng' (dùng tạm được). Bỏ trống để xem cả mục lục.",
+                },
+            },
             "additionalProperties": False,
         },
     },
@@ -336,6 +346,8 @@ def tool_create_audio(args: dict) -> str:
     ]
     lines = [f"Đã tạo bài nghe '{res.get('title')}': {res.get('line_count')} câu thoại, {res.get('duration_s')} giây."]
     lines += [f"- {label}: {files[key]}" for key, label in labels if files.get(key)]
+    if files.get("credits"):
+        lines.append(f"- Ghi nguồn âm thanh (bắt buộc khi chia sẻ): {files['credits']}")
     for layer in res.get("bgm") or []:
         lines.append(f"- Lớp nền: {layer['path']} ({layer['db']} dB)")
     if files.get("audio") and args.get("open_folder"):
@@ -362,9 +374,13 @@ def tool_list_sounds(args: dict) -> str:
     kind = args.get("kind")
     if kind not in (None, "", "bgm", "sfx"):
         raise ToolError("kind phải là 'bgm' hoặc 'sfx'")
-    res = call_api("GET", "/api/v1/sounds" + (f"?kind={kind}" if kind else ""))
+    params = {k: v for k, v in (("kind", kind), ("q", args.get("query"))) if v}
+    res = call_api("GET", "/api/v1/sounds" + (("?" + urllib.parse.urlencode(params)) if params else ""))
     items = res.get("items", [])
     if not items:
+        if args.get("query"):
+            return (f"Không có âm nào khớp hoặc gần với '{args['query']}'. "
+                    "Gọi lại không kèm query để xem cả mục lục, hoặc báo người dùng thêm âm vào thư viện.")
         return "Thư viện âm thanh trống."
     lines = []
     for k, title in (("bgm", "Nhạc/âm nền (dùng cho 'bgm')"), ("sfx", "Hiệu ứng (dùng dòng [sfx=<ref>])")):
@@ -372,7 +388,15 @@ def tool_list_sounds(args: dict) -> str:
         if not group:
             continue
         lines.append(f"{title}:")
-        lines += [f"- ref={it['ref']!r}: {it['name']} [{it['category']}; {it['source']}]" for it in group]
+        for it in group:
+            extra = [it.get("description") or ""]
+            if it.get("tags"):
+                extra.append("từ khóa: " + ", ".join(it["tags"]))
+            if it.get("substitute_for"):
+                extra.append("dùng tạm cho: " + ", ".join(it["substitute_for"]))
+            match = f" ({it['match']})" if it.get("match") else ""
+            lines.append(f"- ref={it['ref']!r}{match}: {it['name']} — " + "; ".join(e for e in extra if e)
+                         + f" [{it['source']}]")
     return "\n".join(lines)
 
 

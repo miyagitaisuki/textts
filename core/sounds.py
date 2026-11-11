@@ -48,9 +48,19 @@ def slug(text: str) -> str:
     return re.sub(r"[^0-9a-z぀-ヿ一-鿿]+", "-", s).strip("-")
 
 
+def load_personal_index(lib: Path) -> dict:
+    """Mô tả do giáo viên ghi cho âm cá nhân: my/index.json {"bgm/ten.mp3": {"description", "tags"}}."""
+    try:
+        data = json.loads((lib / "my" / "index.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def list_sounds(kind: str | None = None, lib: Path | None = None, manifest: dict | None = None) -> list[dict]:
     lib = lib or library_dir()
     manifest = manifest if manifest is not None else load_manifest()
+    personal = load_personal_index(lib)
     pack_dir = lib / "pack" / manifest.get("version", "v1")
     out: list[dict] = []
     for it in manifest.get("items", []):
@@ -61,6 +71,7 @@ def list_sounds(kind: str | None = None, lib: Path | None = None, manifest: dict
         out.append({
             "id": it["id"], "kind": it["kind"], "name": it["name"], "category": it.get("category", ""),
             "source": "pack", "duration": it.get("duration"), "downloaded": ok, "path": str(f) if ok else None,
+            "description": it.get("description", ""), "tags": it.get("tags", []), "related": it.get("related", []),
         })
     for k in KINDS:
         if kind and k != kind:
@@ -70,9 +81,15 @@ def list_sounds(kind: str | None = None, lib: Path | None = None, manifest: dict
             continue
         for f in sorted(d.iterdir()):
             if f.suffix.lower() in AUDIO_EXTS and f.is_file():
+                meta = personal.get(f"{k}/{f.name}", {})
+                tags = meta.get("tags", [])
                 out.append({
                     "id": f"my-{k}-{f.name}", "kind": k, "name": f.stem, "category": "Của tôi",
                     "source": "mine", "duration": None, "downloaded": True, "path": str(f),
+                    "description": str(meta.get("description", "")),
+                    "tags": [str(t) for t in tags] if isinstance(tags, list) else [],
+                    "related": [str(t) for t in meta.get("related", [])] if isinstance(meta.get("related"), list) else [],
+                    "credit": str(meta.get("credit", "")),
                 })
     return out
 
@@ -116,6 +133,10 @@ def find_sound(ref: str, kind: str | None = None, *, lib: Path | None = None, ma
     partial = [it for it in ordered if any(key in k or k in key for k in keys(it) if len(k) >= 3)]
     match = exact[0] if exact else (partial[0] if len({p["id"] for p in partial}) == 1 else None)
     if not match:
+        near = search_sounds(ref, kind, lib=lib, manifest=manifest)[:5]
+        if near:
+            hint = "; ".join(f"{ref_of(n)} ({n['name']}, {n['match']})" for n in near)
+            raise SoundNotFound(f"Không có âm '{ref}'. Âm gần nhất có thể dùng tạm: {hint}")
         names = ", ".join(sorted({it["name"] for it in (partial or items)})[:12])
         raise SoundNotFound(f"Không tìm thấy âm '{ref}'" + (f". Có: {names}" if names else ""))
     if match.get("path"):
@@ -137,3 +158,114 @@ def resolve_bgm(ref: str) -> Path:
     if p.is_file():
         return p
     return find_sound(ref, "bgm")
+
+
+def ref_of(item: dict) -> str:
+    """Tên ngắn dùng trong options.bgm / [sfx=...]: mã gói bỏ tiền tố, hoặc tên file cá nhân."""
+    return item["id"].split("-", 1)[1] if item["source"] == "pack" else item["name"]
+
+
+STOPWORDS = {"tiếng", "âm", "thanh", "cái", "của", "có", "và", "ở", "trong", "ngoài", "đang", "một", "những",
+             "các", "kiểu", "loại", "nhạc", "nền", "sound", "the", "a"}
+
+
+def _vi_words(text: str, keep_marks: bool) -> list[str]:
+    """Tách âm tiết; keep_marks=False thì bỏ dấu (khi người gõ không dấu)."""
+    t = unicodedata.normalize("NFC", str(text)).lower()
+    if not keep_marks:
+        t = slug(t).replace("-", " ")
+    return [w for w in re.split(r"[^\w]+", t) if w and w not in STOPWORDS]
+
+
+def _grams(words: list[str]) -> set[str]:
+    """Cụm 1-3 âm tiết liền nhau ("sấm", "sấm động", "ô tô")."""
+    return {" ".join(words[i:i + n]) for n in (1, 2, 3) for i in range(len(words) - n + 1)}
+
+
+def search_sounds(query: str, kind: str | None = None, *, lib: Path | None = None,
+                  manifest: dict | None = None) -> list[dict]:
+    """Tìm âm theo nghĩa trong mục lục (tên, mô tả, từ khóa, "dùng tạm cho"). Không cần nghe file.
+
+    Mỗi kết quả có 'match': "khớp" (đúng âm cần tìm) hoặc "gần đúng" (âm gần giống, dùng tạm được,
+    ví dụ cần tiếng sấm nhưng chỉ có tiếng mưa). Kết quả xếp theo độ phù hợp.
+    So khớp theo cụm âm tiết, giữ dấu tiếng Việt (gõ không dấu thì so không dấu).
+    """
+    marks = slug(query).replace("-", "") != re.sub(r"[^0-9a-z]", "", str(query).lower())
+    qw = _vi_words(query, marks)
+    if not qw:
+        return []
+    qg = _grams(qw)
+    full = " ".join(qw)
+
+    def score(fields: list[str]) -> int:
+        best = 0
+        for f in fields:
+            fw = _vi_words(f, marks)
+            if not fw:
+                continue
+            fg = _grams(fw)
+            if full == " ".join(fw) or full in fg:
+                best = max(best, 10 + len(qw))  # cả cụm truy vấn có trong trường
+            elif " ".join(fw) in qg:
+                best = max(best, 5 + 2 * len(fw))  # cả trường (vd. từ khóa "sấm") nằm trong truy vấn
+            else:
+                hit = [g for g in qg & fg if " " in g or len(qw) == 1]  # 1 âm tiết chỉ tính khi truy vấn ngắn
+                if hit:
+                    best = max(best, 3 * max(len(g.split()) for g in hit))
+                elif len(qw) > 1:
+                    best = max(best, len(set(qw) & set(fw)))  # vài âm tiết rời: điểm thấp
+        return best
+
+    results = []
+    for it in list_sounds(kind, lib, manifest):
+        direct = score([it["name"], *it.get("tags", []), Path(it["path"]).stem if it.get("path") else ""])
+        desc = score([it.get("description", "")])
+        related = score(it.get("related", []))
+        direct = max(direct, desc - 1)
+        if direct >= 3 or related >= 3:
+            results.append({**it, "ref": ref_of(it), "score": max(direct * 2, related),
+                            "match": "khớp" if direct >= 3 and direct * 2 >= related else "gần đúng"})
+    return sorted(results, key=lambda r: (-r["score"], r["source"] != "mine", r["name"]))
+
+
+def catalog_text(lib: Path | None = None, manifest: dict | None = None) -> str:
+    """Mục lục thư viện dạng văn bản cho Claude/AI khác đọc (không cần nghe file)."""
+    items = list_sounds(None, lib, manifest)
+    lines = [
+        "# Mục lục thư viện âm thanh textts",
+        "",
+        "Dùng 'ref' cho options.bgm (âm nền, chồng được nhiều lớp) hoặc dòng [sfx=<ref>] trong kịch bản.",
+        "Không có âm đúng thì chọn âm có \"Dùng tạm cho\" gần nhất và báo người dùng là đang dùng tạm.",
+        "",
+    ]
+    for kind, title in (("bgm", "Nhạc / âm nền (bgm)"), ("sfx", "Hiệu ứng (sfx)")):
+        group = [i for i in items if i["kind"] == kind]
+        if not group:
+            continue
+        lines += [f"## {title}", "", "| ref | Tên | Mô tả | Từ khóa | Dùng tạm cho | Nguồn |", "|---|---|---|---|---|---|"]
+        for i in group:
+            source = (i.get("credit") or "giáo viên") if i["source"] == "mine" else "gói textts (CC0)"
+            cells = [ref_of(i), i["name"], i.get("description") or "(chưa có mô tả)", ", ".join(i.get("tags", [])),
+                     ", ".join(i.get("related", [])), source]
+            lines.append("| " + " | ".join(c.replace("|", "/") for c in cells) + " |")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def credits_for(paths: list[str | Path], lib: Path | None = None) -> list[str]:
+    """Dòng ghi công cho các âm cá nhân có ghi 'credit' (vd. 'OtoLogic (CC BY 4.0)') đã dùng trong bài."""
+    lib = lib or library_dir()
+    personal = load_personal_index(lib)
+    out: list[str] = []
+    for p in paths:
+        p = Path(p)
+        try:
+            rel = p.resolve().relative_to((lib / "my").resolve()).as_posix()
+        except (ValueError, OSError):
+            continue
+        credit = str(personal.get(rel, {}).get("credit", "")).strip()
+        if credit:
+            line = f"{p.stem}: {credit}"
+            if line not in out:
+                out.append(line)
+    return out
