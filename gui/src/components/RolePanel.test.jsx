@@ -25,6 +25,21 @@ describe("RolePanel voices", () => {
     renderPanel(undefined, []);
     expect(screen.getByRole("option", { name: "ja-JP-NanamiNeural" })).toBeTruthy();
   });
+
+  it("does not offer Edge voices for VOICEVOX when its list is empty", () => {
+    render(<RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} engine="voicevox" />);
+    expect(screen.queryByRole("option", { name: "ja-JP-NanamiNeural" })).toBeNull();
+    expect(screen.getByText(/Chưa lấy được danh sách giọng của VOICEVOX/)).toBeTruthy();
+  });
+
+  it("switches engine from the selector", () => {
+    const onChangeEngine = vi.fn();
+    render(
+      <RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} engine="edge" onChangeEngine={onChangeEngine} />,
+    );
+    fireEvent.change(screen.getByLabelText("Engine đọc"), { target: { value: "voicevox" } });
+    expect(onChangeEngine).toHaveBeenCalledWith("voicevox");
+  });
 });
 
 describe("RolePanel preset library", () => {

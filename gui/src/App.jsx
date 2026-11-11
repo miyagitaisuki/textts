@@ -218,6 +218,12 @@ export default function App() {
   const items = project?.items ?? [];
   const lineCount = useMemo(() => items.filter((it) => it.type === "line").length, [items]);
 
+  // Tải lại danh sách giọng khi mở dự án, đổi engine (kể cả hoàn tác) hoặc VOICEVOX vừa bật.
+  const projectEngine = project?.engine || "edge";
+  useEffect(() => {
+    if (filePath) loadVoices(projectEngine);
+  }, [filePath, projectEngine, voicevoxOk]);
+
   function setProject(next) {
     projectRef.current = next;
     setProjectState(next);
@@ -371,12 +377,44 @@ export default function App() {
     setPreviewUrl(null);
     setLog("");
     setErrorIds([]);
-    setVoices(res.voices ?? []);
+    setVoices([]);
     setIssues(res.issues ?? []);
     setOutput(null);
     setOutputStale(false);
     refreshSuggestions(res.data);
     loadOutputFor(res.filePath);
+  }
+
+  // Lấy danh sách giọng của engine (Edge/VOICEVOX/AivisSpeech) qua tts.py --list-voices.
+  async function loadVoices(engine) {
+    const list = (await window.textts?.listVoices?.(engine || "edge")) ?? [];
+    // Bỏ qua kết quả trễ nếu người dùng đã đổi sang engine khác trong lúc chờ.
+    if ((projectRef.current?.engine || "edge") === (engine || "edge")) setVoices(list);
+    return list;
+  }
+
+  // Đổi engine của dự án; giọng của vai không có trong engine mới được gán lần lượt theo danh sách giọng mới.
+  async function changeEngine(engine) {
+    if (!projectRef.current || (projectRef.current.engine || "edge") === engine) return;
+    const list = (await window.textts?.listVoices?.(engine)) ?? [];
+    if (engine !== "edge" && !list.length) {
+      const name = engine === "voicevox" ? "VOICEVOX" : "AivisSpeech";
+      addToast(`Không lấy được danh sách giọng của ${name}. Hãy bật ${name} trước.`, "error");
+      return;
+    }
+    const values = list.map((v) => v.value);
+    edit((p) => {
+      const ids = Object.keys(p.roles);
+      const roles = {};
+      ids.forEach((id, i) => {
+        const role = p.roles[id];
+        const keep = values.length ? values.includes(String(role.voice)) : engine === "edge";
+        roles[id] = keep ? role : { ...role, voice: values.length ? values[i % values.length] : "ja-JP-NanamiNeural" };
+      });
+      return { ...p, engine, roles };
+    });
+    setVoices(list);
+    addToast(`Đã chuyển sang ${engine === "edge" ? "Edge TTS" : engine === "voicevox" ? "VOICEVOX" : "AivisSpeech"}`, "success");
   }
 
   async function save() {
@@ -944,6 +982,8 @@ export default function App() {
             onPatchSelectedItem={(patch) => selectedId && patchItem(selectedId, patch)}
             disabled={busy}
             voices={voices}
+            engine={project.engine || "edge"}
+            onChangeEngine={changeEngine}
             recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
             library={library}
             output={output}

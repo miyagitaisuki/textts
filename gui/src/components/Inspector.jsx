@@ -12,6 +12,8 @@ export default function Inspector({
   onPatchSelectedItem,
   disabled,
   voices = [],
+  engine,
+  onChangeEngine,
   recorder,
   library,
   output,
@@ -68,6 +70,8 @@ export default function Inspector({
               onDeleteRole={onDeleteRole}
               disabled={disabled}
               voices={voices}
+              engine={engine}
+              onChangeEngine={onChangeEngine}
               recorder={recorder}
               library={library}
             />

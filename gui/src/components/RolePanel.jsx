@@ -61,7 +61,13 @@ function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled 
   );
 }
 
-// voices: [{value, label}] từ engine hiện tại; rỗng thì dùng danh sách Edge mặc định.
+export const ENGINES = [
+  { value: "edge", label: "Edge TTS (online)" },
+  { value: "voicevox", label: "VOICEVOX" },
+  { value: "aivis", label: "AivisSpeech" },
+];
+
+// voices: [{value, label}] từ engine hiện tại; rỗng thì dùng danh sách Edge mặc định (chỉ với engine Edge).
 export default function RolePanel({
   roles,
   onChange,
@@ -69,10 +75,13 @@ export default function RolePanel({
   onDeleteRole,
   disabled,
   voices = [],
+  engine = "edge",
+  onChangeEngine,
   recorder,
   library,
 }) {
-  const options = voices.length ? voices : VOICES.map((v) => ({ value: v, label: v }));
+  const isEdge = !engine || engine === "edge";
+  const options = voices.length ? voices : isEdge ? VOICES.map((v) => ({ value: v, label: v })) : [];
   return (
     <section className="roles">
       <div className="section-head" style={{ marginBottom: 8 }}>
@@ -88,6 +97,20 @@ export default function RolePanel({
           </button>
         )}
       </div>
+      {onChangeEngine && (
+        <label>
+          Engine đọc
+          <select value={engine || "edge"} disabled={disabled} onChange={(e) => onChangeEngine(e.target.value)}>
+            {ENGINES.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+          </select>
+        </label>
+      )}
+      {!isEdge && !voices.length && (
+        <div className="preset-error">
+          Chưa lấy được danh sách giọng của {ENGINES.find((e) => e.value === engine)?.label ?? engine}. Hãy bật engine
+          trên thanh trên cùng; danh sách sẽ tự tải lại khi engine chạy.
+        </div>
+      )}
       <div className="role-grid">
         {Object.entries(roles).map(([id, role]) => (
           <div key={id} className={`role-card role-${id}`}>
