@@ -1,4 +1,5 @@
-// Nguồn tải AivisSpeech Engine và bộ giọng JVNV (không đóng gói trong bộ cài).
+// Nguồn tải AivisSpeech Engine và các giọng ghim sẵn (không đóng gói trong bộ cài).
+// Khi cài, app còn lấy thêm TOÀN BỘ giọng công khai từ API AivisHub (xem fetchCatalog trong aivis-install.cjs).
 // - engine: danh sách phần archive theo đúng thứ tự, mỗi phần có tên, URL và SHA-256 (đã kiểm tra).
 // - models: danh sách file .aivmx tải trực tiếp, mỗi file có tên, URL và SHA-256 (đã kiểm tra, khớp checksum của AivisHub API).
 // Khi thiếu một trong hai, nút tải trong app bị vô hiệu hóa.

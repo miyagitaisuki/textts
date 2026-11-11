@@ -711,6 +711,7 @@ const AIVIS_DOWNLOAD_DIR = path.join(app.getPath("userData"), "aivis-download");
 const AIVIS_MODELS_DIR = path.join(app.getPath("appData"), "AivisSpeech-Engine", "Models");
 let aivisEngine = null;
 let aivisBusy = false;
+let aivisProgress = "";
 
 async function aivisState() {
   const status = aivisInstall.aivisStatus({ cfg: aivisCfg, installDir: AIVIS_DIR, modelsDir: AIVIS_MODELS_DIR });
@@ -722,6 +723,7 @@ async function aivisState() {
     managed: Boolean(aivisEngine?.managed),
     url: aivisCfg.AIVIS_URL,
     busy: aivisBusy,
+    progress: aivisBusy ? aivisProgress : "",
   };
 }
 
@@ -731,16 +733,24 @@ ipcMain.handle("aivis:install", async () => {
   if (aivisBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };
   aivisBusy = true;
   try {
-    await aivisInstall.installAivis({
+    const result = await aivisInstall.installAivis({
       cfg: aivisCfg,
       installDir: AIVIS_DIR,
       modelsDir: AIVIS_MODELS_DIR,
       downloadDir: AIVIS_DOWNLOAD_DIR,
       sevenZip: SEVEN_ZIP,
       spawnFn: spawn,
-      log: (level, msg) => logger.log(level, msg),
+      log: (level, msg) => {
+        logger.log(level, msg);
+        aivisProgress = msg.replace(/^\[AivisSpeech\]\s*/, "");
+        mainWindow?.webContents.send("tts:log", `${msg}\n`);
+      },
     });
-    return { ok: true, state: await aivisState() };
+    const state = await aivisState();
+    if (result.failed.length) {
+      return { ok: false, error: `${result.failed.length} giọng tải lỗi, bấm tải lại để thử tiếp`, state };
+    }
+    return { ok: true, state };
   } catch (err) {
     logger.log("ERROR", `[AivisSpeech] Cài đặt thất bại: ${err?.message ?? err}`);
     return { ok: false, error: err?.message ?? String(err) };
