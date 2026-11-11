@@ -38,6 +38,7 @@ class AivisProvider(TTSProvider):
     name = "aivis"
     ext = "wav"
     cache_salt = f"v1-{EMOTION_STRENGTH}"
+    supports_pause_scale = True
 
     def __init__(self, base_url: str | None = None, timeout: float = 60.0):
         self.base_url = (base_url or os.environ.get("AIVIS_URL") or DEFAULT_URL).rstrip("/")
@@ -104,6 +105,8 @@ class AivisProvider(TTSProvider):
 
             # 2. Điều chỉnh thông số
             query["speedScale"] = SPEED_SCALE[req.speed]
+            if "pauseLengthScale" in query:
+                query["pauseLengthScale"] = req.pause_scale
             if chosen_style != "ノーマル":
                 query["intonationScale"] = EMOTION_STRENGTH
 

@@ -70,9 +70,10 @@ def test_question_gap_added_after_question_before_answer(tmp_path):
         {"type": "line", "id": "L002", "src_line": 2, "role": "2", "audio": f, "plain": "あそこです。"},
         {"type": "line", "id": "L003", "src_line": 3, "role": "1", "audio": f, "plain": "ありがとう。"},
     ]
-    _, placed = build(items, {"lead_in_ms": 0, "tail_ms": 0, "turn_gap_ms": 400, "same_speaker_gap_ms": 200})
+    _, placed = build(items, {"lead_in_ms": 0, "tail_ms": 0, "turn_gap_ms": 400, "same_speaker_gap_ms": 200,
+                              "question_gap_ms": 100})
     # L001 is question: ends at ~200ms
-    # L002 is answer to L001: gap should be turn_gap_ms (400) + 100 = 500ms
+    # L002 is answer to L001: gap should be turn_gap_ms (400) + question_gap_ms (100) = 500ms
     gap_after_q = placed[1]["start_ms"] - placed[0]["end_ms"]
     assert gap_after_q == 500
 

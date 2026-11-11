@@ -5,8 +5,9 @@ from pydub import AudioSegment, effects
 
 DEFAULT_TIMING = {
     "lead_in_ms": 300,
-    "turn_gap_ms": 450,
-    "same_speaker_gap_ms": 200,
+    "turn_gap_ms": 700,
+    "same_speaker_gap_ms": 400,
+    "question_gap_ms": 300,
     "tail_ms": 500,
 }
 
@@ -41,7 +42,7 @@ def build(
             if pause_role is not None and prev_role is not None:
                 gap = t["same_speaker_gap_ms"] if pause_role == prev_role else t["turn_gap_ms"]
                 if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
-                    gap += 100
+                    gap += t["question_gap_ms"]
                 out += AudioSegment.silent(gap)
             out += AudioSegment.silent(it["ms"])
             prev_role = pause_role
@@ -62,7 +63,7 @@ def build(
         if prev_role is not None:
             gap = t["same_speaker_gap_ms"] if it["role"] == prev_role else t["turn_gap_ms"]
             if prev_plain and prev_plain.rstrip().endswith(("？", "?")):
-                gap += 100  # chờ trả lời sau câu hỏi
+                gap += t["question_gap_ms"]  # chờ trả lời sau câu hỏi
             out += AudioSegment.silent(gap)
         if it.get("delay_ms"):
             out += AudioSegment.silent(it["delay_ms"])

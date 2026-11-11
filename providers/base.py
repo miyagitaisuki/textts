@@ -12,6 +12,7 @@ class SynthRequest:
     emotion: str = "neutral"
     speed: str = "normal"
     pitch: int = 0  # Hz tương đối so với giọng gốc
+    pause_scale: float = 1.0  # độ dài chỗ ngắt ở 、 (engine nào hỗ trợ thì dùng)
 
 
 class TTSProvider(ABC):
@@ -20,6 +21,7 @@ class TTSProvider(ABC):
     name: str = "base"
     ext: str = "mp3"  # đuôi file engine trả về, dùng để đặt tên cache
     cache_salt: str = ""  # thêm vào khóa cache khi engine có tinh chỉnh phiên bản/cấu hình
+    supports_pause_scale: bool = False  # engine chỉnh được độ dài chỗ ngắt ở 、
 
     @abstractmethod
     async def synthesize(self, req: SynthRequest, out_path: str) -> None:

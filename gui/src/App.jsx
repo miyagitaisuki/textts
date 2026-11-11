@@ -985,6 +985,8 @@ export default function App() {
             voices={voices}
             engine={project.engine || "edge"}
             onChangeEngine={changeEngine}
+            timing={project.timing}
+            onChangeTiming={(timing) => edit((p) => ({ ...p, timing }))}
             recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
             library={library}
             output={output}

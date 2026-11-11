@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 
 from core.normalize import _HAS_KANJI, _clean_pron, _tokens, annotate_token
-from core.parser import RUBY_RE
+from core.parser import RUBY_RE, ruby_reading
 
 
 def _auto_ruby(text: str) -> str:
@@ -20,7 +20,7 @@ def _auto_ruby(text: str) -> str:
             sub_parts, last = [], 0
             for m in RUBY_RE.finditer(ann):
                 sub_parts.append(html.escape(ann[last:m.start()]))
-                sub_parts.append(_ruby(m.group(1), m.group(2)))
+                sub_parts.append(_ruby(m.group(1), ruby_reading(m)))
                 last = m.end()
             sub_parts.append(html.escape(ann[last:]))
             parts.append("".join(sub_parts))
@@ -47,7 +47,7 @@ def ruby_html(display: str) -> str:
     out, last = [], 0
     for m in RUBY_RE.finditer(display):
         out.append(_segment(display[last:m.start()]))
-        out.append(_ruby(m.group(1), m.group(2)))
+        out.append(_ruby(m.group(1), ruby_reading(m)))
         last = m.end()
     out.append(_segment(display[last:]))
     return "".join(out)

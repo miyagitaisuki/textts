@@ -1777,3 +1777,76 @@ input, textarea, select {
   font-size: 12px;
   color: var(--accent-amber);
 }
+
+/* Bảng Nhịp đọc (tab Mixer) */
+.timing-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.timing-panel .section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timing-panel h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.timing-panel .hint {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.timing-panel button {
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.timing-panel button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.timing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.timing-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timing-input input {
+  width: 72px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 13px;
+  text-align: right;
+}
+
+.timing-input small {
+  width: 16px;
+  color: var(--text-subtle);
+}

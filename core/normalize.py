@@ -13,7 +13,7 @@ import json
 import re
 import sys
 
-from core.parser import RUBY_RE
+from core.parser import RUBY_RE, ruby_reading
 
 _KANJI_ONLY = re.compile(r"^[一-鿿々]+$")
 _HAS_KANJI = re.compile(r"[一-鿿々]")
@@ -77,7 +77,7 @@ def reading(text: str) -> str:
 
     Chú âm `漢字{かな}` được dùng đúng như kana đã ghi, không đoán lại.
     """
-    text = RUBY_RE.sub(r"\2", text)
+    text = RUBY_RE.sub(ruby_reading, text)
     parts = []
     for surface, pron in _tokens(text):
         if pron is None or not _HAS_KANJI.search(surface):
