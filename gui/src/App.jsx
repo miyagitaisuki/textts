@@ -19,8 +19,15 @@ import ExportDialog from "./components/ExportDialog.jsx";
 import ReadingsDialog from "./components/ReadingsDialog.jsx";
 import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
 import AboutDialog from "./components/AboutDialog.jsx";
+import SoundLibraryDialog from "./components/SoundLibraryDialog.jsx";
+import VoiceBankDialog from "./components/VoiceBankDialog.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
+import StatusBar from "./components/StatusBar.jsx";
+import { PanelHeader, Splitter, WorkspaceBar } from "./components/Workspace.jsx";
+import { WORKSPACES, loadWorkspace, patchLayout, resetLayout, saveWorkspace } from "./lib/workspace.js";
 import {
   PlayIcon,
+  UsersIcon,
   PlusIcon,
   ClockIcon,
   MusicIcon,
@@ -48,10 +55,18 @@ const ENGINE_LABELS = { edge: "Edge TTS", voicevox: "VOICEVOX", aivis: "AivisSpe
 // "Xuất tất cả": bản chính + phụ đề + bản chậm + phiếu học tập + từng câu riêng.
 const EXPORT_ALL = { srt: true, slow: true, worksheet: true, exportLines: true };
 const SHORTCUTS = [
+  ["Ctrl + K", "Bảng lệnh: tìm mọi thao tác"],
   ["Alt + ↑ / ↓", "Chọn câu trước / sau"],
   ["F5", "Nghe thử câu đang chọn"],
-  ["Space / Ctrl + Space", "Phát / dừng bản đã xuất"],
-  ["Ctrl + G", "Tạo âm thanh"],
+  ["Shift + Space", "Nghe thử toàn bài (không lưu)"],
+  ["Space / Ctrl + Space", "Phát / dừng"],
+  ["J / K / L", "Lùi 3 giây / Dừng / Phát (bấm L lần nữa để tăng tốc)"],
+  ["← / →  (Shift: 1 s)", "Tua 0,1 giây"],
+  ["Home / End", "Về đầu / cuối bài"],
+  ["Ctrl + lăn chuột", "Phóng to / thu nhỏ timeline"],
+  ["Alt + Shift + 1 / 2 / 3", "Workspace Soạn thảo / Âm thanh / Xuất bản"],
+  ["Ctrl + \\", "Ẩn / hiện panel Thuộc tính"],
+  ["Ctrl + G", "Tạo & lưu âm thanh"],
   ["Ctrl + Shift + G", "Xuất tất cả"],
   ["Ctrl + Enter", "Thêm câu thoại"],
   ["Ctrl + S", "Lưu"],
@@ -79,6 +94,8 @@ export default function App() {
   const [suggestions, setSuggestions] = useState({});
   const [output, setOutput] = useState(null);
   const [outputStale, setOutputStale] = useState(false);
+  // Đường dẫn file âm thanh đã lưu gần nhất ("" nếu đang nghe bản thử hoặc chưa xuất).
+  const [outputPath, setOutputPath] = useState("");
   const [errorIds, setErrorIds] = useState([]);
   const [voices, setVoices] = useState([]);
   const [issues, setIssues] = useState([]);
@@ -99,6 +116,8 @@ export default function App() {
   const [showReadings, setShowReadings] = useState(false);
   const [showCache, setShowCache] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  // Hộp thoại ngân hàng âm thanh đang mở: { kind: "sfx" | "bgm", resolve(path) }
+  const [soundPicker, setSoundPicker] = useState(null);
   const [readingsDict, setReadingsDict] = useState({});
   const [hasWorksheet, setHasWorksheet] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -118,7 +137,30 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [timelineOpen, setTimelineOpen] = useState(true);
+  // Workspace kiểu Adobe: bố cục panel theo từng workspace, ghi nhớ giữa các lần mở.
+  const [ws, setWs] = useState(() => loadWorkspace(window.localStorage));
+  const layout = ws.layouts[ws.active];
+  const timelineOpen = layout.timeline;
+  const setTimelineOpen = (v) =>
+    setWs((s) => patchLayout(s, { timeline: typeof v === "function" ? v(s.layouts[s.active].timeline) : v }));
+  const resizeBase = useRef(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [showVoiceBank, setShowVoiceBank] = useState(false);
+
+  useEffect(() => {
+    saveWorkspace(window.localStorage, ws);
+    document.documentElement.dataset.theme = ws.theme;
+  }, [ws]);
+
+  function switchWorkspace(id) {
+    if (WORKSPACES[id]) setWs((s) => ({ ...s, active: id }));
+  }
+  function togglePanel(key) {
+    setWs((s) => patchLayout(s, { [key]: !s.layouts[s.active][key] }));
+  }
+  function toggleTheme() {
+    setWs((s) => ({ ...s, theme: s.theme === "light" ? "dark" : "light" }));
+  }
 
   // Toasts
   const [toasts, setToasts] = useState([]);
@@ -163,19 +205,47 @@ export default function App() {
     }
   }
 
-  // Spacebar để Play/Pause
+  // Phím điều khiển phát kiểu Premiere (khi không gõ chữ): Space, J/K/L, ←/→, Home/End.
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.code === "Space" && !e.ctrlKey && !e.metaKey) {
-        const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
-        if (typing) return;
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName) || e.target?.isContentEditable;
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      const a = audioRef.current;
+      if (e.code === "Space" && e.shiftKey) {
+        e.preventDefault();
+        previewAll();
+        return;
+      }
+      if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
+        return;
       }
+      if (!a || !output?.dataUrl) return;
+      const key = e.key.toLowerCase();
+      if (key === "k") {
+        a.pause();
+      } else if (key === "l") {
+        // Bấm L khi đang phát: tăng tốc 1× → 1.5× → 2×
+        if (!a.paused) changePlaybackRate(Math.min(2, playbackRate >= 1.5 ? 2 : playbackRate + 0.5));
+        else a.play().catch(() => {});
+      } else if (key === "j") {
+        seek(Math.max(0, a.currentTime - 3));
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const d = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowLeft" ? -1 : 1);
+        seek(Math.min(a.duration || 0, Math.max(0, a.currentTime + d)));
+      } else if (e.key === "Home") {
+        seek(0);
+      } else if (e.key === "End") {
+        seek(a.duration || 0);
+      } else {
+        return;
+      }
+      e.preventDefault();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [output]);
+  });
 
   useEffect(() => {
     if (window.textts?.getApiServerStatus) {
@@ -233,16 +303,16 @@ export default function App() {
 
   const library = {
     presets,
-    onSave: (name, role) => {
-      persistPresets(upsertPreset(presets, name, role));
-      addToast(`Đã lưu mẫu "${name}"`, "success");
+    onSave: (name, role, extra = {}) => {
+      persistPresets(upsertPreset(presets, name, role, extra));
+      addToast(`Đã lưu nhân vật "${name}"`, "success");
     },
     onRemove: (name) => {
       persistPresets(removePreset(presets, name));
       addToast(`Đã xóa mẫu "${name}"`, "info");
     },
     onApply: (roleId, preset) => {
-      patchRole(roleId, patchFromPreset(preset));
+      patchRole(roleId, { ...patchFromPreset(preset), name: preset.name });
       addToast(`Đã áp dụng mẫu "${preset.name}" cho vai ${roleId}`, "success");
     },
   };
@@ -305,9 +375,24 @@ export default function App() {
 
   useEffect(() => {
     function onKey(e) {
-      if (busy || !projectRef.current) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (mod && !e.shiftKey && key === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
+      if (e.altKey && e.shiftKey && ["1", "2", "3"].includes(e.code.replace("Digit", ""))) {
+        e.preventDefault();
+        switchWorkspace(Object.keys(WORKSPACES)[Number(e.code.replace("Digit", "")) - 1]);
+        return;
+      }
+      if (mod && e.key === "\\") {
+        e.preventDefault();
+        togglePanel("inspector");
+        return;
+      }
+      if (busy || !projectRef.current) return;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName);
       if (e.altKey && !mod && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         e.preventDefault();
@@ -456,12 +541,11 @@ export default function App() {
         continue;
       }
       const prepared = await prepareImport(r);
-      const outputPath = r.filePath.replace(/\.json$/, `.${exportOpts.format}`);
-      const res = await window.textts?.generate?.(r.filePath, outputPath, generateOptions());
+      const res = await window.textts?.generate?.(r.filePath, "", exportOpts.format, generateOptions());
       if (res?.code === 0) {
         done.push(r.script);
         last = prepared;
-        setLog((prev) => prev + `xong → ${outputPath}`);
+        setLog((prev) => prev + `xong → ${res.outputPath}`);
       } else {
         failed.push(r.script);
         setLog((prev) => prev + `lỗi (mã ${res?.code})\n${(res?.log || "").trim().split("\n").slice(-5).join("\n")}`);
@@ -529,7 +613,7 @@ export default function App() {
     setOutput(null);
     setOutputStale(false);
     refreshSuggestions(res.data);
-    loadOutputFor(res.filePath);
+    loadOutputFor(res.filePath, exportOpts.format, res.data?.output_name || "");
   }
 
   // Lấy danh sách giọng của engine (Edge/VOICEVOX/AivisSpeech) qua tts.py --list-voices.
@@ -610,11 +694,44 @@ export default function App() {
     return false;
   }
 
-  async function loadOutputFor(projectPath, format = "mp3") {
+  // Nạp bản âm thanh đã lưu của dự án (thư mục riêng theo tên file) để phát và vẽ timeline.
+  async function loadOutputFor(projectPath, format = "mp3", outputName = "") {
     if (!window.textts?.loadOutput) return;
-    const res = await window.textts.loadOutput(projectPath.replace(/\.json$/, `.${format}`));
+    const audio = window.textts.locateOutput
+      ? await window.textts.locateOutput(projectPath, outputName, format)
+      : projectPath.replace(/\.json$/, `.${format}`);
+    await loadSavedOutput(audio);
+  }
+
+  async function loadSavedOutput(audio) {
+    const res = audio ? await window.textts.loadOutput(audio) : null;
     setOutput(res);
+    setOutputPath(res ? audio : "");
     setOutputStale(false);
+    setHasWorksheet(Boolean(res) && Boolean(await window.textts?.worksheetExists?.(audio)));
+  }
+
+  function setOutputName(name) {
+    edit((p) => ({ ...p, output_name: name }));
+  }
+
+  // Nghe thử toàn bài từ dữ liệu đang sửa: không lưu dự án, không ghi file âm thanh nào.
+  async function previewAll() {
+    if (!projectRef.current || !filePath || !window.textts?.previewAll) return;
+    setBusy(true);
+    setLog("Nghe thử toàn bài (không lưu file)\n");
+    const res = await window.textts.previewAll(filePath, projectRef.current, generateOptions());
+    setBusy(false);
+    if (!res?.ok) {
+      setLog((prev) => prev + `\n${res?.error || "Không tạo được bản nghe thử"}`);
+      addToast(res?.error || "Không tạo được bản nghe thử", "error");
+      return;
+    }
+    setOutput({ timeline: res.timeline, dataUrl: res.dataUrl });
+    setOutputPath("");
+    setOutputStale(false);
+    setTimelineOpen(true);
+    setTimeout(() => audioRef.current?.play().catch(() => {}), 0);
   }
 
   function patchRole(id, patch) {
@@ -719,6 +836,26 @@ export default function App() {
     }));
   }
 
+  // Chèn mục ngay sau mục đang chọn (không chọn gì thì thêm cuối).
+  function insertAfterSelected(p, item) {
+    const idx = p.items.findIndex((it) => it.id === selectedId);
+    const next = [...p.items];
+    next.splice(idx < 0 ? next.length : idx + 1, 0, item);
+    return { ...p, items: next };
+  }
+
+  // Đổi cảnh: từ vị trí này âm nền đổi sang âm chọn từ thư viện (hoặc tắt nền).
+  async function addScene(off = false) {
+    let layers = [];
+    if (!off) {
+      const file = await pickFromSoundLibrary("bgm");
+      if (!file) return;
+      layers = [`${file}@-20`];
+    }
+    edit((p) => insertAfterSelected(p, { id: nextId(p.items), type: "bgm", src_line: 0, layers }));
+    addToast(off ? "Đã chèn điểm tắt âm nền" : "Đã chèn cảnh mới: âm nền đổi từ vị trí này", "info");
+  }
+
   function duplicateItem(id) {
     edit((p) => {
       const idx = p.items.findIndex((it) => it.id === id);
@@ -752,10 +889,17 @@ export default function App() {
     });
   }
 
+  // Mở ngân hàng âm thanh, trả về đường dẫn file được chọn ("" nếu đóng hộp thoại).
+  function pickFromSoundLibrary(kind) {
+    if (!window.textts?.listSounds) return window.textts?.pickAudioFile?.() ?? Promise.resolve("");
+    return new Promise((resolve) => setSoundPicker({ kind, resolve }));
+  }
+
   async function addSfx() {
     let chosenPath = "";
-    if (window.textts?.pickAudioFile) {
-      chosenPath = await window.textts.pickAudioFile();
+    if (window.textts) {
+      chosenPath = await pickFromSoundLibrary("sfx");
+      if (!chosenPath) return;
     }
     if (!chosenPath) {
       chosenPath = window.prompt("Nhập đường dẫn file hiệu ứng âm thanh (.wav, .mp3):");
@@ -828,8 +972,9 @@ export default function App() {
       shadowGap: o.shadowGap,
       exportLines: o.exportLines,
       worksheet: o.worksheet,
-      bgmPath: o.bgmPath,
-      bgmDb: o.bgmDb,
+      bgmLayers: o.bgmLayers,
+      level: o.level,
+      bilingual: o.bilingual,
     };
   }
 
@@ -840,8 +985,8 @@ export default function App() {
     setBusy(true);
     setLog("");
     const format = exportOpts.format;
-    const outputPath = projPath.replace(/\.json$/, `.${format}`);
-    const res = await window.textts?.generate?.(projPath, outputPath, generateOptions(overrides));
+    const outputName = projPath === filePath ? projectRef.current?.output_name || "" : "";
+    const res = await window.textts?.generate?.(projPath, outputName, format, generateOptions(overrides));
     setLog((prev) => prev + `\n${res?.code === 0 ? "Hoàn tất" : "Dừng với lỗi"} (mã thoát ${res?.code})`);
 
     const failed = [...(res?.log || "").matchAll(/^\s*-\s*(L\d+)\s+\(dòng/gm)].map((m) => m[1]);
@@ -852,14 +997,37 @@ export default function App() {
     }
 
     if (res?.code === 0) {
-      await loadOutputFor(projPath, format);
-      setOutputStale(false);
-      window.textts?.worksheetExists?.(projPath).then(setHasWorksheet);
-      addToast("Tạo âm thanh thành công!", "success");
+      await loadSavedOutput(res.outputPath);
+      addToast(`Đã lưu: ${res.outputPath}`, "success");
       setTimelineOpen(true);
     }
     setBusy(false);
     return res?.code === 0;
+  }
+
+  // Tự kiểm tra phát âm: tts.py --check nghe lại từng câu (Whisper) và so với kịch bản.
+  async function checkPronunciation() {
+    if (!(await save())) return;
+    setBusy(true);
+    setLog("Kiểm tra phát âm: đang nghe lại từng câu (lần đầu tải mô hình nhận dạng ~460 MB)…\n");
+    const res = await window.textts?.checkPronunciation?.(filePath, exportOpts.level);
+    setBusy(false);
+    if (!res?.ok) {
+      setLog((prev) => prev + `\n${res?.error || "Không kiểm tra được"}`);
+      addToast(res?.error || "Không kiểm tra được phát âm", "error");
+      return;
+    }
+    const bad = res.results.filter((r) => !r.ok);
+    setErrorIds(bad.map((r) => r.id));
+    setLog((prev) =>
+      prev +
+      res.results.map((r) => `${r.ok ? "✓" : "✕"} ${r.id} (${Math.round(r.score * 100)}%) nghe: ${r.heard}`).join("\n") +
+      (bad.length ? "\n\nCâu ✕: thêm chú âm 漢字{かな} cho chữ bị đọc sai rồi nghe thử lại." : "")
+    );
+    if (bad.length) {
+      addToast(`${bad.length}/${res.results.length} câu có thể bị đọc sai (đánh dấu đỏ)`, "error");
+      setTimeout(() => document.getElementById(`row-${bad[0].id}`)?.scrollIntoView({ block: "center" }), 0);
+    } else addToast(`Đã nghe lại ${res.results.length} câu: đều khớp kịch bản`, "success");
   }
 
   function exportAll() {
@@ -898,12 +1066,56 @@ export default function App() {
   function shiftItem(id, offsetMs) {
     edit((p) => ({
       ...p,
-      items: p.items.map((it) => (it.id === id ? { ...it, delay_ms: (it.delay_ms || 0) + offsetMs } : it)),
+      items: p.items.map((it) =>
+        it.id === id ? { ...it, delay_ms: Math.max(0, (it.delay_ms || 0) + offsetMs) } : it
+      ),
     }));
-    addToast(`Đã dời câu [${id}] thêm +${offsetMs}ms`, "info");
+    setOutputStale(true);
+    addToast(`Đã dời câu [${id}] ${offsetMs > 0 ? "+" : ""}${offsetMs} ms. Nghe thử toàn bài để cập nhật.`, "info");
   }
 
   const selectedItem = useMemo(() => items.find((it) => it.id === selectedId), [items, selectedId]);
+
+  // Mọi thao tác cho Bảng lệnh (Ctrl+K). disabled = không dùng được lúc này.
+  const noProject = busy || !project;
+  const commands = [
+    { id: "new", group: "Dự án", label: "Tạo kịch bản mới", run: () => setPasting(true), disabled: busy },
+    { id: "open-txt", group: "Dự án", label: "Mở kịch bản .txt", run: openScript, disabled: busy },
+    { id: "open", group: "Dự án", label: "Mở dự án", run: openProject, disabled: busy },
+    { id: "batch", group: "Dự án", label: "Xử lý hàng loạt nhiều kịch bản", run: batchExport, disabled: busy },
+    { id: "save", group: "Dự án", label: "Lưu dự án", shortcut: "Ctrl+S", run: save, disabled: noProject || !dirty },
+    { id: "folder", group: "Dự án", label: "Mở thư mục dự án", run: openProjectFolder, disabled: busy || !filePath },
+    { id: "root", group: "Dự án", label: "Đổi thư mục xuất mặc định", run: chooseOutputRoot, disabled: busy },
+    { id: "add-line", group: "Chỉnh sửa", label: "Thêm câu thoại", shortcut: "Ctrl+Enter", run: addLine, disabled: noProject },
+    { id: "add-pause", group: "Chỉnh sửa", label: "Thêm khoảng nghỉ", run: addPause, disabled: noProject },
+    { id: "add-sfx", group: "Chỉnh sửa", label: "Thêm hiệu ứng SFX từ thư viện", keywords: "am thanh chuong", run: addSfx, disabled: noProject },
+    { id: "furi", group: "Chỉnh sửa", label: "Tự chú âm furigana cả bài", run: applyAllSuggestions, disabled: noProject },
+    { id: "find", group: "Chỉnh sửa", label: "Tìm & thay", shortcut: "Ctrl+F", run: () => setSearchOpen(true), disabled: noProject },
+    { id: "undo", group: "Chỉnh sửa", label: "Hoàn tác", shortcut: "Ctrl+Z", run: undo, disabled: busy || !canUndo },
+    { id: "redo", group: "Chỉnh sửa", label: "Làm lại", shortcut: "Ctrl+Y", run: redo, disabled: busy || !canRedo },
+    { id: "voice-bank", group: "Giọng", label: "Ngân hàng giọng (biệt danh, tuổi, chất giọng)", keywords: "voice nhan vat vai", run: () => setShowVoiceBank(true) },
+    { id: "scene", group: "Chỉnh sửa", label: "Đổi cảnh: đổi âm nền từ vị trí đang chọn", keywords: "bgm canh nen", run: () => addScene(false), disabled: noProject },
+    { id: "scene-off", group: "Chỉnh sửa", label: "Tắt âm nền từ vị trí đang chọn", keywords: "bgm canh", run: () => addScene(true), disabled: noProject },
+    { id: "qc", group: "Âm thanh", label: "Kiểm tra phát âm (nghe lại, tìm câu đọc sai)", keywords: "whisper qc", run: checkPronunciation, disabled: noProject },
+    { id: "readings", group: "Chỉnh sửa", label: "Từ điển cách đọc", run: () => setShowReadings(true), disabled: busy },
+    { id: "preview-all", group: "Âm thanh", label: "Nghe thử toàn bài (không lưu)", shortcut: "Shift+Space", run: previewAll, disabled: noProject },
+    { id: "preview-line", group: "Âm thanh", label: "Nghe thử câu đang chọn", shortcut: "F5", run: () => selectedLineId() && preview(selectedLineId()), disabled: noProject || !selectedLineId() },
+    { id: "play", group: "Âm thanh", label: "Phát / dừng", shortcut: "Space", run: togglePlay, disabled: !output },
+    { id: "gen", group: "Âm thanh", label: "Tạo & lưu âm thanh", shortcut: "Ctrl+G", run: generate, disabled: noProject },
+    { id: "export-all", group: "Âm thanh", label: "Xuất tất cả (âm thanh, SRT, bản chậm, phiếu, từng câu)", shortcut: "Ctrl+Shift+G", run: exportAll, disabled: noProject },
+    { id: "export-opts", group: "Âm thanh", label: "Tùy chọn xuất", run: () => { switchWorkspace("publish"); }, disabled: noProject },
+    { id: "cache", group: "Âm thanh", label: "Quản lý bộ nhớ đệm", run: () => setShowCache(true), disabled: busy },
+    ...Object.entries(WORKSPACES).map(([id, w], i) => ({
+      id: `ws-${id}`, group: "Workspace", label: `Workspace: ${w.label}`, keywords: w.hint, shortcut: `Alt+Shift+${i + 1}`, run: () => switchWorkspace(id),
+    })),
+    { id: "panel-inspector", group: "Workspace", label: `${layout.inspector ? "Ẩn" : "Hiện"} panel Thuộc tính`, shortcut: "Ctrl+\\", run: () => togglePanel("inspector") },
+    { id: "panel-timeline", group: "Workspace", label: `${layout.timeline ? "Ẩn" : "Hiện"} panel Timeline`, run: () => togglePanel("timeline") },
+    { id: "panel-log", group: "Workspace", label: `${layout.log ? "Ẩn" : "Hiện"} panel Nhật ký`, run: () => togglePanel("log") },
+    { id: "reset", group: "Workspace", label: "Đặt lại bố cục workspace hiện tại", run: () => setWs((st) => resetLayout(st)) },
+    { id: "theme", group: "Giao diện", label: ws.theme === "light" ? "Chế độ tối" : "Chế độ sáng", keywords: "theme dark light giao dien mau", run: toggleTheme },
+    { id: "help", group: "Trợ giúp", label: "Hướng dẫn & kết nối AI", run: () => setShowAbout(true) },
+    { id: "update", group: "Trợ giúp", label: "Kiểm tra cập nhật", run: checkUpdates },
+  ];
 
   return (
     <div className="app">
@@ -939,13 +1151,14 @@ export default function App() {
           </>
         }
         status={
-          <span
-            className="status-pill"
-            title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
-          >
-            <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
-            <span>VOICEVOX</span>
-          </span>
+          <WorkspaceBar
+            state={ws}
+            onSwitch={switchWorkspace}
+            onTogglePanel={togglePanel}
+            onReset={() => setWs((s) => resetLayout(s))}
+            onToggleTheme={toggleTheme}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
         }
         tabs={[
           {
@@ -977,6 +1190,9 @@ export default function App() {
                     onClick={addPause} disabled={busy || !project} />
                   <RibbonButton icon={<MusicIcon size={20} />} label="Hiệu ứng SFX" title="Chèn hiệu ứng âm thanh SFX"
                     onClick={addSfx} disabled={busy || !project} />
+                  <RibbonButton icon={<MusicIcon size={20} />} label="Đổi cảnh"
+                    title="Đổi âm nền từ vị trí đang chọn (vào quán, ra phố...): chọn âm từ thư viện"
+                    onClick={() => addScene(false)} disabled={busy || !project} />
                 </RibbonGroup>
                 <RibbonGroup label="Chỉnh sửa">
                   <RibbonButton icon={<SearchIcon size={20} />} label="Tìm & thay" title="Tìm kiếm & Thay thế (Ctrl+F)"
@@ -992,11 +1208,16 @@ export default function App() {
                   </div>
                 </RibbonGroup>
                 <RibbonGroup label="Âm thanh">
-                  <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo âm thanh"
-                    title="Tạo file âm thanh theo tùy chọn xuất đã lưu (Ctrl+G)" onClick={generate} disabled={busy || !project} />
+                  <RibbonButton icon={<PlayIcon size={20} />} label="Nghe thử toàn bài"
+                    title="Nghe thử toàn bài với thay đổi hiện tại, không ghi file nào" onClick={previewAll} disabled={busy || !project} />
+                  <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo & lưu"
+                    title="Tạo và lưu âm thanh vào thư mục riêng mang tên file (Ctrl+G)" onClick={generate} disabled={busy || !project} />
                   <RibbonButton icon={<HardDriveIcon size={20} />} label="Xuất tất cả"
                     title="Xuất một lần: âm thanh + phụ đề SRT + bản chậm 0.8× + phiếu học tập + từng câu riêng (Ctrl+Shift+G)"
                     onClick={exportAll} disabled={busy || !project} />
+                  <RibbonButton icon={<SearchIcon size={20} />} label="Kiểm tra phát âm"
+                    title="Nghe lại từng câu bằng nhận dạng giọng nói, đánh dấu câu có thể bị đọc sai (chữ Hán đọc nhầm...)"
+                    onClick={checkPronunciation} disabled={busy || !project} />
                   <RibbonButton icon={<SlidersIcon size={20} />} label="Tùy chọn xuất"
                     title="Tùy chọn xuất file (SRT, MP3, Chậm 0.8x, Phiếu học tập)"
                     onClick={() => setShowExport(true)} disabled={busy || !project} />
@@ -1009,6 +1230,11 @@ export default function App() {
             label: "Engine giọng",
             content: (
               <>
+                <RibbonGroup label="Giọng">
+                  <RibbonButton highlight icon={<UsersIcon size={20} />} label="Ngân hàng giọng"
+                    title="Đặt biệt danh, giới tính, tuổi, chất giọng cho từng giọng để chọn vai nhanh và để AI chọn đúng"
+                    onClick={() => setShowVoiceBank(true)} />
+                </RibbonGroup>
                 <RibbonGroup label="VOICEVOX">
                   <span
                     className="status-pill"
@@ -1187,63 +1413,146 @@ export default function App() {
           )}
         </main>
       ) : (
-        <div className="studio-workspace">
-          {/* Cột trái: Trình soạn thảo kịch bản dạng Cards */}
-          <section className="script-editor-pane">
-            <div className="editor-toolbar">
-              <h2>
-                <span>Kịch bản hội thoại</span>
-                <span className="line-counter">({lineCount} câu thoại)</span>
-              </h2>
-            </div>
+        <div className="studio-main">
+          <div className="studio-workspace">
+            {/* Panel Kịch bản */}
+            <section className="panel script-editor-pane">
+              <PanelHeader title="Kịch bản hội thoại" extra={`${lineCount} câu thoại`}>
+                <button type="button" className="panel-btn" title="Nghe thử toàn bài (Shift+Space)" onClick={previewAll} disabled={busy}>
+                  ▶
+                </button>
+              </PanelHeader>
 
-            <div className="script-scroll-area">
-              <LineTable
-                items={items}
-                roles={project.roles}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                onPatch={patchItem}
-                onMove={moveItem}
-                onDelete={deleteItem}
-                onDuplicate={duplicateItem}
-                onInsertBelow={insertLineBelow}
-                onPreview={preview}
-                suggestions={suggestions}
-                onApply={applySuggestion}
-                disabled={busy}
-                errorIds={errorIds}
-                issues={issues}
+              <div className="script-scroll-area">
+                <LineTable
+                  items={items}
+                  roles={project.roles}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onPatch={patchItem}
+                  onMove={moveItem}
+                  onDelete={deleteItem}
+                  onDuplicate={duplicateItem}
+                  onInsertBelow={insertLineBelow}
+                  onPreview={preview}
+                  suggestions={suggestions}
+                  onApply={applySuggestion}
+                  disabled={busy}
+                  errorIds={errorIds}
+                  issues={issues}
+                />
+              </div>
+
+              {/* Panel Nhật ký: mở theo workspace, tự hiện khi có lỗi */}
+              {(layout.log || logHasError) && (
+                <div className="panel log-panel">
+                  <PanelHeader
+                    title="Nhật ký xử lý"
+                    extra={log ? `${log.trim().split("\n").length} dòng` : ""}
+                    onClose={layout.log ? () => togglePanel("log") : undefined}
+                  />
+                  <pre className="log">{log || "Chưa có hoạt động."}</pre>
+                </div>
+              )}
+            </section>
+
+            {/* Panel Thuộc tính (Inspector) */}
+            {layout.inspector && (
+              <>
+                <Splitter
+                  direction="vertical"
+                  label="Độ rộng panel Thuộc tính"
+                  onResizeStart={() => (resizeBase.current = layout.inspectorWidth)}
+                  onResize={(dx) => setWs((s) => patchLayout(s, { inspectorWidth: resizeBase.current - dx }))}
+                  onReset={() => setWs((s) => patchLayout(s, { inspectorWidth: WORKSPACES[s.active].layout.inspectorWidth }))}
+                />
+                <div className="panel inspector-panel" style={{ width: layout.inspectorWidth }}>
+                  <PanelHeader title="Thuộc tính" onClose={() => togglePanel("inspector")} closeTitle="Ẩn panel Thuộc tính (Ctrl+\\)" />
+                  <Inspector
+                    roles={project.roles}
+                    selectedItem={selectedItem}
+                    onChangeRole={patchRole}
+                    onAddRole={addRole}
+                    onDeleteRole={deleteRole}
+                    onPatchSelectedItem={(patch) => selectedId && patchItem(selectedId, patch)}
+                    disabled={busy}
+                    voices={voices}
+                    engine={project.engine || "edge"}
+                    onChangeEngine={changeEngine}
+                    onSampleVoice={sampleVoice}
+                    sampling={samplingId}
+                    timing={project.timing}
+                    onChangeTiming={(timing) => edit((p) => ({ ...p, timing }))}
+                    recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
+                    library={library}
+                    output={output}
+                    onOpenVoiceBank={() => setShowVoiceBank(true)}
+                    tab={layout.inspectorTab}
+                    onTabChange={(t) => setWs((s) => patchLayout(s, { inspectorTab: t }))}
+                    exportPanel={
+                      <ExportDialog
+                        inline
+                        opts={exportOpts}
+                        onChange={setExportOpts}
+                        roles={project?.roles || {}}
+                        onPickAudio={() => pickFromSoundLibrary("bgm")}
+                        onOpenWorksheet={() => outputPath && window.textts?.openWorksheet?.(outputPath)}
+                        hasWorksheet={hasWorksheet}
+                        disabled={busy}
+                        onClose={() => {}}
+                      />
+                    }
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Panel Timeline nhiều track */}
+          {layout.timeline && (
+            <>
+              <Splitter
+                direction="horizontal"
+                label="Chiều cao panel Timeline"
+                onResizeStart={() => (resizeBase.current = layout.dockHeight)}
+                onResize={(dy) => setWs((s) => patchLayout(s, { dockHeight: resizeBase.current - dy }))}
+                onReset={() => setWs((s) => patchLayout(s, { dockHeight: WORKSPACES[s.active].layout.dockHeight }))}
               />
-            </div>
-
-            {/* Chi tiết nhật ký log có thể gập mở */}
-            <details className="log-wrap" open={logHasError}>
-              <summary>Nhật ký xử lý{log ? ` (${log.trim().split("\n").length} dòng)` : ""}</summary>
-              <pre className="log">{log}</pre>
-            </details>
-          </section>
-
-          {/* Cột phải: Studio Inspector (3 Tab: Nhân vật, Mixer, Chi tiết) */}
-          <Inspector
-            roles={project.roles}
-            selectedItem={selectedItem}
-            onChangeRole={patchRole}
-            onAddRole={addRole}
-            onDeleteRole={deleteRole}
-            onPatchSelectedItem={(patch) => selectedId && patchItem(selectedId, patch)}
-            disabled={busy}
-            voices={voices}
-            engine={project.engine || "edge"}
-            onChangeEngine={changeEngine}
-            onSampleVoice={sampleVoice}
-            sampling={samplingId}
-            timing={project.timing}
-            onChangeTiming={(timing) => edit((p) => ({ ...p, timing }))}
-            recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
-            library={library}
-            output={output}
-          />
+              <div className="panel timeline-panel" style={{ height: layout.dockHeight }}>
+                {output ? (
+                  <Timeline
+                    output={output}
+                    items={items}
+                    roles={project.roles}
+                    selectedId={selectedId}
+                    onSelect={(id) => {
+                      setSelectedId(id);
+                      document.getElementById(`row-${id}`)?.scrollIntoView({ block: "nearest" });
+                    }}
+                    onShift={shiftItem}
+                    onSeek={seek}
+                    onPreview={preview}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                    playbackRate={playbackRate}
+                    onChangeRate={changePlaybackRate}
+                    disabled={busy}
+                    bgmLayers={exportOpts.bgmLayers}
+                  />
+                ) : (
+                  <div className="timeline-empty">
+                    <PanelHeader title="Timeline" onClose={() => togglePanel("timeline")} />
+                    <div className="timeline-empty-body">
+                      <p>Chưa có bản nghe để hiển thị.</p>
+                      <button type="button" className="nav-btn primary" onClick={previewAll} disabled={busy}>
+                        ▶ Nghe thử toàn bài <kbd>Shift+Space</kbd>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1258,21 +1567,8 @@ export default function App() {
         style={{ display: "none" }}
       />
 
-      {/* Bottom DAW Dock: Timeline + Transport Bar */}
+      {/* Thanh điều khiển phát + xuất */}
       <div className="studio-bottom-dock">
-        {output && timelineOpen && (
-          <Timeline
-            output={output}
-            onShift={shiftItem}
-            selectedId={selectedId}
-            disabled={busy}
-            currentTime={currentTime}
-            onSeek={seek}
-            playbackRate={playbackRate}
-            onChangeRate={changePlaybackRate}
-          />
-        )}
-
         <TransportBar
           isPlaying={isPlaying}
           currentTime={currentTime}
@@ -1280,6 +1576,11 @@ export default function App() {
           onTogglePlay={togglePlay}
           onSeek={seek}
           onGenerate={generate}
+          onPreviewAll={previewAll}
+          outputName={project?.output_name || ""}
+          defaultOutputName={filePath ? filePath.split(/[\\/]/).pop().replace(/\.json$/, "") : ""}
+          onOutputNameChange={setOutputName}
+          isPreview={Boolean(output) && !outputPath}
           onOpenExport={() => setShowExport(true)}
           onOpenOutputFolder={openProjectFolder}
           onChooseOutputRoot={chooseOutputRoot}
@@ -1293,17 +1594,54 @@ export default function App() {
         />
       </div>
 
+      <StatusBar
+        dirty={dirty}
+        hasProject={Boolean(project)}
+        lineCount={lineCount}
+        durationMs={output?.timeline?.duration_ms}
+        isPreview={Boolean(output) && !outputPath}
+        engineLabel={project ? ENGINE_LABELS[project.engine] || project.engine : ""}
+        engineOk={project?.engine === "edge" ? true : project?.engine === "voicevox" ? voicevoxOk : undefined}
+        outputRoot={outputRoot}
+        onOpenPalette={() => setPaletteOpen(true)}
+        onChooseOutputRoot={chooseOutputRoot}
+      />
+
+      {showVoiceBank && (
+        <VoiceBankDialog
+          initialEngine={project?.engine && project.engine !== "edge" ? project.engine : "voicevox"}
+          onClose={() => setShowVoiceBank(false)}
+          onChanged={() => project && loadVoices(project.engine || "edge")}
+        />
+      )}
+
+      {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+
       {/* Modals & Dialogs */}
       {showExport && (
         <ExportDialog
           opts={exportOpts}
           onChange={setExportOpts}
           roles={project?.roles || {}}
-          onPickAudio={() => window.textts?.pickAudioFile?.()}
-          onOpenWorksheet={() => window.textts?.openWorksheet?.(filePath)}
+          onPickAudio={() => pickFromSoundLibrary("bgm")}
+          onOpenWorksheet={() => outputPath && window.textts?.openWorksheet?.(outputPath)}
           hasWorksheet={hasWorksheet}
           disabled={busy}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {soundPicker && (
+        <SoundLibraryDialog
+          kind={soundPicker.kind}
+          onPick={(file) => {
+            soundPicker.resolve(file);
+            soundPicker.resolve = () => {};
+          }}
+          onClose={() => {
+            soundPicker.resolve("");
+            setSoundPicker(null);
+          }}
         />
       )}
 

@@ -28,7 +28,15 @@ const runtimeOpts = {
   exists: fs.existsSync,
 };
 const PYTHON = resolvePython({ env: process.env, ...runtimeOpts });
-const CHILD_ENV = buildChildEnv({ env: process.env, ...runtimeOpts });
+const voiceBank = require("./voice-bank.cjs");
+const USER_DATA = app.getPath("userData");
+
+// Python (tts.py, server.py) đọc thư viện âm thanh và thư mục xuất của app qua các biến này.
+const CHILD_ENV = {
+  ...buildChildEnv({ env: process.env, ...runtimeOpts }),
+  TEXTTS_USER_DATA: app.getPath("userData"),
+  TEXTTS_SOUND_LIBRARY: path.join(app.getPath("userData"), "sound-library"),
+};
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -87,9 +95,20 @@ function configFile() {
 }
 
 function readOutputRoot() {
+  let saved = "";
   try {
     const raw = JSON.parse(fs.readFileSync(configFile(), "utf-8")).outputRoot;
-    return validOutputRoot(raw, (p) => fs.existsSync(p) && fs.statSync(p).isDirectory());
+    saved = validOutputRoot(raw, (p) => fs.existsSync(p) && fs.statSync(p).isDirectory());
+  } catch {
+    // chưa có cấu hình
+  }
+  if (saved) return saved;
+  // Chưa chọn (hoặc thư mục đã bị xóa): dùng Documents/textts và ghi nhớ luôn để lần sau không hỏi lại.
+  try {
+    const fallback = path.join(app.getPath("documents"), "textts");
+    fs.mkdirSync(fallback, { recursive: true });
+    writeOutputRoot(fallback);
+    return fallback;
   } catch {
     return "";
   }
@@ -206,9 +225,46 @@ ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.
-ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = {} }) => {
+// Trình độ (N5..N1) và bản song ngữ
+function levelArgs(options) {
+  const out = [];
+  if (["N5", "N4", "N3", "N2", "N1"].includes(options.level)) out.push("--level", options.level);
+  if (options.bilingual) out.push("--bilingual");
+  return out;
+}
+
+// Các lớp nhạc/âm nền chồng nhau: mỗi lớp "--bgm <file>@<dB>". Bỏ qua file không còn tồn tại.
+function bgmArgs(options) {
+  const layers = Array.isArray(options.bgmLayers) ? options.bgmLayers : [];
+  return layers.flatMap((l) => {
+    if (!l || typeof l.path !== "string" || !fs.existsSync(l.path)) return [];
+    const db = Number.isFinite(Number(l.db)) ? Math.min(-6, Math.max(-40, Number(l.db))) : -18;
+    return ["--bgm", `${l.path}@${db}`];
+  });
+}
+
+// Mỗi lần xuất nằm trong thư mục riêng cạnh project: <thư mục dự án>/<tên file>/<tên file>.mp3 (+ bản chậm, SRT, phiếu, từng câu).
+// Tên file theo giáo trình (vd. "1-02"); bỏ trống thì dùng tên dự án.
+function exportTarget(proj, outputName, format, { create = true } = {}) {
+  const raw = String(outputName || "").trim();
+  const name = raw ? sanitizeName(raw) : path.basename(proj, ".json");
+  const dir = path.join(path.dirname(proj), name);
+  if (create) fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, `${name}.${format === "wav" ? "wav" : "mp3"}`);
+  allowDirOf(out);
+  return out;
+}
+
+// Tìm file âm thanh đã xuất của dự án (thư mục riêng theo tên file; bản cũ nằm ngay cạnh project). "" nếu chưa có.
+ipcMain.handle("output:locate", async (_evt, { projectPath, outputName, format = "mp3" }) => {
   const proj = assertAllowed(projectPath, new Set([".json"]));
-  const out = assertAllowed(outputPath, AUDIO_EXTS);
+  const candidates = [exportTarget(proj, outputName, format, { create: false }), proj.replace(/\.json$/, `.${format === "wav" ? "wav" : "mp3"}`)];
+  return candidates.find((f) => fs.existsSync(f)) ?? "";
+});
+
+ipcMain.handle("tts:generate", async (evt, { projectPath, outputName, format = "mp3", options = {} }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const out = exportTarget(proj, outputName, format);
   // Tùy chọn xuất từ giao diện; chỉ nhận đúng các cờ đã biết.
   const args = [TTS_CLI, "--project", proj, "-o", out];
   if (options.lufs !== null && options.lufs !== undefined && String(options.lufs).trim() !== "" && Number.isFinite(Number(options.lufs))) {
@@ -226,17 +282,13 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
     }
   }
   if (options.exportLines) {
-    args.push("--export-lines", path.join(path.dirname(proj), "lines"));
+    args.push("--export-lines", path.join(path.dirname(out), "lines"));
   }
   if (options.worksheet) {
-    args.push("--worksheet", proj.replace(/\.json$/, ".html"));
+    args.push("--worksheet", out.replace(/\.[^./\\]+$/, ".html"));
   }
-  if (options.bgmPath && typeof options.bgmPath === "string" && fs.existsSync(options.bgmPath)) {
-    args.push("--bgm", options.bgmPath);
-    if (options.bgmDb !== undefined && Number.isFinite(Number(options.bgmDb))) {
-      args.push("--bgm-db", String(Number(options.bgmDb)));
-    }
-  }
+  args.push(...bgmArgs(options));
+  args.push(...levelArgs(options));
   return new Promise((resolve) => {
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
@@ -251,7 +303,7 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputPath, options = 
     child.on("close", (code) => {
       logger.log(code === 0 ? "INFO" : "ERROR", `Tạo âm thanh kết thúc (mã ${code}), project: ${path.basename(proj)}`);
       if (code !== 0) logger.log("ERROR", log.trim().slice(-2000));
-      resolve({ code, log });
+      resolve({ code, log, outputPath: out });
     });
   });
 });
@@ -267,19 +319,72 @@ ipcMain.handle("file:pickAudio", async () => {
   return path.resolve(res.filePaths[0]);
 });
 
+// --- Ngân hàng âm thanh (gói CC0 của textts + thư viện cá nhân) ---
+const soundLib = require("./sound-library.cjs");
+const SOUND_PACK = require("./sound-pack.json");
+const SOUND_LIB_DIR = path.join(app.getPath("userData"), "sound-library");
+const soundLibArgs = () => ({ libDir: SOUND_LIB_DIR, manifest: SOUND_PACK });
+
+ipcMain.handle("soundlib:list", async () => soundLib.listLibrary(soundLibArgs()));
+
+ipcMain.handle("soundlib:download", async (evt, { ids } = {}) => {
+  try {
+    const count = await soundLib.downloadPack({
+      ...soundLibArgs(),
+      ids: Array.isArray(ids) ? ids.filter((i) => typeof i === "string") : undefined,
+      log: (text) => evt.sender.send("tts:log", `${text}\n`),
+    });
+    return { ok: true, count, ...soundLib.listLibrary(soundLibArgs()) };
+  } catch (err) {
+    logger.log("ERROR", `Tải gói âm thanh: ${err.message}`);
+    return { ok: false, error: `Không tải được âm thanh: ${err.message}` };
+  }
+});
+
+// Thêm file (hoặc cả thư mục, folder=true) vào thư viện cá nhân; credit ghi nguồn cho các file vừa thêm.
+ipcMain.handle("soundlib:import", async (_evt, { kind, folder = false, credit = "" } = {}) => {
+  const res = await dialog.showOpenDialog({
+    title: kind === "bgm" ? "Thêm nhạc/âm nền vào thư viện" : "Thêm hiệu ứng vào thư viện",
+    filters: folder ? undefined : [{ name: "Âm thanh", extensions: ["mp3", "wav", "ogg", "m4a"] }],
+    properties: folder ? ["openDirectory"] : ["openFile", "multiSelections"],
+  });
+  if (res.canceled) return { ok: true, added: [], ...soundLib.listLibrary(soundLibArgs()) };
+  const files = folder ? soundLib.audioFilesIn(res.filePaths[0]) : res.filePaths;
+  const added = soundLib.importToMine({ libDir: SOUND_LIB_DIR, kind, files, credit });
+  return { ok: true, added, ...soundLib.listLibrary(soundLibArgs()) };
+});
+
+ipcMain.handle("soundlib:describe", async (_evt, meta = {}) => {
+  soundLib.setMeta({ libDir: SOUND_LIB_DIR, ...meta });
+  return soundLib.listLibrary(soundLibArgs());
+});
+
+ipcMain.handle("soundlib:openFolder", async () => {
+  fs.mkdirSync(SOUND_LIB_DIR, { recursive: true });
+  soundLib.writeCatalog(SOUND_LIB_DIR);
+  return shell.openPath(SOUND_LIB_DIR);
+});
+
+ipcMain.handle("soundlib:remove", async (_evt, { file }) => {
+  soundLib.removeMine({ libDir: SOUND_LIB_DIR, file });
+  return soundLib.listLibrary(soundLibArgs());
+});
+
+ipcMain.handle("soundlib:read", async (_evt, { file }) => soundLib.readAsDataUrl({ libDir: SOUND_LIB_DIR, file }));
+
 // Mở phiếu in HTML bằng trình duyệt mặc định.
-ipcMain.handle("worksheet:open", async (_evt, { projectPath }) => {
-  const proj = assertAllowed(projectPath, new Set([".json"]));
-  const htmlPath = proj.replace(/\.json$/, ".html");
+// Phiếu học tập nằm cạnh file âm thanh đã xuất (cùng thư mục, cùng tên, đuôi .html).
+ipcMain.handle("worksheet:open", async (_evt, { audioPath }) => {
+  const htmlPath = assertAllowed(audioPath, AUDIO_EXTS).replace(/\.[^./\\]+$/, ".html");
   if (!fs.existsSync(htmlPath)) return { error: "Chưa có file phiếu học tập" };
   const err = await shell.openPath(htmlPath);
   return err ? { error: err } : { ok: true };
 });
 
 // Kiểm tra sự tồn tại của file phiếu học tập.
-ipcMain.handle("worksheet:exists", async (_evt, { projectPath }) => {
-  const proj = assertAllowed(projectPath, new Set([".json"]));
-  const htmlPath = proj.replace(/\.json$/, ".html");
+ipcMain.handle("worksheet:exists", async (_evt, { audioPath }) => {
+  if (!audioPath) return false;
+  const htmlPath = assertAllowed(audioPath, AUDIO_EXTS).replace(/\.[^./\\]+$/, ".html");
   return fs.existsSync(htmlPath);
 });
 
@@ -354,8 +459,8 @@ ipcMain.handle("presets:save", async (_evt, { presets }) => {
 });
 
 // Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
-ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
-  const eng = engine || "edge";
+// Danh sách giọng thô của engine (tts.py --list-voices) và ghi nhớ tên giọng vào ngân hàng giọng.
+function rawVoices(eng) {
   return new Promise((resolve) => {
     const child = spawn(PYTHON, [TTS_CLI, "--list-voices", eng], { cwd: REPO_ROOT, env: CHILD_ENV });
     let out = "";
@@ -363,13 +468,31 @@ ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
     child.on("error", () => resolve([]));
     child.on("close", (code) => {
       try {
-        resolve(code === 0 ? JSON.parse(out) : []);
+        const list = code === 0 ? JSON.parse(out) : [];
+        if (list.length) voiceBank.rememberLabels(USER_DATA, eng, list);
+        resolve(list);
       } catch {
         resolve([]);
       }
     });
   });
+}
+
+// Ô chọn giọng của vai: kèm biệt danh/tuổi/chất giọng từ ngân hàng giọng, yêu thích lên đầu, ẩn giọng bị ẩn.
+ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
+  const eng = engine || "edge";
+  const list = await rawVoices(eng);
+  return voiceBank.decorateOptions(eng, list, voiceBank.readBank(USER_DATA));
 });
+
+// Ngân hàng giọng: giọng thô của engine + ghi chú đã lưu (kể cả giọng đã ghi nhớ khi engine đang tắt).
+ipcMain.handle("voicebank:get", async (_evt, { engine } = {}) => {
+  const eng = engine || "edge";
+  const list = await rawVoices(eng);
+  return { engine: eng, online: list.length > 0, voices: list, bank: voiceBank.readBank(USER_DATA) };
+});
+
+ipcMain.handle("voicebank:set", async (_evt, entry = {}) => voiceBank.setVoice(USER_DATA, entry));
 
 // Kiểm tra kịch bản đã lưu (tts.py --lint): trả về [{id, level, message}].
 ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
@@ -430,6 +553,85 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   const b64 = fs.readFileSync(outPath).toString("base64");
   fs.rmSync(outPath, { force: true });
   return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
+});
+
+// Nghe thử toàn bài: dựng âm thanh từ dữ liệu đang sửa (chưa cần lưu) vào thư mục tạm,
+// trả về audio + timeline để phát ngay rồi xóa sạch. Không ghi gì vào thư mục dự án/thư mục xuất.
+ipcMain.handle("tts:previewAll", async (evt, { projectPath, data, options = {} }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const base = path.dirname(proj);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "textts-preview-all-"));
+  try {
+    const project = {
+      ...data,
+      items: (data?.items ?? []).map((it) =>
+        it?.type === "sfx" && it.path && !path.isAbsolute(it.path) ? { ...it, path: path.resolve(base, it.path) } : it
+      ),
+    };
+    const tmpProj = path.join(tmp, "preview.json");
+    fs.writeFileSync(tmpProj, JSON.stringify(project), "utf-8");
+    const out = path.join(tmp, "preview.mp3");
+    const args = [TTS_CLI, "--project", tmpProj, "-o", out];
+    if (options.lufs !== null && options.lufs !== undefined && String(options.lufs).trim() !== "" && Number.isFinite(Number(options.lufs))) {
+      args.push("--lufs", String(Number(options.lufs)));
+    }
+    args.push(...bgmArgs(options), ...levelArgs(options));
+    const result = await new Promise((resolve) => {
+      const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
+      let log = "";
+      const send = (chunk) => {
+        const text = chunk.toString("utf-8");
+        log += text;
+        evt.sender.send("tts:log", text);
+      };
+      child.stdout.on("data", send);
+      child.stderr.on("data", send);
+      child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
+      child.on("close", (code) => resolve({ code, log }));
+    });
+    const timelinePath = path.join(tmp, "preview.timeline.json");
+    if (result.code !== 0 || !fs.existsSync(out) || !fs.existsSync(timelinePath)) {
+      logger.log("ERROR", `Nghe thử toàn bài thất bại (mã ${result.code}): ${result.log.trim().slice(-2000)}`);
+      return { ok: false, code: result.code, log: result.log, error: friendlyPythonError(result.log, PYTHON) || "Không tạo được bản nghe thử" };
+    }
+    return {
+      ok: true,
+      log: result.log,
+      timeline: JSON.parse(fs.readFileSync(timelinePath, "utf-8")),
+      dataUrl: `data:audio/mpeg;base64,${fs.readFileSync(out).toString("base64")}`,
+    };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// Tự kiểm tra phát âm: tts.py --project <file> --check in JSON kết quả từng câu.
+ipcMain.handle("tts:check", async (evt, { projectPath, level }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const args = [TTS_CLI, "--project", proj, "--check"];
+  if (["N5", "N4", "N3", "N2", "N1"].includes(level)) args.push("--level", level);
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => {
+      err += c;
+      evt.sender.send("tts:log", c.toString("utf-8"));
+    });
+    child.on("error", (e) => resolve({ ok: false, error: spawnErrorText(e) }));
+    child.on("close", (code) => {
+      if (code === 0 || code === 1) {
+        try {
+          return resolve({ ok: true, results: JSON.parse(out.trim().split("\n").pop()) });
+        } catch {
+          // rơi xuống báo lỗi
+        }
+      }
+      logger.log("ERROR", `Kiểm tra phát âm thất bại (mã ${code}): ${err.slice(-1500)}`);
+      resolve({ ok: false, error: err.trim().split("\n").pop() || `Kiểm tra thất bại (mã ${code})` });
+    });
+  });
 });
 
 // Cấu hình MCP cho Claude Desktop: chạy ai_tools/mcp_server.py bằng đúng Python mà textts đang dùng.
@@ -671,6 +873,7 @@ const AIVIS_DOWNLOAD_DIR = path.join(app.getPath("userData"), "aivis-download");
 const AIVIS_MODELS_DIR = path.join(app.getPath("appData"), "AivisSpeech-Engine", "Models");
 let aivisEngine = null;
 let aivisBusy = false;
+let aivisProgress = "";
 
 async function aivisState() {
   const status = aivisInstall.aivisStatus({ cfg: aivisCfg, installDir: AIVIS_DIR, modelsDir: AIVIS_MODELS_DIR });
@@ -682,6 +885,7 @@ async function aivisState() {
     managed: Boolean(aivisEngine?.managed),
     url: aivisCfg.AIVIS_URL,
     busy: aivisBusy,
+    progress: aivisBusy ? aivisProgress : "",
   };
 }
 
@@ -691,16 +895,24 @@ ipcMain.handle("aivis:install", async () => {
   if (aivisBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };
   aivisBusy = true;
   try {
-    await aivisInstall.installAivis({
+    const result = await aivisInstall.installAivis({
       cfg: aivisCfg,
       installDir: AIVIS_DIR,
       modelsDir: AIVIS_MODELS_DIR,
       downloadDir: AIVIS_DOWNLOAD_DIR,
       sevenZip: SEVEN_ZIP,
       spawnFn: spawn,
-      log: (level, msg) => logger.log(level, msg),
+      log: (level, msg) => {
+        logger.log(level, msg);
+        aivisProgress = msg.replace(/^\[AivisSpeech\]\s*/, "");
+        mainWindow?.webContents.send("tts:log", `${msg}\n`);
+      },
     });
-    return { ok: true, state: await aivisState() };
+    const state = await aivisState();
+    if (result.failed.length) {
+      return { ok: false, error: `${result.failed.length} giọng tải lỗi, bấm tải lại để thử tiếp`, state };
+    }
+    return { ok: true, state };
   } catch (err) {
     logger.log("ERROR", `[AivisSpeech] Cài đặt thất bại: ${err?.message ?? err}`);
     return { ok: false, error: err?.message ?? String(err) };
@@ -768,9 +980,10 @@ ipcMain.handle("apiServer:toggle", async () => {
   }
 
   const serverScript = path.join(REPO_ROOT, "server.py");
+  // Bài AI tạo được lưu vào cùng thư mục xuất người dùng đã chọn (mỗi bài một thư mục con theo tên file).
   apiServerProcess = spawn(PYTHON, [serverScript, "--port", String(API_PORT)], {
     cwd: REPO_ROOT,
-    env: CHILD_ENV,
+    env: { ...CHILD_ENV, TEXTTS_OUTPUT_DIR: readOutputRoot() || "" },
   });
 
   apiServerProcess.stdout.on("data", (chunk) => {

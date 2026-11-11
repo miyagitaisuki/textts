@@ -2,7 +2,8 @@
 // chưa cấu hình -> tải thêm -> bật -> đang chạy.
 import { useEffect, useState } from "react";
 
-export default function EngineButton({ name, api, confirmText, startHint = "" }) {
+// `extra`: thao tác phụ khi engine đã cài (vd. tải thêm giọng mới): { label, title, confirmText, run }.
+export default function EngineButton({ name, api, confirmText, startHint = "", extra = null }) {
   const [state, setState] = useState(null);
   const [message, setMessage] = useState("");
 
@@ -37,7 +38,7 @@ export default function EngineButton({ name, api, confirmText, startHint = "" })
   let title;
   let disabled = false;
   if (state.busy) {
-    label = `${name}: đang tải…`;
+    label = `${name}: ${state.progress || "đang tải…"}`;
     title = `Đang tải ${name}, vui lòng chờ`;
     disabled = true;
   } else if (state.configured === false) {
@@ -56,7 +57,15 @@ export default function EngineButton({ name, api, confirmText, startHint = "" })
     disabled = true;
   }
 
-  return (
+  async function onExtra() {
+    if (!window.confirm(extra.confirmText)) return;
+    setMessage(`Đang tải ${name}…`);
+    const res = await extra.run();
+    setMessage(res?.ok ? "" : `Lỗi: ${res?.error ?? "không rõ"}`);
+    refresh();
+  }
+
+  const button = (
     <button className="nav-btn ghost" onClick={onClick} disabled={disabled} title={title}>
       <span>{label}</span>
       {message && (
@@ -65,5 +74,14 @@ export default function EngineButton({ name, api, confirmText, startHint = "" })
         </span>
       )}
     </button>
+  );
+  if (!extra || !state.installed || state.busy) return button;
+  return (
+    <>
+      {button}
+      <button className="nav-btn ghost" onClick={onExtra} title={extra.title}>
+        <span>{extra.label}</span>
+      </button>
+    </>
   );
 }

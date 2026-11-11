@@ -1,15 +1,15 @@
 // Bảng "Nhịp đọc": khoảng lặng tự động giữa các câu thoại và ngắt nghỉ trong một câu.
 // Giá trị lưu ở project.timing (xem core/models.py Timing).
 
-// Mức đề xuất cho bài nghe của người học (khớp với mặc định trong core/models.py).
+// Mức đề xuất: gần hội thoại tự nhiên; chỗ chờ cho học viên dùng chế độ shadow (khớp với mặc định trong core/models.py).
 export const RECOMMENDED_TIMING = {
-  lead_in_ms: 300,
-  turn_gap_ms: 1400,
-  same_speaker_gap_ms: 800,
-  question_gap_ms: 300,
-  sentence_pause_ms: 800,
+  lead_in_ms: 2000,
+  turn_gap_ms: 600,
+  same_speaker_gap_ms: 400,
+  question_gap_ms: 200,
+  sentence_pause_ms: 500,
   comma_pause_scale: 1.5,
-  tail_ms: 500,
+  tail_ms: 2000,
 };
 
 const FIELDS = [

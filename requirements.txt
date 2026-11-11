@@ -12,3 +12,4 @@ fastapi>=0.110.0
 uvicorn>=0.28.0
 httpx>=0.27.0
 aiohttp>=3.9
+faster-whisper>=1.0   # tự kiểm tra phát âm (core/qc.py); mô hình ~460 MB tải lần đầu dùng

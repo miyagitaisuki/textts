@@ -8,6 +8,10 @@
         "type": "string",
         "description": "Tên bài học hoặc chủ đề, ví dụ 'Bai_10_Hoi_Duong' (không dấu, viết liền hoặc dùng gạch dưới)"
       },
+      "filename": {
+        "type": "string",
+        "description": "Tên file theo giáo trình, đúng số track in trong sách, ví dụ '1-02' cho ♪1-02. Mọi file của bài được lưu trong thư mục riêng mang tên này."
+      },
       "script": {
         "type": "string",
         "description": "Kịch bản hội thoại tiếng Nhật. Mỗi câu thoại trên một dòng, bắt đầu bằng số vai ví dụ '[1] すみません' hoặc '1 すみません'. Có thể dùng 漢字{かな} để chỉ định rõ cách đọc, [pause=1000] để tạo khoảng lặng 1 giây."
@@ -25,6 +29,18 @@
             "type": "string",
             "enum": ["mp3", "wav"],
             "default": "mp3"
+          },
+          "bgm": {
+            "type": "array",
+            "description": "Các lớp nhạc/âm nền phát chồng nhau suốt bài, lấy từ thư viện (GET /api/v1/sounds?kind=bgm). Ví dụ đường phố trời mưa: [{\"ref\": \"mua\", \"db\": -20}, {\"ref\": \"duong-pho\", \"db\": -26}]",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": { "type": "string" },
+                "db": { "type": "number", "minimum": -40, "maximum": -6 }
+              },
+              "required": ["ref"]
+            }
           },
           "slow": {
             "type": "boolean",

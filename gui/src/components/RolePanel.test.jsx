@@ -46,15 +46,15 @@ describe("RolePanel preset library", () => {
   it("saves the current role as a named preset", () => {
     const onSave = vi.fn();
     renderPanel({ presets: [], onSave, onApply: () => {}, onRemove: () => {} });
-    fireEvent.change(screen.getByPlaceholderText("Tên mẫu mới"), { target: { value: "Vui" } });
-    fireEvent.click(screen.getByRole("button", { name: "Lưu mẫu" }));
-    expect(onSave).toHaveBeenCalledWith("Vui", ROLES[1]);
+    fireEvent.change(screen.getByPlaceholderText("Tên nhân vật (vd. Minh)"), { target: { value: "Vui" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu nhân vật" }));
+    expect(onSave).toHaveBeenCalledWith("Vui", ROLES[1], { engine: "edge", description: "" });
   });
 
   it("shows the validation error from an empty name", () => {
     const onSave = vi.fn(() => { throw new Error("Tên mẫu không được để trống"); });
     renderPanel({ presets: [], onSave, onApply: () => {}, onRemove: () => {} });
-    fireEvent.click(screen.getByRole("button", { name: "Lưu mẫu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu nhân vật" }));
     expect(screen.getByText("Tên mẫu không được để trống")).toBeTruthy();
   });
 

@@ -12,8 +12,10 @@ export const DEFAULT_SETTINGS = {
   shadowGap: 1500,
   exportLines: false,
   worksheet: true,
-  bgmPath: "",
-  bgmDb: -18,
+  // Các lớp nhạc/âm nền phát chồng lên nhau suốt bài: [{ path, db }]
+  bgmLayers: [],
+  level: "", // "" | N5..N1
+  bilingual: false,
 };
 const SETTINGS_KEY = "textts.settings";
 
@@ -23,10 +25,14 @@ export function presetFromRole(role) {
 }
 
 /** Thêm hoặc ghi đè mẫu theo tên; danh sách luôn xếp theo tên. */
-export function upsertPreset(list, name, role) {
+// Mẫu vai = nhân vật cố định của giáo trình (Minh, Yui...): kèm engine và mô tả để AI dùng lại đúng giọng.
+export function upsertPreset(list, name, role, extra = {}) {
   const trimmed = name.trim();
-  if (!trimmed) throw new Error("Tên mẫu không được để trống");
-  return [...list.filter((p) => p.name !== trimmed), { name: trimmed, ...presetFromRole(role) }]
+  if (!trimmed) throw new Error("Tên nhân vật không được để trống");
+  const meta = {};
+  if (extra.engine) meta.engine = extra.engine;
+  if (extra.description?.trim()) meta.description = extra.description.trim();
+  return [...list.filter((p) => p.name !== trimmed), { name: trimmed, ...presetFromRole(role), ...meta }]
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -42,7 +48,14 @@ export function patchFromPreset(preset) {
 /** Đọc cài đặt chung đã lưu; dữ liệu hỏng thì dùng mặc định. */
 export function loadSettings(storage) {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(storage.getItem(SETTINGS_KEY) || "{}") };
+    const saved = JSON.parse(storage.getItem(SETTINGS_KEY) || "{}");
+    // Bản cũ chỉ có một nhạc nền (bgmPath/bgmDb): chuyển thành một lớp.
+    if (!Array.isArray(saved.bgmLayers) && saved.bgmPath) {
+      saved.bgmLayers = [{ path: saved.bgmPath, db: Number.isFinite(saved.bgmDb) ? saved.bgmDb : -18 }];
+    }
+    delete saved.bgmPath;
+    delete saved.bgmDb;
+    return { ...DEFAULT_SETTINGS, ...saved };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

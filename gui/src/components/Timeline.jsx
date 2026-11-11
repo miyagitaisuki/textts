@@ -1,267 +1,336 @@
-// Timeline: sóng âm của bản đầu ra, tô màu theo vai.
-// Click để tua. Kéo một câu sang phải để dời nó về phía sau (lưu vào delay_ms).
-import { useEffect, useRef, useState } from "react";
+// Timeline nhiều track kiểu Premiere/Audition:
+// mỗi vai một track (clip = câu thoại), track SFX, track nhạc nền và track tổng (sóng âm).
+// - Nhấp thước/khoảng trống: tua. Nhấp clip: chọn câu. Nhấp đúp clip: nghe thử câu đó.
+// - Kéo clip sang trái/phải: dời câu (lưu vào delay_ms, không nhỏ hơn 0).
+// - Ctrl + lăn chuột hoặc nút −/+: phóng to/thu nhỏ; "Vừa khung" để xem toàn bài.
+import { useEffect, useMemo, useRef, useState } from "react";
 
-const ROLE_COLORS = { "1": "#34d399", "2": "#60a5fa", "3": "#c084fc", "4": "#fbbf24", "5": "#f43f5e" };
+export const ROLE_COLORS = { "1": "#34d399", "2": "#60a5fa", "3": "#c084fc", "4": "#fbbf24", "5": "#f43f5e" };
+const roleColor = (r) => ROLE_COLORS[r] || "#94a3b8";
 const DRAG_THRESHOLD_PX = 4;
-const CANVAS_CSS_HEIGHT = 120;
+const MIN_PX_PER_SEC = 4;
+const MAX_PX_PER_SEC = 400;
+const HEADER_W = 168;
 
-// Thước thời gian: vạch mỗi 2, 10 hoặc 30 giây tùy độ dài.
-function Ruler({ durationMs }) {
-  const totalS = durationMs / 1000;
-  const step = totalS <= 20 ? 2 : totalS <= 120 ? 10 : 30;
-  const ticks = [];
-  for (let s = 0; s <= totalS; s += step) ticks.push(s);
-  return (
-    <div className="ruler" aria-hidden="true">
-      {ticks.map((s) => (
-        <span key={s} style={{ left: `${(s / totalS) * 100}%` }}>
-          {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
-        </span>
-      ))}
-    </div>
-  );
+function fmt(ms) {
+  const s = Math.max(0, ms) / 1000;
+  const m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(1).padStart(4, "0")}`;
 }
 
-// Thanh VU: mức của từng vai tại vị trí phát hiện tại.
-function VuMeters({ levels, nowMs, durationMs }) {
-  const roles = Object.keys(levels ?? {});
-  const bins = roles.length ? levels[roles[0]].length : 0;
-  const index = bins ? Math.min(bins - 1, Math.max(0, Math.floor((nowMs / durationMs) * bins))) : 0;
-  return (
-    <div className="vu">
-      {roles.map((role) => {
-        const level = levels[role][index] ?? 0;
-        const color = ROLE_COLORS[role] || "#94a3b8";
-        return (
-          <div key={role} className="vu-channel" title={`Vai ${role}: ${Math.round(level * 100)}%`}>
-            <div className="vu-track">
-              <div
-                className="vu-fill"
-                style={{
-                  height: `${Math.round(level * 100)}%`,
-                  background: level > 0.9 ? "#ef4444" : level > 0.7 ? "#facc15" : color,
-                }}
-              />
-            </div>
-            <span className="fader-label" style={{ color }}>
-              [{role}]
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
+function tickStep(pxPerSec) {
+  // khoảng vạch sao cho mỗi nhãn cách nhau ít nhất ~70px
+  for (const step of [0.5, 1, 2, 5, 10, 15, 30, 60, 120]) if (step * pxPerSec >= 70) return step;
+  return 300;
+}
+
+function baseName(p = "") {
+  return String(p).split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
 }
 
 export default function Timeline({
   output,
-  onShift,
+  items: projectItems = [],
+  roles = {},
   selectedId,
-  disabled,
-  currentTime = 0,
+  onSelect,
+  onShift,
   onSeek,
+  onPreview,
+  currentTime = 0,
+  isPlaying = false,
   playbackRate = 1.0,
   onChangeRate,
+  disabled,
+  bgmLayers = [],
 }) {
-  const canvasRef = useRef(null);
+  const scrollRef = useRef(null);
   const dragRef = useRef(null);
-  const [drag, setDrag] = useState(null); // {id, offsetMs}
-  const { peaks, items = [], duration_ms = 0, role_levels = {} } = output?.timeline || {};
-  const duration = duration_ms / 1000;
+  const [drag, setDrag] = useState(null); // { id, offsetMs }
+  const [viewW, setViewW] = useState(800);
+  const [bodyH, setBodyH] = useState(240);
+  const bodyRef = useRef(null);
+  const [zoom, setZoom] = useState(null); // null = vừa khung
+  const tl = output?.timeline || {};
+  const { peaks = [], items = [], duration_ms = 0, role_levels = {}, sfx = [] } = tl;
+  // Các lớp nền: lấy từ timeline của bản đã dựng; bản cũ chỉ có một chuỗi đường dẫn.
+  const bgm = (Array.isArray(tl.bgm) ? tl.bgm : tl.bgm ? [{ path: tl.bgm }] : bgmLayers).filter((l) => l?.path);
   const nowMs = currentTime * 1000;
 
+  // Đo bề rộng vùng cuộn để tính mức "vừa khung".
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth || 1200;
-    const pxW = Math.round(cssW * dpr);
-    const pxH = Math.round(CANVAS_CSS_HEIGHT * dpr);
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setViewW(el.clientWidth || 800);
+      setBodyH(bodyRef.current?.clientHeight || 240);
+    });
+    ro.observe(el);
+    if (bodyRef.current) ro.observe(bodyRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-    if (canvas.width !== pxW || canvas.height !== pxH) {
-      canvas.width = pxW;
-      canvas.height = pxH;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const fitPx = duration_ms ? Math.max(MIN_PX_PER_SEC, (viewW - 24) / (duration_ms / 1000)) : 50;
+  const pxPerSec = zoom ?? fitPx;
+  const contentW = Math.max(viewW, (duration_ms / 1000) * pxPerSec + 24);
+  const x = (ms) => (ms / 1000) * pxPerSec;
 
-    const w = cssW;
-    const h = CANVAS_CSS_HEIGHT;
-    ctx.clearRect(0, 0, w, h);
+  // Khi đang phát, giữ playhead trong khung nhìn (cuộn theo trang như Premiere).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !isPlaying) return;
+    const px = x(nowMs);
+    if (px < el.scrollLeft || px > el.scrollLeft + el.clientWidth - 40) el.scrollLeft = Math.max(0, px - 40);
+  }, [nowMs, isPlaying, pxPerSec]);
 
-    // Nền tối
-    ctx.fillStyle = "#0c101a";
-    ctx.fillRect(0, 0, w, h);
+  const textById = useMemo(
+    () => Object.fromEntries(projectItems.filter((i) => i.type === "line").map((i) => [i.id, i])),
+    [projectItems]
+  );
+  const roleIds = useMemo(() => {
+    const ids = new Set([...Object.keys(roles), ...items.map((i) => i.role)]);
+    return [...ids].sort((a, b) => Number(a) - Number(b));
+  }, [roles, items]);
 
-    // Đường lưới nhẹ
-    ctx.strokeStyle = "#1b2234";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h);
-    ctx.stroke();
-
-    // Sóng âm
-    if (peaks && peaks.length) {
-      const step = w / peaks.length;
-      for (let i = 0; i < peaks.length; i++) {
+  // Màu từng cột sóng theo vai đang nói tại thời điểm đó.
+  const bars = useMemo(
+    () =>
+      peaks.map((p, i) => {
         const t = (i / peaks.length) * duration_ms;
         const cur = items.find((it) => t >= it.start_ms && t < it.end_ms);
-        const col = (cur && ROLE_COLORS[cur.role]) || "#334155";
-        ctx.fillStyle = col;
-        const amp = peaks[i] * (h / 2 - 8);
-        ctx.fillRect(i * step, h / 2 - amp, Math.max(1.5, step - 0.5), amp * 2);
-      }
-    }
+        return { h: Math.max(2, p * 100), color: cur ? roleColor(cur.role) : "#475569" };
+      }),
+    [peaks, items, duration_ms]
+  );
 
-    // Viền các câu
-    ctx.lineWidth = 1.5;
-    for (const it of items) {
-      const x1 = (it.start_ms / duration_ms) * w;
-      const x2 = (it.end_ms / duration_ms) * w;
-      const isCur = it.id === selectedId;
-      ctx.strokeStyle = isCur ? "#ffffff" : ROLE_COLORS[it.role] || "#64748b";
-      ctx.strokeRect(x1, 2, Math.max(2, x2 - x1), h - 4);
-      if (isCur) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-        ctx.fillRect(x1, 2, Math.max(2, x2 - x1), h - 4);
-      }
-    }
-
-    // Đang kéo dời câu
-    if (drag) {
-      const it = items.find((p) => p.id === drag.id);
-      if (it) {
-        const nextStart = it.start_ms + drag.offsetMs;
-        const len = it.end_ms - it.start_ms;
-        const x1 = (nextStart / duration_ms) * w;
-        const x2 = ((nextStart + len) / duration_ms) * w;
-        ctx.fillStyle = "rgba(251, 191, 36, 0.35)";
-        ctx.fillRect(x1, 2, Math.max(2, x2 - x1), h - 4);
-        ctx.strokeStyle = "#fbbf24";
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(x1, 2, Math.max(2, x2 - x1), h - 4);
-        ctx.setLineDash([]);
-      }
-    }
-
-    // Con trỏ phát (Playhead)
-    const playX = (currentTime / (duration || 1)) * w;
-    ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(playX, 0);
-    ctx.lineTo(playX, h);
-    ctx.stroke();
-
-    // Đầu kim tam giác
-    ctx.fillStyle = "#10b981";
-    ctx.beginPath();
-    ctx.moveTo(playX - 5, 0);
-    ctx.lineTo(playX + 5, 0);
-    ctx.lineTo(playX, 7);
-    ctx.closePath();
-    ctx.fill();
-  }, [peaks, items, duration_ms, selectedId, drag, currentTime, duration]);
-
-  function timeAt(e) {
-    const rect = canvasRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    return ratio * (duration || 0);
+  function setZoomClamped(next) {
+    const el = scrollRef.current;
+    const center = el ? (el.scrollLeft + el.clientWidth / 2) / pxPerSec : 0;
+    const z = Math.min(MAX_PX_PER_SEC, Math.max(MIN_PX_PER_SEC, next));
+    setZoom(Math.abs(z - fitPx) < 0.5 ? null : z);
+    requestAnimationFrame(() => {
+      if (el) el.scrollLeft = Math.max(0, center * z - el.clientWidth / 2);
+    });
   }
 
-  function itemAtMs(ms) {
-    return items.find((it) => ms >= it.start_ms && ms < it.end_ms);
+  function onWheel(e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    setZoomClamped(pxPerSec * (e.deltaY < 0 ? 1.25 : 0.8));
   }
 
-  function onPointerDown(e) {
-    if (disabled || !duration) return;
-    const t = timeAt(e);
-    const it = itemAtMs(t * 1000);
-    dragRef.current = {
-      startX: e.clientX,
-      tDown: t,
-      targetId: it ? it.id : null,
-      moved: false,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+  function msAt(e) {
+    const el = scrollRef.current;
+    const rect = el.getBoundingClientRect();
+    return Math.max(0, Math.min(duration_ms, ((e.clientX - rect.left + el.scrollLeft) / pxPerSec) * 1000));
   }
 
-  function onPointerMove(e) {
-    const d = dragRef.current;
-    if (!d || disabled) return;
-    const dx = e.clientX - d.startX;
-    if (!d.moved && Math.abs(dx) >= DRAG_THRESHOLD_PX) {
-      d.moved = true;
-    }
-    if (d.moved && d.targetId) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const msPerPx = duration_ms / rect.width;
-      const offsetMs = Math.round(Math.max(0, dx * msPerPx));
-      setDrag({ id: d.targetId, offsetMs });
-    }
+  function seekAt(e) {
+    if (!duration_ms) return;
+    onSeek?.(msAt(e) / 1000);
   }
 
-  function onPointerUp(e) {
+  function onClipDown(e, it) {
+    e.stopPropagation();
+    if (disabled) return;
+    dragRef.current = { id: it.id, startX: e.clientX, moved: false, start: it.start_ms };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function onClipMove(e) {
     const d = dragRef.current;
     if (!d) return;
+    const dx = e.clientX - d.startX;
+    if (!d.moved && Math.abs(dx) < DRAG_THRESHOLD_PX) return;
+    d.moved = true;
+    const minOffset = -(textById[d.id]?.delay_ms || 0); // không kéo sớm hơn vị trí gốc
+    const offsetMs = Math.max(minOffset, Math.round(((dx / pxPerSec) * 1000) / 10) * 10);
+    setDrag({ id: d.id, offsetMs });
+  }
+
+  function onClipUp(it) {
+    const d = dragRef.current;
     dragRef.current = null;
+    if (!d) return;
     if (!d.moved) {
-      onSeek?.(d.tDown);
-    } else if (d.targetId && drag && drag.offsetMs > 0) {
-      onShift?.(d.targetId, drag.offsetMs);
+      onSelect?.(it.id);
+      onSeek?.(it.start_ms / 1000);
+    } else if (drag && Math.abs(drag.offsetMs) >= 10) {
+      onShift?.(it.id, drag.offsetMs);
     }
     setDrag(null);
   }
 
-  return (
-    <div className="studio-timeline-panel">
-      <div className="timeline-toolbar-row">
-        <div className="timeline-legend">
-          {items.map((it) => (
-            <span
-              key={it.id}
-              className={`legend-pill ${selectedId === it.id ? "active" : ""}`}
-              style={{ borderColor: ROLE_COLORS[it.role] || "#64748b" }}
-            >
-              [{it.role}] {it.id}
-            </span>
-          ))}
-          <span className="timeline-hint">Kéo câu sang phải để chèn delay; nhấp để tua vị trí.</span>
-        </div>
+  const step = tickStep(pxPerSec);
+  const ticks = [];
+  for (let s = 0; s <= duration_ms / 1000 + 0.001; s += step) ticks.push(s);
+  const levelAt = (role) => {
+    const arr = role_levels[role];
+    if (!arr?.length || !duration_ms) return 0;
+    return arr[Math.min(arr.length - 1, Math.floor((nowMs / duration_ms) * arr.length))] ?? 0;
+  };
 
-        <div className="playback-speed-select">
-          <label>Tốc độ:</label>
-          <select
-            value={playbackRate}
-            disabled={disabled}
-            onChange={(e) => onChangeRate?.(Number(e.target.value))}
-            title="Tốc độ phát lại"
-          >
-            <option value={0.75}>0.75×</option>
-            <option value={1.0}>1.0×</option>
-            <option value={1.25}>1.25×</option>
-            <option value={1.5}>1.5×</option>
-          </select>
+  // Track SFX / nhạc nền chỉ hiện khi bài có dùng, để panel thấp vẫn đủ chỗ.
+  const tracks = [
+    ...roleIds.map((r) => ({ key: `role-${r}`, kind: "role", role: r })),
+    ...(sfx.length ? [{ key: "sfx", kind: "sfx" }] : []),
+    ...bgm.map((l, i) => ({ key: `bgm-${i}`, kind: "bgm", layer: l })),
+  ];
+  // Chiều cao mỗi track co giãn theo panel (giữ chỗ cho track Tổng và thanh cuộn ngang).
+  const laneH = Math.round(Math.min(44, Math.max(20, (bodyH - 22 - 12 - 36) / Math.max(1, tracks.length))));
+
+  return (
+    <div className="mt-timeline">
+      <div className="mt-toolbar">
+        <span className="mt-title">Timeline</span>
+        <span className="mt-time">
+          {fmt(nowMs)} <span className="muted">/ {fmt(duration_ms)}</span>
+        </span>
+        <span className="mt-spacer" />
+        <div className="mt-zoom" role="group" aria-label="Thu phóng timeline">
+          <button type="button" className="mini-ghost-btn" title="Thu nhỏ (Ctrl + lăn chuột)" onClick={() => setZoomClamped(pxPerSec * 0.8)}>
+            −
+          </button>
+          <input
+            type="range"
+            min={Math.log(MIN_PX_PER_SEC)}
+            max={Math.log(MAX_PX_PER_SEC)}
+            step={0.01}
+            value={Math.log(pxPerSec)}
+            onChange={(e) => setZoomClamped(Math.exp(Number(e.target.value)))}
+            aria-label="Mức thu phóng"
+          />
+          <button type="button" className="mini-ghost-btn" title="Phóng to (Ctrl + lăn chuột)" onClick={() => setZoomClamped(pxPerSec * 1.25)}>
+            +
+          </button>
+          <button type="button" className="mini-ghost-btn" title="Xem toàn bài" onClick={() => setZoom(null)} disabled={zoom === null}>
+            Vừa khung
+          </button>
         </div>
+        <label className="mt-rate" title="Tốc độ phát lại (chỉ khi nghe, không đổi file)">
+          Tốc độ
+          <select value={playbackRate} onChange={(e) => onChangeRate?.(Number(e.target.value))}>
+            {[0.75, 1, 1.25, 1.5, 2].map((r) => (
+              <option key={r} value={r}>
+                {r}×
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <VuMeters levels={role_levels} nowMs={nowMs} durationMs={duration_ms} />
-      <Ruler durationMs={duration_ms} />
-      <div className="timeline-canvas-wrap">
-        <canvas
-          ref={canvasRef}
-          width={1200}
-          height={CANVAS_CSS_HEIGHT}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={() => {
-            dragRef.current = null;
-            setDrag(null);
-          }}
-        />
+      <div className="mt-body" ref={bodyRef} style={{ "--lane-h": `${laneH}px` }}>
+        <div className="mt-headers" style={{ width: HEADER_W }}>
+          <div className="mt-ruler-spacer" />
+          {tracks.map((t) => {
+            if (t.kind === "role") {
+              const level = levelAt(t.role);
+              return (
+                <div key={t.key} className="mt-track-head" style={{ "--track-color": roleColor(t.role) }}>
+                  <span className="mt-swatch" />
+                  <span className="mt-track-name" title={roles[t.role]?.name || ""}>
+                    [{t.role}] {roles[t.role]?.name || `Vai ${t.role}`}
+                  </span>
+                  <span className="mt-meter" title={`Mức hiện tại ${Math.round(level * 100)}%`}>
+                    <span style={{ width: `${Math.round(level * 100)}%` }} />
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <div key={t.key} className="mt-track-head mt-track-aux">
+                <span className="mt-track-name" title={t.layer?.path}>
+                  {t.kind === "sfx" ? "Hiệu ứng (SFX)" : `Nền: ${baseName(t.layer.path)}`}
+                </span>
+              </div>
+            );
+          })}
+          <div className="mt-track-head mt-track-master">
+            <span className="mt-track-name">Tổng</span>
+          </div>
+        </div>
+
+        <div className="mt-scroll" ref={scrollRef} onWheel={onWheel}>
+          <div className="mt-content" style={{ width: contentW }}>
+            <div className="mt-ruler" onPointerDown={seekAt} title="Nhấp để tua">
+              {ticks.map((s) => (
+                <span key={s} className="mt-tick" style={{ left: x(s * 1000) }}>
+                  {fmt(s * 1000).replace(/\.0$/, "")}
+                </span>
+              ))}
+            </div>
+
+            {tracks.map((t) => (
+              <div key={t.key} className="mt-lane" onPointerDown={seekAt}>
+                {t.kind === "role" &&
+                  items
+                    .filter((it) => it.role === t.role)
+                    .map((it) => {
+                      const off = drag?.id === it.id ? drag.offsetMs : 0;
+                      const line = textById[it.id];
+                      return (
+                        <div
+                          key={it.id}
+                          className={`mt-clip ${selectedId === it.id ? "selected" : ""} ${off ? "dragging" : ""}`}
+                          style={{
+                            left: x(it.start_ms + off),
+                            width: Math.max(4, x(it.end_ms - it.start_ms)),
+                            "--track-color": roleColor(it.role),
+                          }}
+                          title={`${it.id} · ${fmt(it.start_ms)}–${fmt(it.end_ms)}${line ? `\n${line.plain}` : ""}\nKéo để dời, nhấp đúp để nghe thử`}
+                          onPointerDown={(e) => onClipDown(e, it)}
+                          onPointerMove={onClipMove}
+                          onPointerUp={() => onClipUp(it)}
+                          onPointerCancel={() => {
+                            dragRef.current = null;
+                            setDrag(null);
+                          }}
+                          onDoubleClick={() => onPreview?.(it.id)}
+                        >
+                          <span className="mt-clip-id">{it.id}</span>
+                          <span className="mt-clip-text">{line?.plain ?? ""}</span>
+                          {off !== 0 && <span className="mt-clip-offset">{off > 0 ? "+" : ""}{(off / 1000).toFixed(2)}s</span>}
+                        </div>
+                      );
+                    })}
+                {t.kind === "sfx" &&
+                  sfx.map((m) => (
+                    <div
+                      key={`${m.id}-${m.start_ms}`}
+                      className={`mt-clip mt-clip-sfx ${selectedId === m.id ? "selected" : ""}`}
+                      style={{ left: x(m.start_ms), width: Math.max(4, x(m.end_ms - m.start_ms)) }}
+                      title={`${baseName(m.path)} · ${fmt(m.start_ms)}`}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        onSelect?.(m.id);
+                        onSeek?.(m.start_ms / 1000);
+                      }}
+                    >
+                      <span className="mt-clip-text">♪ {baseName(m.path)}</span>
+                    </div>
+                  ))}
+                {t.kind === "bgm" && (
+                  <div className="mt-clip mt-clip-bgm" style={{ left: 0, width: x(duration_ms) }} title={t.layer.path}>
+                    <span className="mt-clip-text">
+                      ♫ {baseName(t.layer.path)}
+                      {Number.isFinite(t.layer.db) ? ` · ${t.layer.db} dB` : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div className="mt-lane mt-master" onPointerDown={seekAt}>
+              <div className="mt-wave">
+                {bars.map((b, i) => (
+                  <span key={i} style={{ height: `${b.h}%`, background: b.color }} />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-playhead" style={{ left: x(nowMs) }} />
+          </div>
+        </div>
       </div>
     </div>
   );

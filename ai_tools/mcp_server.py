@@ -37,19 +37,47 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent  # thư mục chứa server.py (resources/engine trong bộ cài)
 API_URL = (os.environ.get("TEXTTS_API_URL") or "http://127.0.0.1:8000").rstrip("/")
 SERVER_NAME = "textts"
-SERVER_VERSION = "1.1.2"
+SERVER_VERSION = "1.2.0"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 ENGINES = ["voicevox", "aivis", "edge"]
 
 INSTRUCTIONS = """textts tạo bài nghe hội thoại tiếng Nhật (MP3, bản chậm 0.8x, phụ đề SRT, phiếu học tập HTML có furigana).
 Quy trình nên dùng:
 1. textts_status: xem engine nào đang chạy (VOICEVOX, AivisSpeech; Edge TTS cần Internet).
-2. textts_list_voices: lấy mã giọng của engine đã chọn, chọn giọng hợp với từng vai.
+2. Chọn giọng: gọi textts_find_voices với mô tả từng vai (vd. "bé gái 8 tuổi vui tươi", "ông già giọng trầm")
+   để lấy giọng giáo viên đã ghi chú trong Ngân hàng giọng (biệt danh, giới tính, tuổi, chất giọng; ★ là yêu thích).
+   Dùng đúng 'voice' và 'engine' trả về; các vai trong một bài phải cùng một engine. Nếu ngân hàng trống
+   hoặc không hợp, dùng textts_list_voices để xem toàn bộ giọng của engine.
 3. Soạn kịch bản: mỗi câu thoại một dòng, bắt đầu bằng số vai: "[1] こんにちは。" hoặc "1 こんにちは。".
    Chú âm chữ Hán khó bằng 漢字{かな} (ví dụ 面接{めんせつ}). Khoảng lặng thêm: dòng "[pause=1500]".
    Khoảng lặng giữa các câu được chèn tự động, không cần thêm [pause] cho mỗi câu.
-4. textts_check_script (tùy chọn): kiểm tra cú pháp và gợi ý furigana trước khi tạo.
-5. textts_create_audio: tạo file; trả về đường dẫn các file trên máy người dùng."""
+4. Bối cảnh & hiệu ứng: khi người dùng nêu bối cảnh (công viên, quán cà phê, trời mưa, nhà ga...) hoặc
+   kịch bản có tiếng động (chuông cửa, điện thoại, gõ cửa...), gọi textts_list_sounds (có thể kèm 'query',
+   vd. query="tiếng sấm") để đọc mục lục: mỗi âm có mô tả, từ khóa và "dùng tạm cho". Không cần nghe file.
+   Không có âm "khớp" thì dùng âm "gần đúng" phù hợp nhất (vd. không có sấm thì dùng mưa) và nói rõ với
+   người dùng là đang dùng tạm âm nào.
+   - Nhạc/âm nền: đặt 'bgm' của textts_create_audio là danh sách lớp nền hợp bối cảnh
+     (ưu tiên âm "thư viện của giáo viên" nếu khớp). Có thể chồng nhiều lớp cùng lúc, ví dụ đường phố
+     trời mưa: [{"ref": "mua", "db": -20}, {"ref": "duong-pho", "db": -26}]; lớp phụ nên nhỏ hơn lớp chính.
+     Không có âm phù hợp thì bỏ qua lớp đó và báo người dùng.
+   - Hiệu ứng: chèn một dòng riêng "[sfx=<ref>]" vào đúng chỗ trong kịch bản (vd. "[sfx=chuong-cua]").
+   Chỉ dùng 'ref' có trong danh sách, không tự đặt tên.
+5. Đạo diễn để hội thoại tự nhiên (viết thẳng trong kịch bản):
+   - Cảm xúc/tốc độ từng câu: [2]{emotion=happy, speed=slow} ...  (neutral|happy|sad|angry|surprised)
+   - Hiệu ứng giọng: {fx=phone} qua điện thoại, {fx=whisper} thì thầm, {fx=far} ở xa, {fx=radio} loa thông báo,
+     {fx=echo} phòng vang. To/nhỏ: {vol=-6}. Nói chen: {overlap=400} (bắt đầu trước khi câu trước dứt 400 ms).
+   - Ngập ngừng tự nhiên viết thẳng vào lời: えーと、あの…、うーん。 Câu cảm thán ngắn (はい、へえ、そうですか) giúp sống động.
+   - Cảnh: dòng [bgm=quan-ca-phe] đổi âm nền từ chỗ đó (nhiều lớp: [bgm=mua+duong-pho@-26], tắt: [bgm=off]).
+   - Hiệu ứng: [sfx=chuong-cua] chiếm thời gian riêng; [sfx=dien-thoai-reo, overlay, vol=-6] chồng lên câu kế tiếp.
+   - Bản dịch: thêm " // bản dịch tiếng Việt" cuối mỗi câu (dùng cho bản song ngữ và phiếu học tập).
+6. Trình độ: đặt level (N5..N1) để chỉnh tốc độ/khoảng nghỉ; textts_levels cho gợi ý viết theo trình độ.
+7. Nhân vật cố định của giáo trình: textts_list_characters; dùng roles {"1": {"character": "Minh"}} để mọi bài
+   cùng nhân vật giữ nguyên giọng.
+8. textts_check_script (tùy chọn): kiểm tra cú pháp và gợi ý furigana trước khi tạo.
+9. Tạo: textts_create_audio (một bài nghe) hoặc textts_create_lesson (trọn bộ: bài nghe, bản chậm, shadowing,
+   đóng vai, từ vựng, câu hỏi nghe hiểu + đáp án, phiếu in). Khi người dùng muốn "bài học"/"giáo án", dùng lesson
+   và tự soạn vocab (5-12 từ) + questions (2-4 câu kiểu JLPT 聴解).
+10. Sau khi tạo, gọi textts_check_audio để nghe lại; câu đáng ngờ thì thêm chú âm 漢字{かな} rồi tạo lại."""
 
 TOOLS = [
     {
@@ -65,6 +93,37 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {"engine": {"type": "string", "enum": ENGINES, "default": "voicevox"}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_find_voices",
+        "description": "Tìm giọng hợp vai trong Ngân hàng giọng của giáo viên (biệt danh, giới tính, tuổi, chất giọng "
+        "như vui, buồn, trẻ con, trầm). Trả về 'engine' và 'voice' dùng trong 'roles' của textts_create_audio.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Mô tả vai, vd. 'bé gái 8 tuổi vui tươi', 'nhân viên nam trẻ'"},
+                "engine": {"type": "string", "enum": ENGINES, "description": "Bỏ trống để tìm ở mọi engine"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_list_sounds",
+        "description": "Liệt kê âm trong thư viện của textts: nhạc/âm nền (bgm) theo bối cảnh như công viên, "
+        "quán cà phê, mưa, và hiệu ứng (sfx) như chuông cửa, điện thoại reo. Gồm gói CC0 của textts và âm "
+        "giáo viên tự thêm. Trường 'ref' dùng cho 'bgm' của textts_create_audio hoặc dòng [sfx=<ref>] trong kịch bản.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["bgm", "sfx"], "description": "Bỏ trống để lấy cả hai"},
+                "query": {
+                    "type": "string",
+                    "description": "Âm cần tìm, mô tả bằng lời (vd. 'tiếng sấm', 'quán ăn đông người'). "
+                    "Kết quả ghi 'khớp' hoặc 'gần đúng' (dùng tạm được). Bỏ trống để xem cả mục lục.",
+                },
+            },
             "additionalProperties": False,
         },
     },
@@ -86,7 +145,12 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "title": {"type": "string", "description": "Tên bài/tên file, không dấu, ví dụ phong_van_xin_viec"},
+                "title": {"type": "string", "description": "Tên bài học, in trên phiếu học tập, ví dụ 'Thuê nhà'"},
+                "filename": {
+                    "type": "string",
+                    "description": "Tên file theo giáo trình, đúng số track in trong sách (ví dụ '1-02' cho ♪1-02). "
+                    "Luôn đặt khi soạn giáo trình; các file được lưu chung một thư mục riêng mang tên này.",
+                },
                 "script": {
                     "type": "string",
                     "description": "Kịch bản tiếng Nhật, mỗi câu thoại một dòng bắt đầu bằng số vai: "
@@ -99,15 +163,39 @@ TOOLS = [
                     "additionalProperties": {
                         "type": "object",
                         "properties": {
-                            "voice": {"type": "string", "description": "Mã giọng từ textts_list_voices"},
+                            "character": {"type": "string", "description": "Tên nhân vật cố định (textts_list_characters)"},
+                            "voice": {"type": "string", "description": "Mã giọng từ textts_find_voices / textts_list_voices"},
                             "name": {"type": "string", "description": "Tên nhân vật"},
                             "emotion": {"type": "string", "enum": ["neutral", "happy", "sad", "angry", "surprised"]},
                             "speed": {"type": "string", "enum": ["slow", "normal", "fast"]},
                             "pitch": {"type": "integer", "minimum": -50, "maximum": 50},
                         },
-                        "required": ["voice"],
+
                     },
                 },
+                "bgm": {
+                    "type": "array",
+                    "description": "Các lớp nhạc/âm nền phát cùng lúc suốt bài (chồng lên nhau), 'ref' lấy từ "
+                    "textts_list_sounds (kind=bgm). Ví dụ trời mưa ngoài phố: "
+                    "[{\"ref\": \"mua\", \"db\": -20}, {\"ref\": \"duong-pho\", \"db\": -26}]. Bỏ trống nếu không cần.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "ref": {"type": "string"},
+                            "db": {"type": "number", "minimum": -40, "maximum": -6,
+                                   "description": "Âm lượng lớp này so với lời thoại; trống = bgm_db"},
+                        },
+                        "required": ["ref"],
+                    },
+                },
+                "bgm_db": {
+                    "type": "number", "minimum": -40, "maximum": -6, "default": -20,
+                    "description": "Âm lượng mặc định mỗi lớp nền so với lời thoại (dB); -20 là nền nhẹ, -12 là rõ hơn",
+                },
+                "level": {"type": "string", "enum": ["N5", "N4", "N3", "N2", "N1"],
+                          "description": "Trình độ người học: chỉnh tốc độ đọc và khoảng nghỉ"},
+                "bilingual": {"type": "boolean", "default": False,
+                              "description": "Đọc bản dịch tiếng Việt (phần sau ' // ' mỗi câu) ngay sau câu đó"},
                 "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
                 "slow": {"type": "boolean", "default": True, "description": "Xuất thêm bản chậm 0.8x"},
                 "srt": {"type": "boolean", "default": True, "description": "Xuất phụ đề .srt"},
@@ -121,6 +209,62 @@ TOOLS = [
             "required": ["title", "script"],
             "additionalProperties": False,
         },
+    },
+]
+
+
+_AUDIO = next(t for t in TOOLS if t["name"] == "textts_create_audio")
+TOOLS += [
+    {
+        "name": "textts_create_lesson",
+        "description": "Tạo trọn bộ bài học nghe trong một thư mục: bài nghe chính, bản chậm, phụ đề, shadowing, "
+        "bản đóng vai cho từng vai, bài từ vựng (đọc từng từ + nghĩa), câu hỏi nghe hiểu kiểu JLPT và phiếu in có đáp án.",
+        "inputSchema": {
+            **_AUDIO["inputSchema"],
+            "properties": {
+                **_AUDIO["inputSchema"]["properties"],
+                "vocab": {
+                    "type": "array",
+                    "description": "Từ vựng chính của bài (5-12 từ)",
+                    "items": {"type": "object", "properties": {
+                        "word": {"type": "string", "description": "Từ, có thể chú âm 漢字{かな}"},
+                        "reading": {"type": "string"}, "meaning": {"type": "string", "description": "Nghĩa tiếng Việt"},
+                    }, "required": ["word"]},
+                },
+                "questions": {
+                    "type": "array",
+                    "description": "Câu hỏi nghe hiểu tiếng Nhật kiểu JLPT 聴解 (2-4 câu)",
+                    "items": {"type": "object", "properties": {
+                        "question": {"type": "string"}, "choices": {"type": "array", "items": {"type": "string"}},
+                        "answer": {"type": "integer", "description": "Số thứ tự đáp án đúng, bắt đầu từ 1"},
+                        "explanation": {"type": "string", "description": "Giải thích bằng tiếng Việt"},
+                    }, "required": ["question", "choices", "answer"]},
+                },
+                "roleplay": {"type": "boolean", "default": True},
+                "shadowing": {"type": "boolean", "default": True},
+            },
+        },
+    },
+    {
+        "name": "textts_check_audio",
+        "description": "Nghe lại từng câu đã tạo (nhận dạng giọng nói) và so với kịch bản để tìm câu đọc sai, "
+        "thường do chữ Hán đọc nhầm. Dùng cùng script/engine/roles như khi tạo.",
+        "inputSchema": {"type": "object", "properties": {
+            "script": _AUDIO["inputSchema"]["properties"]["script"],
+            "engine": _AUDIO["inputSchema"]["properties"]["engine"],
+            "roles": _AUDIO["inputSchema"]["properties"]["roles"],
+        }, "required": ["script"], "additionalProperties": False},
+    },
+    {
+        "name": "textts_list_characters",
+        "description": "Nhân vật cố định của giáo trình (tên, giọng, cảm xúc, mô tả) để mọi bài dùng cùng nhân vật.",
+        "inputSchema": {"type": "object", "properties": {"engine": {"type": "string", "enum": ENGINES}},
+                        "additionalProperties": False},
+    },
+    {
+        "name": "textts_levels",
+        "description": "Gợi ý soạn kịch bản theo trình độ JLPT (N5-N1): độ dài câu, ngữ pháp, tốc độ đọc.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
 ]
 
@@ -260,7 +404,7 @@ def _open_folder(path: str) -> None:
         subprocess.Popen(["open", folder])
 
 
-def tool_create_audio(args: dict) -> str:
+def _dialogue_body(args: dict) -> dict:
     script = str(args.get("script") or "").strip()
     if not script:
         raise ToolError("script trống")
@@ -269,6 +413,7 @@ def tool_create_audio(args: dict) -> str:
         raise ToolError(f"engine phải là một trong {', '.join(ENGINES)}")
     body: dict = {
         "title": str(args.get("title") or "hoi_thoai"),
+        **({"filename": str(args["filename"])} if args.get("filename") else {}),
         "script": script,
         "engine": engine,
         "options": {
@@ -276,20 +421,40 @@ def tool_create_audio(args: dict) -> str:
             "slow": bool(args.get("slow", True)),
             "srt": bool(args.get("srt", True)),
             "worksheet": bool(args.get("worksheet", True)),
+            **({"bgm": _bgm_layers(args["bgm"])} if args.get("bgm") else {}),
+            **({"bgm_db": float(args["bgm_db"])} if args.get("bgm_db") is not None else {}),
+            **({"level": args["level"]} if args.get("level") else {}),
+            **({"bilingual": True} if args.get("bilingual") else {}),
         },
     }
     if args.get("roles"):
         body["roles"] = {str(k): {kk: vv for kk, vv in v.items() if vv is not None} for k, v in args["roles"].items()}
-    res = call_api("POST", "/api/v1/dialogue", body, timeout=900)
+    return body
+
+
+FILE_LABELS = [
+    ("audio", "Âm thanh"),
+    ("slow_audio", "Bản chậm 0.8x"),
+    ("bilingual", "Bản song ngữ"),
+    ("shadowing", "Bản shadowing"),
+    ("vocab", "Từ vựng"),
+    ("questions", "Câu hỏi nghe hiểu"),
+    ("srt", "Phụ đề SRT"),
+    ("worksheet_html", "Phiếu học tập HTML"),
+]
+
+
+def _describe(res: dict, args: dict, what: str) -> str:
     files = res.get("files", {})
-    labels = [
-        ("audio", "Âm thanh"),
-        ("slow_audio", "Bản chậm 0.8x"),
-        ("srt", "Phụ đề SRT"),
-        ("worksheet", "Phiếu học tập HTML"),
-    ]
-    lines = [f"Đã tạo bài nghe '{res.get('title')}': {res.get('line_count')} câu thoại, {res.get('duration_s')} giây."]
-    lines += [f"- {label}: {files[key]}" for key, label in labels if files.get(key)]
+    lines = [f"Đã tạo {what} '{res.get('title')}': {res.get('line_count')} câu thoại, {res.get('duration_s')} giây. "
+             f"Thư mục: {res.get('folder')}"]
+    lines += [f"- {label}: {files[key]}" for key, label in FILE_LABELS if files.get(key)]
+    lines += [f"- Bản đóng vai ({k.split('_', 1)[1]}): {v}" for k, v in files.items()
+              if k.startswith("roleplay_") and not k.endswith("_url")]
+    if files.get("credits"):
+        lines.append(f"- Ghi nguồn âm thanh (bắt buộc khi chia sẻ): {files['credits']}")
+    for layer in res.get("bgm") or []:
+        lines.append(f"- Lớp nền: {layer['path']} ({layer['db']} dB)")
     if files.get("audio") and args.get("open_folder"):
         try:
             _open_folder(files["audio"])
@@ -298,11 +463,120 @@ def tool_create_audio(args: dict) -> str:
     return "\n".join(lines)
 
 
+def tool_create_audio(args: dict) -> str:
+    res = call_api("POST", "/api/v1/dialogue", _dialogue_body(args), timeout=900)
+    return _describe(res, args, "bài nghe")
+
+
+def tool_create_lesson(args: dict) -> str:
+    body = _dialogue_body(args)
+    body["vocab"] = [v for v in args.get("vocab") or [] if isinstance(v, dict) and v.get("word")]
+    body["questions"] = [q for q in args.get("questions") or [] if isinstance(q, dict) and q.get("question")]
+    body["roleplay"] = bool(args.get("roleplay", True))
+    body["shadowing"] = bool(args.get("shadowing", True))
+    res = call_api("POST", "/api/v1/lesson", body, timeout=1800)
+    return _describe(res, args, f"gói bài học ({res.get('vocab_count', 0)} từ vựng, {res.get('question_count', 0)} câu hỏi)")
+
+
+def tool_check_audio(args: dict) -> str:
+    body = {k: v for k, v in _dialogue_body(args).items() if k in ("script", "engine", "roles")}
+    res = call_api("POST", "/api/v1/check-audio", body, timeout=1800)
+    if res.get("ok"):
+        return f"Đã nghe lại {res.get('checked')} câu: tất cả khớp kịch bản."
+    lines = [f"Đã nghe lại {res.get('checked')} câu; {len(res['suspicious'])} câu có thể đọc sai:"]
+    for r in res["suspicious"]:
+        lines.append(f"- {r['id']} (khớp {int(r['score'] * 100)}%): kịch bản '{r['display']}' — nghe thành '{r['heard']}'")
+    lines.append("Gợi ý: thêm chú âm 漢字{かな} cho chữ bị đọc sai (hoặc viết bằng kana) rồi tạo lại.")
+    return "\n".join(lines)
+
+
+def tool_list_characters(args: dict) -> str:
+    q = f"?engine={args['engine']}" if args.get("engine") else ""
+    items = call_api("GET", "/api/v1/characters" + q).get("items", [])
+    if not items:
+        return "Chưa có nhân vật cố định. Giáo viên tạo trong app (panel Vai → Mẫu / nhân vật giáo trình)."
+    return "\n".join(f"- {c['name']} [engine={c.get('engine') or 'bất kỳ'}, voice={c['voice']}, {c['emotion']}, {c['speed']}]"
+                     + (f" — {c['description']}" if c.get("description") else "") for c in items)
+
+
+def tool_levels(_args: dict) -> str:
+    items = call_api("GET", "/api/v1/levels").get("items", [])
+    return "\n".join(f"- {i['level']}: {i['guide']} (tốc độ ×{i['rate']}, nghỉ đổi người {i['turn_gap_ms']} ms)" for i in items)
+
+
+def _bgm_layers(value) -> list:
+    """Nhận một tên, danh sách tên, hoặc danh sách {ref, db}."""
+    items = value if isinstance(value, list) else [value]
+    out = []
+    for it in items:
+        if isinstance(it, str) and it.strip():
+            out.append(it.strip())
+        elif isinstance(it, dict) and it.get("ref"):
+            out.append({"ref": str(it["ref"]), **({"db": float(it["db"])} if it.get("db") is not None else {})})
+    return out
+
+
+def tool_find_voices(args: dict) -> str:
+    params = {k: v for k, v in (("engine", args.get("engine")), ("q", args.get("query"))) if v}
+    res = call_api("GET", "/api/v1/voice-bank" + (("?" + urllib.parse.urlencode(params)) if params else ""))
+    items = res.get("items", [])
+    if not items:
+        return ("Ngân hàng giọng chưa có giọng phù hợp (giáo viên chưa ghi chú, hoặc không khớp). "
+                "Dùng textts_list_voices để xem toàn bộ giọng của engine.")
+    lines = []
+    for v in items[:15]:
+        info = [v.get("gender") or "", f"{v['age']} tuổi" if v.get("age") is not None else "", ", ".join(v.get("styles") or [])]
+        name = (v.get("nickname") or v.get("label") or v["voice"]) + (" ★" if v.get("favorite") else "")
+        line = f"- engine={v['engine']} voice={v['voice']!r}: {name} ({v.get('label', '')}) — " + "; ".join(i for i in info if i)
+        if v.get("description"):
+            line += f" — {v['description']}"
+        if v.get("why"):
+            line += f" [khớp: {', '.join(v['why'])}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def tool_list_sounds(args: dict) -> str:
+    kind = args.get("kind")
+    if kind not in (None, "", "bgm", "sfx"):
+        raise ToolError("kind phải là 'bgm' hoặc 'sfx'")
+    params = {k: v for k, v in (("kind", kind), ("q", args.get("query"))) if v}
+    res = call_api("GET", "/api/v1/sounds" + (("?" + urllib.parse.urlencode(params)) if params else ""))
+    items = res.get("items", [])
+    if not items:
+        if args.get("query"):
+            return (f"Không có âm nào khớp hoặc gần với '{args['query']}'. "
+                    "Gọi lại không kèm query để xem cả mục lục, hoặc báo người dùng thêm âm vào thư viện.")
+        return "Thư viện âm thanh trống."
+    lines = []
+    for k, title in (("bgm", "Nhạc/âm nền (dùng cho 'bgm')"), ("sfx", "Hiệu ứng (dùng dòng [sfx=<ref>])")):
+        group = [it for it in items if it["kind"] == k]
+        if not group:
+            continue
+        lines.append(f"{title}:")
+        for it in group:
+            extra = [it.get("description") or ""]
+            if it.get("tags"):
+                extra.append("từ khóa: " + ", ".join(it["tags"]))
+            if it.get("substitute_for"):
+                extra.append("dùng tạm cho: " + ", ".join(it["substitute_for"]))
+            match = f" ({it['match']})" if it.get("match") else ""
+            lines.append(f"- ref={it['ref']!r}{match}: {it['name']} — " + "; ".join(e for e in extra if e)
+                         + f" [{it['source']}]")
+    return "\n".join(lines)
+
+
 HANDLERS = {
     "textts_status": tool_status,
+    "textts_list_sounds": tool_list_sounds,
+    "textts_find_voices": tool_find_voices,
     "textts_list_voices": tool_list_voices,
     "textts_check_script": tool_check_script,
     "textts_create_audio": tool_create_audio,
+    "textts_create_lesson": tool_create_lesson,
+    "textts_check_audio": tool_check_audio,
+    "textts_list_characters": tool_list_characters,
+    "textts_levels": tool_levels,
 }
 
 

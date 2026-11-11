@@ -15,16 +15,16 @@ SCHEMA_VERSION = 1
 
 
 class Timing(BaseModel):
-    """Nhịp đọc (ms). Mặc định chọn cho bài nghe của người học: chậm rãi, dễ theo kịp."""
+    """Nhịp đọc (ms). Mặc định gần hội thoại tự nhiên; thời gian chờ cho học viên nhắc lại dùng chế độ shadow."""
 
     model_config = ConfigDict(extra="forbid")
-    lead_in_ms: int = Field(300, ge=0)
-    turn_gap_ms: int = Field(1400, ge=0)            # đổi người nói
-    same_speaker_gap_ms: int = Field(800, ge=0)    # cùng người nói, sang câu thoại mới
-    question_gap_ms: int = Field(300, ge=0)        # chờ thêm sau câu hỏi trước khi trả lời
-    sentence_pause_ms: int = Field(800, ge=0)      # trong một câu thoại: sau 。！？ (0 = đọc liền)
+    lead_in_ms: int = Field(2000, ge=0)        # lặng đầu bài: tránh lặp đột ngột khi bật repeat
+    turn_gap_ms: int = Field(600, ge=0)             # đổi người nói
+    same_speaker_gap_ms: int = Field(400, ge=0)    # cùng người nói, sang câu thoại mới
+    question_gap_ms: int = Field(200, ge=0)        # chờ thêm sau câu hỏi trước khi trả lời
+    sentence_pause_ms: int = Field(500, ge=0)      # trong một câu thoại: sau 。！？ (0 = đọc liền)
     comma_pause_scale: float = Field(1.5, ge=0.0, le=3.0)  # độ dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech)
-    tail_ms: int = Field(500, ge=0)
+    tail_ms: int = Field(2000, ge=0)           # lặng cuối bài: tránh bị cắt mất câu cuối
 
 
 class Role(BaseModel):
@@ -67,6 +67,7 @@ class LineItem(BaseModel):
     plain: str
     cache_key: str | None = None
     audio: str | None = None
+    translation: str = ""  # bản dịch (sau "//" trong kịch bản), dùng cho bản song ngữ và phiếu học tập
 
     @model_validator(mode="after")
     def _derive_reading(self) -> "LineItem":
@@ -92,9 +93,21 @@ class SfxItem(BaseModel):
     type: Literal["sfx"] = "sfx"
     src_line: int
     path: str = Field(min_length=1)
+    overlay: bool = False  # chồng lên câu kế tiếp (không chiếm thời gian riêng), vd. chuông reo khi đang nói
+    volume_db: float = Field(0.0, ge=-40, le=12)
 
 
-Item = Annotated[Union[LineItem, PauseItem, SfxItem], Field(discriminator="type")]
+class BgmItem(BaseModel):
+    """Đổi nhạc/âm nền từ vị trí này (cảnh mới): [bgm=quan-ca-phe] / [bgm=mua+duong-pho@-26] / [bgm=off]."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    type: Literal["bgm"] = "bgm"
+    src_line: int
+    layers: list[str] = Field(default_factory=list)  # "tên@dB"; rỗng = tắt nền
+
+
+Item = Annotated[Union[LineItem, PauseItem, SfxItem, BgmItem], Field(discriminator="type")]
 
 
 class Project(BaseModel):
@@ -103,6 +116,7 @@ class Project(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = SCHEMA_VERSION
     title: str = ""
+    output_name: str = ""  # tên file xuất theo giáo trình, vd. "1-02" (trống = tên dự án)
     engine: str
     timing: Timing = Field(default_factory=Timing)
     roles: dict[str, Role]

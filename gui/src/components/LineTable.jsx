@@ -1,5 +1,14 @@
 // Trình soạn thảo kịch bản trực quan dạng Card/Block chuyên nghiệp (Script Editor)
 import { EMOTIONS, SPEEDS, EMOTION_LABELS, SPEED_LABELS } from "./RolePanel.jsx";
+
+// Hiệu ứng giọng theo câu ({fx=...} trong kịch bản)
+export const FX_LABELS = {
+  phone: "Qua điện thoại",
+  whisper: "Thì thầm",
+  far: "Ở xa / phòng bên",
+  radio: "Loa thông báo",
+  echo: "Phòng vang",
+};
 import { splitRuby, hasRuby } from "../lib/ruby.js";
 import { indexIssues } from "../lib/library.js";
 import {
@@ -70,6 +79,51 @@ export default function LineTable({
               <div className="card-body sfx-body">
                 <span className="sfx-label">Hiệu ứng âm thanh:</span>
                 <code className="sfx-path">{it.path}</code>
+                <label className="sfx-overlay" title="Phát chồng lên câu kế tiếp (vd. chuông reo khi đang nói), không chờ hết tiếng" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={Boolean(it.overlay)} disabled={disabled} onChange={(e) => onPatch(it.id, { overlay: e.target.checked })} />
+                  Chồng lên câu sau
+                </label>
+              </div>
+              <div className="card-actions">
+                <CardActions
+                  idx={idx}
+                  total={items.length}
+                  id={it.id}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                  onInsertBelow={onInsertBelow}
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          );
+        }
+
+        if (it.type === "bgm") {
+          return (
+            <div
+              key={it.id}
+              id={`row-${it.id}`}
+              title={tooltip}
+              className={`script-card sfx-card scene-card ${isSelected ? "selected" : ""} ${hasError ? "error" : ""} ${hasWarn ? "warn" : ""}`}
+              onClick={() => onSelect(it.id)}
+            >
+              <div className="card-badge sfx-badge">
+                <MusicIcon size={14} />
+                <span>Cảnh</span>
+              </div>
+              <div className="card-body sfx-body">
+                <span className="sfx-label">Âm nền từ đây:</span>
+                {it.layers?.length ? (
+                  it.layers.map((l) => (
+                    <code key={l} className="sfx-path">
+                      {l}
+                    </code>
+                  ))
+                ) : (
+                  <span className="muted">tắt âm nền</span>
+                )}
               </div>
               <div className="card-actions">
                 <CardActions
@@ -199,6 +253,38 @@ export default function LineTable({
                       </option>
                     ))}
                   </select>
+
+                  <select
+                    className={`tag-select ${it.attrs?.fx ? "overridden" : "inherit"}`}
+                    value={it.attrs?.fx ?? ""}
+                    disabled={disabled}
+                    title="Hiệu ứng giọng của câu này"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "fx", e.target.value) })}
+                  >
+                    <option value="">Giọng: Bình thường</option>
+                    {Object.entries(FX_LABELS).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className={`tag-select ${it.attrs?.overlap ? "overridden" : "inherit"}`}
+                    value={it.attrs?.overlap ?? ""}
+                    disabled={disabled || idx === 0}
+                    title="Nói chen: bắt đầu trước khi câu trước kết thúc"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onPatch(it.id, { attrs: patchAttr(it, "overlap", e.target.value) })}
+                  >
+                    <option value="">Nói chen: Không</option>
+                    {[200, 400, 700, 1000].map((v) => (
+                      <option key={v} value={String(v)}>
+                        Chen {v} ms
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -242,16 +328,31 @@ export default function LineTable({
               <div className="text-input-wrap">
                 {hasError && <span className="flag error-flag" title={tooltip}>✕</span>}
                 {hasWarn && <span className="flag warn-flag" title={tooltip}>⚠</span>}
-                <input
-                  type="text"
+                {/* Ô nhiều dòng tự giãn theo nội dung để soạn đoạn văn dài; vẫn là MỘT câu thoại nên không cho xuống dòng. */}
+                <textarea
                   className="speech-text-input"
+                  rows={1}
                   value={it.display}
                   disabled={disabled}
                   placeholder="Nhập câu thoại tiếng Nhật (ví dụ: すみません、駅{えき}はどこですか)..."
                   onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onPatch(it.id, { display: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  onChange={(e) => onPatch(it.id, { display: e.target.value.replace(/[\r\n]+/g, "") })}
                 />
               </div>
+
+              {/* Bản dịch: dùng cho bản song ngữ (đọc sau câu) và cột Dịch trên phiếu học tập */}
+              <input
+                className="translation-input"
+                value={it.translation || ""}
+                disabled={disabled}
+                placeholder="Bản dịch tiếng Việt (không bắt buộc, dùng cho bản song ngữ và phiếu học tập)"
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onPatch(it.id, { translation: e.target.value })}
+                aria-label={`Bản dịch câu ${it.id}`}
+              />
 
               {/* Gợi ý Furigana từ OpenJTalk */}
               {suggestion && (

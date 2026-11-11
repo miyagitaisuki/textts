@@ -79,3 +79,21 @@ describe("indexIssues", () => {
     expect(byId.L002).toEqual({ id: "L002", level: "warning", message: "a; b" });
   });
 });
+
+import { loadSettings as loadSettingsForBgm } from "./library.js";
+
+describe("bgm layers settings", () => {
+  it("migrates the old single background track into one layer", () => {
+    const store = { getItem: () => JSON.stringify({ bgmPath: "C:/a/mua.mp3", bgmDb: -22 }) };
+    const s = loadSettingsForBgm(store);
+    expect(s.bgmLayers).toEqual([{ path: "C:/a/mua.mp3", db: -22 }]);
+    expect("bgmPath" in s).toBe(false);
+  });
+});
+
+describe("characters (role presets)", () => {
+  it("store engine and description for the AI", () => {
+    const list = upsertPreset([], "Minh", { voice: "13", emotion: "happy", speed: "normal", pitch: 0 }, { engine: "voicevox", description: " nam sinh viên " });
+    expect(list[0]).toEqual({ name: "Minh", voice: "13", emotion: "happy", speed: "normal", pitch: 0, engine: "voicevox", description: "nam sinh viên" });
+  });
+});

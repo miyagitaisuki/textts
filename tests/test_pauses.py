@@ -34,8 +34,8 @@ def test_split_sentences():
 
 def test_recommended_defaults_match():
     t = Timing()
-    assert (t.turn_gap_ms, t.same_speaker_gap_ms, t.question_gap_ms) == (1400, 800, 300)
-    assert t.sentence_pause_ms == 800 and t.comma_pause_scale == 1.5
+    assert (t.turn_gap_ms, t.same_speaker_gap_ms, t.question_gap_ms) == (600, 400, 200)
+    assert t.sentence_pause_ms == 500 and t.comma_pause_scale == 1.5
     for k, v in DEFAULT_TIMING.items():
         assert getattr(t, k) == v
 
@@ -114,3 +114,18 @@ def test_build_keeps_pauses_inside_a_line(tmp_path):
     assert inner and abs(inner[0] - 800) <= 20
     # Hai đầu vẫn được cắt, chỉ giữ ~40 ms đệm.
     assert abs(len(seg) - (400 + 800 + 400 + 2 * 40)) <= 20
+
+
+def test_lead_in_and_tail_default_to_two_seconds():
+    # Đủ lặng hai đầu để chế độ repeat không lặp đột ngột và câu cuối không bị cắt.
+    t = Timing()
+    assert t.lead_in_ms == 2000 and t.tail_ms == 2000
+
+
+def test_limit_peak_keeps_headroom():
+    from pydub.generators import Sine
+    from core.audio import limit_peak
+    loud = Sine(440).to_audio_segment(500, volume=0.0)
+    assert limit_peak(loud).max_dBFS <= -1.0 + 0.05
+    quiet = Sine(440).to_audio_segment(500, volume=-12.0)
+    assert abs(limit_peak(quiet).max_dBFS - quiet.max_dBFS) < 0.01
