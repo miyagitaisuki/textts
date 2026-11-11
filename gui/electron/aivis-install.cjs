@@ -2,13 +2,13 @@
 // Mỗi phần tải về đều được kiểm tra SHA-256; giải nén bằng 7za.exe (xem archive-install.cjs).
 const fs = require("fs");
 const path = require("path");
-const { installArchiveParts } = require("./archive-install.cjs");
+const { installArchiveParts, downloadVerified } = require("./archive-install.cjs");
 
-// Cấu hình đủ nguồn để tải: engine và models đều phải có danh sách phần đã ghim SHA-256.
+// Cấu hình đủ nguồn để tải: engine là các phần archive đã ghim SHA-256;
+// models là danh sách file .aivmx đã ghim SHA-256 (mỗi file tải trực tiếp, không giải nén).
 function isConfigured(cfg) {
-  const okParts = (s) =>
-    Array.isArray(s?.parts) && s.parts.length > 0 && s.parts.every((p) => p?.url && p?.sha256 && p?.name);
-  return okParts(cfg?.engine) && okParts(cfg?.models);
+  const okParts = (list) => Array.isArray(list) && list.length > 0 && list.every((p) => p?.url && p?.sha256 && p?.name);
+  return okParts(cfg?.engine?.parts) && okParts(cfg?.models?.files);
 }
 
 // Tìm file theo tên trong cây thư mục (archive có thể có thư mục gốc bao quanh). Trả về đường dẫn hoặc null.
@@ -56,32 +56,20 @@ async function installAivis({ cfg, installDir, modelsDir, downloadDir, sevenZip,
     log,
   });
 
-  log("INFO", "[AivisSpeech] Đang tải bộ giọng JVNV");
-  const modelStage = path.join(downloadDir, "models");
-  await installArchiveParts({
-    parts: cfg.models.parts,
-    installDir: modelStage,
-    downloadDir: path.join(downloadDir, "models-dl"),
-    sevenZip,
-    fetchImpl,
-    spawnFn,
-    log,
-  });
+  // Model .aivmx tải trực tiếp, kiểm tra SHA-256 rồi chép vào thư mục Models của engine.
+  log("INFO", "[AivisSpeech] Đang tải bộ giọng");
   fs.mkdirSync(modelsDir, { recursive: true });
-  copyAivmx(modelStage, modelsDir);
-  fs.rmSync(modelStage, { recursive: true, force: true });
+  const modelDl = path.join(downloadDir, "models");
+  for (const file of cfg.models.files) {
+    const dest = path.join(modelDl, file.name);
+    await downloadVerified({ url: file.url, sha256: file.sha256, dest, fetchImpl });
+    fs.copyFileSync(dest, path.join(modelsDir, file.name));
+    fs.rmSync(dest, { force: true });
+  }
+  fs.rmSync(modelDl, { recursive: true, force: true });
 
   log("INFO", "[AivisSpeech] Cài đặt xong");
   return aivisStatus({ cfg, installDir, modelsDir });
-}
-
-function copyAivmx(srcDir, destDir) {
-  if (!fs.existsSync(srcDir)) return;
-  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-    const full = path.join(srcDir, entry.name);
-    if (entry.isDirectory()) copyAivmx(full, destDir);
-    else if (entry.name.toLowerCase().endsWith(".aivmx")) fs.copyFileSync(full, path.join(destDir, entry.name));
-  }
 }
 
 module.exports = {

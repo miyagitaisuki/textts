@@ -40,7 +40,8 @@ function fake7z(layoutByDir) {
 }
 
 const ENGINE = [Buffer.from("engine-part-1"), Buffer.from("engine-part-2")];
-const MODELS = [Buffer.from("models-only")];
+const MODEL_A = Buffer.from("aivmx-model-a");
+const MODEL_B = Buffer.from("aivmx-model-b");
 const cfgWith = () => ({
   engine: {
     parts: [
@@ -49,19 +50,23 @@ const cfgWith = () => ({
     ],
   },
   models: {
-    parts: [{ name: "m.zip", url: "https://example.test/m", sha256: sha(MODELS[0]) }],
+    files: [
+      { name: "a.aivmx", url: "https://example.test/a", sha256: sha(MODEL_A) },
+      { name: "b.aivmx", url: "https://example.test/b", sha256: sha(MODEL_B) },
+    ],
   },
 });
 const FETCH = {
   "https://example.test/e1": ENGINE[0],
   "https://example.test/e2": ENGINE[1],
-  "https://example.test/m": MODELS[0],
+  "https://example.test/a": MODEL_A,
+  "https://example.test/b": MODEL_B,
 };
 
-test("isConfigured requires named, hashed parts for both engine and models", () => {
-  assert.equal(aivis.isConfigured({ engine: { parts: [] }, models: { parts: [] } }), false);
+test("isConfigured requires hashed engine parts and hashed model files", () => {
+  assert.equal(aivis.isConfigured({ engine: { parts: [] }, models: { files: [] } }), false);
   assert.equal(
-    aivis.isConfigured({ engine: { parts: [{ name: "e", url: "u" }] }, models: { parts: [{ name: "m", url: "u", sha256: "h" }] } }),
+    aivis.isConfigured({ engine: { parts: [{ name: "e", url: "u", sha256: "h" }] }, models: { files: [{ name: "m", url: "u" }] } }),
     false
   );
   assert.equal(aivis.isConfigured(cfgWith()), true);
@@ -109,11 +114,7 @@ test("installAivis installs the engine and copies .aivmx models into the engine 
       downloadDir,
       sevenZip: "7za.exe",
       fetchImpl: fakeFetch(FETCH),
-      spawnFn: fake7z((dirName) =>
-        dirName === "engine"
-          ? { "AivisSpeech-Engine/run.exe": "exe" }
-          : { "jvnv/jvnv-F1.aivmx": "m1", "jvnv/jvnv-F2.aivmx": "m2" }
-      ),
+      spawnFn: fake7z(() => ({ "Windows-x64/run.exe": "exe" })),
     });
     assert.equal(status.engineInstalled, true);
     assert.equal(status.modelCount, 2);
