@@ -179,6 +179,26 @@ async def synth_all(
     return errors
 
 
+# Câu mẫu ngắn để nghe thử chất giọng (có 、 và 。 để nghe cả chỗ ngắt).
+SAMPLE_TEXT = "こんにちは。今日は、いい天気ですね。"
+
+
+async def sample_voice(provider: TTSProvider, req: SynthRequest, cache_dir: Path, output: Path) -> None:
+    """Đọc một câu mẫu bằng giọng trong `req` (dùng cache như câu thoại) rồi ghi ra `output`."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
+    cached = cache_dir / f"{key}.{provider.ext}"
+    if not cached.exists() or cached.stat().st_size == 0:
+        tmp = cached.with_suffix(".part")
+        try:
+            await provider.synthesize(req, str(tmp))
+            tmp.replace(cached)
+        finally:
+            tmp.unlink(missing_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    AudioSegment.from_file(cached).export(output, format=output.suffix.lstrip(".").lower() or "mp3")
+
+
 def dry_run(project: Project) -> None:
     for it in project.items:
         if isinstance(it, SfxItem):
@@ -276,6 +296,14 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--project", type=Path, help="đọc project.json đã lưu")
     ap.add_argument("-o", "--output", type=Path, help="file đầu ra (.mp3 hoặc .wav)")
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
+    ap.add_argument("--sample", choices=sorted(PROVIDERS), metavar="ENGINE",
+                    help="đọc thử một câu mẫu bằng giọng --voice của engine rồi ghi ra -o (chọn nhanh giọng)")
+    ap.add_argument("--voice", help="giọng cho --sample (tên giọng Edge hoặc mã style VOICEVOX/AivisSpeech)")
+    ap.add_argument("--emotion", default="neutral", choices=["neutral", "happy", "sad", "angry", "surprised"],
+                    help="cảm xúc cho --sample")
+    ap.add_argument("--speed", default="normal", choices=["slow", "normal", "fast"], help="tốc độ cho --sample")
+    ap.add_argument("--pitch", type=int, default=0, help="cao độ (Hz) cho --sample")
+    ap.add_argument("--sample-text", default=SAMPLE_TEXT, help="câu đọc mẫu cho --sample")
     ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
                     help="in danh sách giọng của engine dạng JSON (edge, voicevox, aivis) rồi thoát")
     ap.add_argument("--batch", type=Path, metavar="DIR",
@@ -317,6 +345,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.cache_info or args.clear_cache:
         return _cache_command(args.cache_dir, clear=args.clear_cache)
 
+    if args.sample:
+        if not args.voice or not args.output:
+            ap.error("--sample cần --voice và -o")
+        req = SynthRequest(text=args.sample_text.strip() or SAMPLE_TEXT, voice=args.voice, emotion=args.emotion,
+                           speed=args.speed, pitch=args.pitch)
+        try:
+            asyncio.run(sample_voice(PROVIDERS[args.sample](), req, args.cache_dir, args.output))
+        except Exception as exc:  # noqa: BLE001 - báo lỗi gọn cho giao diện
+            print(f"Không đọc thử được giọng {args.voice}: {exc}", file=sys.stderr)
+            return 1
+        print(f"Đã xuất câu mẫu ra {args.output}")
+        return 0
     if args.list_voices:
         if args.list_voices == "voicevox":
             voices = asyncio.run(list_speakers())

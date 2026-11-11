@@ -80,3 +80,23 @@ describe("RolePanel segmented controls", () => {
     expect(onChange).toHaveBeenCalledWith("1", { emotion: "happy" });
   });
 });
+
+describe("RolePanel voice sample", () => {
+  it("plays a sample for the role and shows the stop state while sampling", () => {
+    const onSampleVoice = vi.fn();
+    const { rerender } = render(
+      <RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} onSampleVoice={onSampleVoice} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Nghe thử giọng của vai 1" }));
+    expect(onSampleVoice).toHaveBeenCalledWith("1");
+    rerender(
+      <RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} onSampleVoice={onSampleVoice} sampling="1" />,
+    );
+    expect(screen.getByRole("button", { name: "Nghe thử giọng của vai 1" }).textContent).toBe("■");
+  });
+
+  it("hides the sample button when no handler is given", () => {
+    renderPanel(undefined, []);
+    expect(screen.queryByRole("button", { name: /Nghe thử giọng/ })).toBeNull();
+  });
+});

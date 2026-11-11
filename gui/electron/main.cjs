@@ -432,6 +432,42 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
 });
 
+// Nghe thử một giọng (chọn nhanh giọng cho vai): tts.py --sample <engine> --voice ... đọc một câu mẫu ngắn.
+const SAMPLE_ENGINES = new Set(["edge", "voicevox", "aivis"]);
+const SAMPLE_EMOTIONS = new Set(["neutral", "happy", "sad", "angry", "surprised"]);
+const SAMPLE_SPEEDS = new Set(["slow", "normal", "fast"]);
+
+ipcMain.handle("voice:sample", async (_evt, { engine, voice, emotion = "neutral", speed = "normal", pitch = 0 } = {}) => {
+  if (!SAMPLE_ENGINES.has(engine)) return { ok: false, error: `Engine không hỗ trợ: ${engine}` };
+  if (typeof voice !== "string" || !voice.trim() || voice.length > 200 || /[\x00-\x1f]/.test(voice)) {
+    return { ok: false, error: "Giọng không hợp lệ" };
+  }
+  const args = [
+    TTS_CLI, "--sample", engine, "--voice", voice,
+    "--emotion", SAMPLE_EMOTIONS.has(emotion) ? emotion : "neutral",
+    "--speed", SAMPLE_SPEEDS.has(speed) ? speed : "normal",
+    "--pitch", String(Math.max(-50, Math.min(50, Math.round(Number(pitch) || 0)))),
+  ];
+  const outPath = path.join(os.tmpdir(), `textts-sample-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`);
+  args.push("-o", outPath);
+  const result = await new Promise((resolve) => {
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
+    let log = "";
+    child.stdout.on("data", (c) => (log += c));
+    child.stderr.on("data", (c) => (log += c));
+    child.on("error", (err) => resolve({ code: -1, log: spawnErrorText(err) }));
+    child.on("close", (code) => resolve({ code, log }));
+  });
+  if (result.code !== 0 || !fs.existsSync(outPath)) {
+    logger.log("ERROR", `Nghe thử giọng ${engine}/${voice} thất bại (mã ${result.code}): ${result.log.trim().slice(0, 2000)}`);
+    const lines = result.log.trim().split(/\r?\n/).filter(Boolean);
+    return { ok: false, error: lines[lines.length - 1] || "Không đọc thử được giọng này" };
+  }
+  const b64 = fs.readFileSync(outPath).toString("base64");
+  fs.rmSync(outPath, { force: true });
+  return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
+});
+
 // Lỗi khi không chạy được tiến trình Python: hiển thị bằng tiếng Việt thay vì thông báo gốc của Node.
 function spawnErrorText(err) {
   logger.log("ERROR", `Không chạy được tiến trình (${PYTHON}): ${err?.code ?? ""} ${err?.message ?? err}`);

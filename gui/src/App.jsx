@@ -88,6 +88,10 @@ export default function App() {
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState("");
   const memoryRef = useRef(loadMemory(window.localStorage));
+  // Nghe thử giọng của vai: mã vai đang đọc mẫu và trình phát riêng (không đụng bản đã xuất).
+  const [samplingId, setSamplingId] = useState(null);
+  const sampleAudioRef = useRef(null);
+  const sampleReqRef = useRef(0); // tăng mỗi lần bấm/dừng: kết quả đến muộn của lần trước bị bỏ qua
   const [pasteEngine, setPasteEngine] = useState(() => memoryRef.current.engine || "edge");
   // Dự án vừa nạp từ đĩa: không ghi nhớ giọng cho tới khi người dùng sửa.
   const loadedRef = useRef(null);
@@ -534,6 +538,44 @@ export default function App() {
     // Bỏ qua kết quả trễ nếu người dùng đã đổi sang engine khác trong lúc chờ.
     if ((projectRef.current?.engine || "edge") === (engine || "edge")) setVoices(list);
     return list;
+  }
+
+  function stopSample() {
+    sampleReqRef.current += 1;
+    sampleAudioRef.current?.pause();
+    sampleAudioRef.current = null;
+    setSamplingId(null);
+  }
+
+  // Đọc một câu mẫu ngắn bằng giọng, cảm xúc, tốc độ và cao độ hiện tại của vai để chọn nhanh giọng.
+  async function sampleVoice(roleId) {
+    if (samplingId === roleId) return stopSample();
+    const proj = projectRef.current;
+    const role = proj?.roles?.[roleId];
+    if (!role) return;
+    stopSample();
+    const reqId = sampleReqRef.current;
+    setSamplingId(roleId);
+    const engine = proj.engine || "edge";
+    const res = await window.textts?.sampleVoice?.({
+      engine,
+      voice: String(role.voice),
+      emotion: role.emotion,
+      speed: role.speed,
+      pitch: role.pitch,
+    });
+    if (reqId !== sampleReqRef.current) return; // đã dừng hoặc chuyển sang vai khác trong lúc chờ
+    if (!res?.ok) {
+      setSamplingId(null);
+      addToast(`Không nghe thử được giọng (${ENGINE_LABELS[engine] ?? engine}): ${res?.error ?? "lỗi không rõ"}`, "error");
+      return;
+    }
+    const audio = new Audio(res.dataUrl);
+    sampleAudioRef.current = audio;
+    audio.onended = () => {
+      if (sampleAudioRef.current === audio) stopSample();
+    };
+    audio.play().catch(() => stopSample());
   }
 
   // Đổi engine của dự án; giọng của vai không có trong engine mới được gán lần lượt theo danh sách giọng mới.
@@ -1194,6 +1236,8 @@ export default function App() {
             voices={voices}
             engine={project.engine || "edge"}
             onChangeEngine={changeEngine}
+            onSampleVoice={sampleVoice}
+            sampling={samplingId}
             timing={project.timing}
             onChangeTiming={(timing) => edit((p) => ({ ...p, timing }))}
             recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
