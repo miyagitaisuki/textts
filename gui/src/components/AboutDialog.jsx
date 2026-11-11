@@ -314,6 +314,25 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
               </div>
 
               <div className="guide-section">
+                <h4>Ghi công VOICEVOX</h4>
+                <p>
+                  textts có nút tải <strong>VOICEVOX ENGINE</strong> phiên bản 0.26.1 (bản CPU cho Windows, tải theo yêu cầu) và tự khởi động engine khi đã cài. Engine dùng giấy phép LGPL v3 hoặc giấy phép riêng, mã nguồn tại{" "}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.textts?.openExternalUrl?.("https://github.com/VOICEVOX/voicevox_engine");
+                    }}
+                  >
+                    github.com/VOICEVOX/voicevox_engine
+                  </a>.
+                </p>
+                <p>
+                  Khi đăng tải hoặc phát hành âm thanh do VOICEVOX tạo, hãy ghi credit theo dạng <code>VOICEVOX:&lt;tên nhân vật&gt;</code> (ví dụ <code>VOICEVOX:ずんだもん</code>) và tuân theo điều khoản sử dụng riêng của từng giọng.
+                </p>
+              </div>
+
+              <div className="guide-section">
                 <h4>Mã nguồn & Đóng góp</h4>
                 <p>
                   Mã nguồn được lưu trữ tại GitHub:{" "}
