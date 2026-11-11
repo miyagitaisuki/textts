@@ -103,17 +103,34 @@ python server.py --host 127.0.0.1 --port 8000
 | `/api/v1/speakers` | `GET` | Lấy danh sách giọng đọc của engine (`edge`, `voicevox`, hoặc `aivis`). |
 | `/api/v1/health` | `GET` | Kiểm tra trạng thái hoạt động của server và các engine cục bộ. |
 
-### 3. Tích hợp với Custom GPTs (ChatGPT Actions)
+### 3. Claude Desktop qua MCP (khuyên dùng)
 
-1. Mở trang [ChatGPT GPT Builder](https://chatgpt.com/create) và tạo GPT mới (ví dụ: "Giáo viên tiếng Nhật").
-2. Chọn mục **Actions** > **Create new action**.
-3. Dán URL OpenAPI Schema: `http://127.0.0.1:8000/openapi.json` (hoặc dán nội dung từ file [`ai_tools/openai_tool.json`](ai_tools/openai_tool.json)).
-4. Khi trò chuyện, bạn chỉ cần yêu cầu ChatGPT soạn bài hội thoại, GPT sẽ gọi `textts` để tạo ngay file âm thanh hoàn chỉnh.
+`ai_tools/mcp_server.py` là MCP server (stdio, chỉ dùng thư viện chuẩn của Python) để Claude Desktop tự soạn kịch bản và tạo bài nghe ngay trong khung chat. Server tự khởi động `server.py` nếu API chưa chạy, và tắt nó khi Claude Desktop thoát.
 
-### 4. Tích hợp với Claude Desktop / Claude Code / AI Agents
+Các công cụ Claude dùng được:
 
-- Schema định nghĩa công cụ (Tool Use / MCP) đã được cấu hình sẵn trong [`ai_tools/claude_tool.json`](ai_tools/claude_tool.json).
-- Đoạn mã Python mẫu để AI Agent gọi API và tải file kết quả: [`ai_tools/example_agent.py`](ai_tools/example_agent.py).
+| Công cụ | Việc làm |
+| --- | --- |
+| `textts_status` | Kiểm tra API, VOICEVOX và AivisSpeech có đang chạy |
+| `textts_list_voices` | Liệt kê mã giọng của một engine (`voicevox`, `aivis`, `edge`) |
+| `textts_check_script` | Kiểm tra cú pháp kịch bản và gợi ý furigana `漢字{かな}` |
+| `textts_create_audio` | Tạo âm thanh, bản chậm 0.8×, phụ đề SRT, phiếu học tập HTML; trả về đường dẫn file |
+
+Cài đặt:
+
+1. Trong app textts: **Trợ giúp → Hướng dẫn → tab Kết nối AI**, bấm **Sao chép** ở phần Claude Desktop (cấu hình đã điền sẵn đường dẫn trên máy). Mẫu: [`ai_tools/claude_desktop_config.example.json`](ai_tools/claude_desktop_config.example.json).
+2. Trong Claude Desktop: **Settings → Developer → Edit Config**, dán vào `claude_desktop_config.json` (nếu đã có `mcpServers` thì chỉ thêm mục `"textts"`), lưu file rồi thoát hẳn và mở lại Claude Desktop.
+3. Nhắn cho Claude, ví dụ: *"Soạn hội thoại phỏng vấn xin việc 8 câu cho 2 vai và tạo bài nghe bằng AivisSpeech."*
+
+Chạy từ mã nguồn: `"command": "python"`, `"args": ["<đường dẫn repo>/ai_tools/mcp_server.py"]`. Biến môi trường tùy chọn: `TEXTTS_API_URL` (mặc định `http://127.0.0.1:8000`), `TEXTTS_NO_AUTOSTART=1` để không tự khởi động API.
+
+### 4. Claude Code và AI Agent khác trên cùng máy
+
+Claude Code chạy lệnh trên máy nên chỉ cần bật API rồi nhờ Claude gọi `POST http://127.0.0.1:8000/api/v1/dialogue`. Mẫu code: [`ai_tools/example_agent.py`](ai_tools/example_agent.py). Schema công cụ cho Tool Use: [`ai_tools/claude_tool.json`](ai_tools/claude_tool.json).
+
+### 5. ChatGPT (Custom GPT Actions)
+
+ChatGPT chạy trên máy chủ của OpenAI nên **không gọi được** `127.0.0.1` trên máy bạn. Muốn dùng phải đưa API ra Internet qua đường hầm HTTPS (ví dụ Cloudflare Tunnel) rồi dán `https://…/openapi.json` (hoặc nội dung [`ai_tools/openai_tool.json`](ai_tools/openai_tool.json)) vào mục **Actions** của GPT. Không khuyên dùng: API hiện không có mật khẩu, ai biết địa chỉ cũng dùng được máy bạn để tạo âm thanh.
 
 ---
 

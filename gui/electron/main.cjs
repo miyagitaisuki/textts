@@ -432,6 +432,19 @@ ipcMain.handle("tts:preview", async (_evt, { projectPath, lineId }) => {
   return { ok: true, dataUrl: `data:audio/mpeg;base64,${b64}` };
 });
 
+// Cấu hình MCP cho Claude Desktop: chạy ai_tools/mcp_server.py bằng đúng Python mà textts đang dùng.
+ipcMain.handle("mcp:config", async () => {
+  const config = {
+    mcpServers: {
+      textts: {
+        command: PYTHON,
+        args: [path.join(REPO_ROOT, "ai_tools", "mcp_server.py")],
+      },
+    },
+  };
+  return JSON.stringify(config, null, 2);
+});
+
 // Nghe thử một giọng (chọn nhanh giọng cho vai): tts.py --sample <engine> --voice ... đọc một câu mẫu ngắn.
 const SAMPLE_ENGINES = new Set(["edge", "voicevox", "aivis"]);
 const SAMPLE_EMOTIONS = new Set(["neutral", "happy", "sad", "angry", "surprised"]);

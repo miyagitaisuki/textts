@@ -2,9 +2,24 @@
 // Hướng dẫn chi tiết về: Chạy riêng lẻ (CLI), Kết nối với AI, Cú pháp kịch bản và Thông tin phiên bản.
 import { useEffect, useState } from "react";
 
+const MCP_CONFIG_EXAMPLE = `{
+  "mcpServers": {
+    "textts": {
+      "command": "C:\\\\Users\\\\<tên>\\\\AppData\\\\Local\\\\Programs\\\\textts-gui\\\\resources\\\\python\\\\python.exe",
+      "args": ["C:\\\\Users\\\\<tên>\\\\AppData\\\\Local\\\\Programs\\\\textts-gui\\\\resources\\\\engine\\\\ai_tools\\\\mcp_server.py"]
+    }
+  }
+}`;
+
 export default function AboutDialog({ onClose, docsUrl, apiRunning, onToggleApi }) {
   const [activeTab, setActiveTab] = useState("cli");
   const [copiedKey, setCopiedKey] = useState("");
+  // Cấu hình MCP cho Claude Desktop với đúng đường dẫn Python và mcp_server.py trên máy này.
+  const [mcpConfig, setMcpConfig] = useState(MCP_CONFIG_EXAMPLE);
+
+  useEffect(() => {
+    window.textts?.getMcpConfig?.().then((cfg) => cfg && setMcpConfig(cfg));
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -203,22 +218,37 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
               </div>
 
               <div className="guide-section">
-                <h4>2. Tích hợp với Custom GPTs (ChatGPT Actions)</h4>
+                <h4>2. Claude Desktop (khuyên dùng): tạo bài nghe ngay trong khung chat</h4>
+                <p>
+                  textts có sẵn MCP server (<code>ai_tools/mcp_server.py</code>). Sau khi khai báo, bạn chỉ cần nhắn cho Claude
+                  ví dụ "Soạn hội thoại phỏng vấn xin việc 8 câu và tạo bài nghe bằng AivisSpeech": Claude tự soạn kịch bản,
+                  chọn giọng và tạo file MP3, bản chậm, phụ đề, phiếu học tập. MCP server tự bật API nếu API chưa chạy.
+                </p>
                 <ol className="guide-steps">
-                  <li>Truy cập <a href="https://chatgpt.com/create" target="_blank" rel="noreferrer">ChatGPT GPT Builder</a> và tạo một Custom GPT (ví dụ: "Giáo viên tiếng Nhật").</li>
-                  <li>Trong mục <strong>Actions</strong>, bấm <strong>Create new action</strong>.</li>
-                  <li>Nhập URL OpenAPI Schema: <code>http://127.0.0.1:8000/openapi.json</code> (hoặc sao chép nội dung file <code>ai_tools/openai_tool.json</code>).</li>
-                  <li>Khi người dùng yêu cầu soạn bài thoại, GPT sẽ tự động gọi textts để tạo âm thanh và trả về link file bài học hoàn chỉnh.</li>
+                  <li>Trong Claude Desktop, mở <strong>Settings → Developer → Edit Config</strong> (file <code>claude_desktop_config.json</code>).</li>
+                  <li>Dán cấu hình dưới đây (đã điền đường dẫn trên máy này). Nếu file đã có <code>mcpServers</code>, chỉ thêm mục <code>"textts"</code>.</li>
+                  <li>Lưu file rồi thoát hẳn và mở lại Claude Desktop. Công cụ <strong>textts</strong> sẽ xuất hiện trong khung chat.</li>
+                  <li>Bật VOICEVOX hoặc AivisSpeech trong textts nếu muốn dùng các engine này (Edge TTS chỉ cần Internet).</li>
                 </ol>
+                <div className="code-block">
+                  <pre>{mcpConfig}</pre>
+                  <button className="copy-btn" onClick={() => copyCode(mcpConfig, "mcp")}>
+                    {copiedKey === "mcp" ? "✓ Đã chép" : "Sao chép"}
+                  </button>
+                </div>
+                <p className="muted">
+                  Claude Code (chạy trên máy này) không cần cấu hình: chỉ cần bật API rồi nhờ Claude gọi
+                  <code> http://127.0.0.1:8000/api/v1/dialogue</code>. Mẫu code Python: <code>ai_tools/example_agent.py</code>.
+                </p>
               </div>
 
               <div className="guide-section">
-                <h4>3. Tích hợp với Claude Desktop / Claude Code / AI Agents</h4>
+                <h4>3. ChatGPT (Custom GPT Actions)</h4>
                 <p>
-                  Khai báo tool <code>generate_japanese_dialogue_audio</code> bằng cách nhập file schema <code>ai_tools/claude_tool.json</code> vào cấu hình MCP hoặc cấu hình tools của agent.
-                </p>
-                <p>
-                  Thư mục <code>ai_tools/example_agent.py</code> có sẵn đoạn code Python mẫu để AI Agent gọi API trực tiếp và nhận kết quả trọn gói.
+                  ChatGPT chạy trên máy chủ của OpenAI nên <strong>không gọi được</strong> địa chỉ <code>127.0.0.1</code> trên máy bạn.
+                  Muốn dùng, phải đưa API ra Internet qua một đường hầm HTTPS (ví dụ Cloudflare Tunnel) rồi dán URL
+                  <code> https://…/openapi.json</code> vào mục Actions của GPT. Không khuyên dùng: API hiện không có mật khẩu,
+                  ai biết địa chỉ cũng dùng được máy bạn để tạo âm thanh.
                 </p>
               </div>
 
