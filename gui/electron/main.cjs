@@ -176,9 +176,15 @@ ipcMain.handle("folder:open", async (_evt, { projectPath }) => {
 });
 
 ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
-  const target = assertAllowed(filePath, new Set([".json"]));
-  fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");
-  return true;
+  // Giao diện chờ { ok: true } (hoặc { ok: false, error }) — trả về `true` trần
+  // khiến mọi lần lưu bị coi là lỗi và chặn luôn "Nghe thử"/"Tạo âm thanh".
+  try {
+    const target = assertAllowed(filePath, new Set([".json"]));
+    fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.

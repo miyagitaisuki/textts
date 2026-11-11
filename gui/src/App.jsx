@@ -388,7 +388,8 @@ export default function App() {
       addToast("Đã lưu dự án", "success");
       return true;
     }
-    addToast("Lỗi khi lưu dự án", "error");
+    if (res?.error) setLog((prev) => prev + `\nLỗi khi lưu dự án:\n${res.error}\n`);
+    addToast(res?.error ? `Lỗi khi lưu dự án: ${res.error}` : "Lỗi khi lưu dự án", "error");
     return false;
   }
 
