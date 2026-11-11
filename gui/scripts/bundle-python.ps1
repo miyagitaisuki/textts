@@ -67,7 +67,7 @@ if (-not $FfExe) { throw "Không tìm thấy ffmpeg.exe trong gói tải về" }
 Copy-Item $FfExe.FullName (Join-Path $FfDir "ffmpeg.exe")
 
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
-& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk; print('imports OK')"
+& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
 & (Join-Path $FfDir "ffmpeg.exe") -version | Select-Object -First 1
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg.exe không chạy được" }
