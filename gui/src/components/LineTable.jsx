@@ -242,14 +242,18 @@ export default function LineTable({
               <div className="text-input-wrap">
                 {hasError && <span className="flag error-flag" title={tooltip}>✕</span>}
                 {hasWarn && <span className="flag warn-flag" title={tooltip}>⚠</span>}
-                <input
-                  type="text"
+                {/* Ô nhiều dòng tự giãn theo nội dung để soạn đoạn văn dài; vẫn là MỘT câu thoại nên không cho xuống dòng. */}
+                <textarea
                   className="speech-text-input"
+                  rows={1}
                   value={it.display}
                   disabled={disabled}
                   placeholder="Nhập câu thoại tiếng Nhật (ví dụ: すみません、駅{えき}はどこですか)..."
                   onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onPatch(it.id, { display: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  onChange={(e) => onPatch(it.id, { display: e.target.value.replace(/[\r\n]+/g, "") })}
                 />
               </div>
 

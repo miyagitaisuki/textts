@@ -722,12 +722,13 @@ input, textarea, select {
 }
 
 .furigana-live-badge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  /* block (không phải flex): đoạn dài phải xuống dòng như văn bản, không tách mỗi chữ thành một cột */
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: normal;
   font-family: "Noto Sans JP", sans-serif;
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 2.2;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: #090e1780;
@@ -743,7 +744,7 @@ input, textarea, select {
 
 .text-input-wrap {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   position: relative;
 }
@@ -757,7 +758,14 @@ input, textarea, select {
   color: #fff;
   font-family: "Noto Sans JP", sans-serif;
   font-size: 15px;
+  line-height: 1.7;
   transition: all 0.15s ease;
+  resize: none;
+  field-sizing: content; /* tự cao theo nội dung (Chromium 123+) */
+  min-height: 2.4em;
+  max-height: 40vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .speech-text-input:focus {
@@ -791,6 +799,8 @@ input, textarea, select {
   font-family: "Noto Sans JP", sans-serif;
   color: #e2e8f0;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .apply-suggestion-btn {
@@ -969,6 +979,7 @@ input, textarea, select {
   font-family: "Noto Sans JP", sans-serif;
   font-size: 16px;
   line-height: 2;
+  overflow-wrap: anywhere;
 }
 
 .ruby-preview-box ruby rt {
