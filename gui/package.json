@@ -72,6 +72,10 @@
         "filter": [
           "ffmpeg.exe"
         ]
+      },
+      {
+        "from": "python-runtime/voicevox",
+        "to": "voicevox"
       }
     ],
     "win": {

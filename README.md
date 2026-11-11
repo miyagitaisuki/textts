@@ -298,8 +298,13 @@ Chỉ liệt kê engine miễn phí, mã mở, dùng không kinh doanh.
 | Engine | Trạng thái | Ghi chú |
 | --- | --- | --- |
 | Edge-TTS | Đã cài (mặc định) | Miễn phí, không cần key. Dịch vụ của Microsoft không chính thức, không có SLA, có thể ngừng bất cứ lúc nào. Thư viện `edge-tts` là mã mở. |
-| VOICEVOX | Đã cài, chạy offline | Cần chạy VOICEVOX Engine trước (mặc định `http://127.0.0.1:50021`, đổi bằng `VOICEVOX_URL`). Trường `voice` là mã nhân vật, ví dụ `3`. Không có cảm xúc tách riêng; `emotion` bị bỏ qua. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. Chưa kiểm chứng với engine thật trong môi trường phát triển (chỉ test bằng server giả). |
+| VOICEVOX | Đã cài, chạy offline | Bộ cài Windows đã kèm VOICEVOX ENGINE 0.26.1 (bản CPU) và tự khởi động engine; nếu VOICEVOX đã chạy sẵn ở cổng đó thì app dùng engine đó và không tắt khi thoát. Khi chạy từ mã nguồn, cần tự chạy VOICEVOX Engine (mặc định `http://127.0.0.1:50021`, đổi bằng `VOICEVOX_URL`). Trường `voice` là mã nhân vật, ví dụ `3`. Không có cảm xúc tách riêng; `emotion` bị bỏ qua. Mỗi nhân vật có điều khoản riêng, cần đọc trước khi dùng. Chưa kiểm chứng với engine thật trong môi trường phát triển (chỉ test bằng server giả). |
 | AivisSpeech | Đã hỗ trợ, chạy offline | Cần chạy AivisSpeech Engine (mặc định `http://127.0.0.1:10101`, đổi bằng `AIVIS_URL`). Hỗ trợ bộ model chất lượng cao JVNV (Style-BERT-VITS2), tự động ánh xạ 5 cảm xúc (neutral/happy/sad/angry/surprised) theo style nhân vật. |
+
+### Ghi công VOICEVOX
+
+- VOICEVOX ENGINE (phiên bản 0.26.1) được đóng gói trong bộ cài Windows, giấy phép LGPL v3 hoặc giấy phép riêng. Mã nguồn: https://github.com/VOICEVOX/voicevox_engine
+- Khi đăng tải hoặc phát hành âm thanh do VOICEVOX tạo, ghi credit theo dạng `VOICEVOX:<tên nhân vật>` (ví dụ `VOICEVOX:ずんだもん`) và tuân theo điều khoản sử dụng riêng của từng giọng. Các thông tin này cũng hiển thị trong hộp thoại "Hướng dẫn & Giới thiệu" của ứng dụng.
 
 Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phép của mã và của model giọng, và có giọng tiếng Nhật hay không. Khi thêm engine mới, chỉ cần viết một lớp mới kế thừa `TTSProvider` trong `providers/`.
 

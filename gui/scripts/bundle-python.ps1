@@ -66,6 +66,35 @@ $FfExe = Get-ChildItem -Path (Join-Path $Tmp "ffmpeg") -Recurse -Filter "ffmpeg.
 if (-not $FfExe) { throw "Không tìm thấy ffmpeg.exe trong gói tải về" }
 Copy-Item $FfExe.FullName (Join-Path $FfDir "ffmpeg.exe")
 
+# 5b. VOICEVOX ENGINE (bản CPU cho Windows) để app tự khởi động engine, người dùng không cần cài thêm.
+# Phiên bản và SHA256 được ghim cứng: đổi phiên bản thì phải cập nhật cả hai.
+# Bản phát hành chia thành .7z.001, .7z.002...; bản hiện tại là một file duy nhất (kiểm tra bằng HEAD của URL).
+$VvVersion = "0.26.1"
+$VvSha256 = "2143ab794bf7241b1f88704f88bf4fb10ea6cf453035f54e1b3a73aea2c668fc"
+$VvUrl = "https://github.com/VOICEVOX/voicevox_engine/releases/download/$VvVersion/voicevox_engine-windows-cpu-$VvVersion.7z.001"
+$VvArchive = Join-Path $Tmp "voicevox.7z.001"
+$VvExtract = Join-Path $Tmp "voicevox"
+$VvDir = Join-Path $Work "voicevox"
+
+$ProgressPreference = "SilentlyContinue"
+& curl.exe -fL --retry 3 -o $VvArchive $VvUrl
+if ($LASTEXITCODE -ne 0) { throw "Tải VOICEVOX ENGINE $VvVersion thất bại" }
+$VvHash = (Get-FileHash -Algorithm SHA256 $VvArchive).Hash.ToLower()
+if ($VvHash -ne $VvSha256) { throw "SHA256 VOICEVOX không khớp (nhận $VvHash, cần $VvSha256)" }
+
+if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) { throw "Cần 7z (7-Zip) trong PATH để giải nén VOICEVOX" }
+& 7z x $VvArchive "-o$VvExtract" -y | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Giải nén VOICEVOX thất bại" }
+Remove-Item -Force $VvArchive  # file nén ~1.9 GB, không cần nữa sau khi giải nén
+
+# run.exe có thể nằm ở thư mục gốc của gói hoặc trong một thư mục con: lấy thư mục chứa nó làm gốc engine.
+$VvRun = Get-ChildItem -Path $VvExtract -Recurse -Filter "run.exe" | Select-Object -First 1
+if (-not $VvRun) { throw "Không tìm thấy run.exe trong gói VOICEVOX" }
+New-Item -ItemType Directory -Force -Path $VvDir | Out-Null
+Copy-Item -Path (Join-Path $VvRun.Directory.FullName "*") -Destination $VvDir -Recurse -Force
+if (-not (Test-Path (Join-Path $VvDir "run.exe"))) { throw "Thiếu run.exe sau khi chép VOICEVOX vào $VvDir" }
+Remove-Item -Recurse -Force $VvExtract
+
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
 & (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }

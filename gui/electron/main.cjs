@@ -11,6 +11,7 @@ const logger = require("./logger.cjs");
 const { friendlyPythonError } = require("./python-errors.cjs");
 const { resolvePython, buildChildEnv } = require("./runtime.cjs");
 const { buildMenu } = require("./menu.cjs");
+const { resolveEngineExe, startEngine, stopEngine } = require("./voicevox-engine.cjs");
 
 logger.installCrashHandlers();
 
@@ -469,9 +470,38 @@ async function pingUrl(url, timeoutMs = 1500) {
   }
 }
 
+// VOICEVOX đi kèm bộ cài: app tự khởi động khi sẵn sàng (xem voicevox-engine.cjs).
+// voicevoxBoot là promise của lần khởi động; voicevox:status chờ nó xong rồi mới báo trạng thái.
+let voicevoxEngine = null;
+let voicevoxBoot = null;
+
+function bootVoicevox() {
+  const exe = resolveEngineExe(process.resourcesPath);
+  voicevoxBoot = startEngine({
+    url: VOICEVOX_URL,
+    exe,
+    ping: (u) => pingUrl(u),
+    spawn,
+    log: (level, msg) => logger.log(level, msg),
+    onSpawn: (child) => {
+      voicevoxEngine = { ready: false, managed: true, child };
+    },
+  })
+    .then((engine) => {
+      voicevoxEngine = engine;
+      return engine.ready;
+    })
+    .catch((err) => {
+      logger.log("ERROR", `[VOICEVOX] Khởi động thất bại: ${err?.stack ?? err}`);
+      return false;
+    });
+  return voicevoxBoot;
+}
+
 ipcMain.handle("voicevox:status", async () => {
+  if (voicevoxBoot) await voicevoxBoot;
   const ok = await pingUrl(`${VOICEVOX_URL}/version`);
-  return { ok, url: VOICEVOX_URL };
+  return { ok, url: VOICEVOX_URL, managed: Boolean(voicevoxEngine?.managed) };
 });
 
 ipcMain.handle("apiServer:status", async () => {
@@ -535,10 +565,14 @@ app.on("before-quit", () => {
     }
     apiServerProcess = null;
   }
+  // Chỉ tắt VOICEVOX do textts khởi động; engine người dùng tự mở từ trước được giữ nguyên.
+  stopEngine(voicevoxEngine);
+  voicevoxEngine = null;
 });
 
 app.whenReady().then(() => {
   logger.log("INFO", `Khởi động textts ${app.getVersion()} trên ${process.platform}`);
+  bootVoicevox();
   const win = createWindow();
   mainWindow = win;
   buildMenu({
