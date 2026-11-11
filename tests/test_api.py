@@ -214,3 +214,14 @@ def test_dialogue_stacks_background_layers_from_the_library(mock_vv_alive, mock_
         # Tên không có trong thư viện: báo lỗi kèm gợi ý thay vì bỏ qua
         bad = client.post("/api/v1/dialogue", json={**payload, "options": {**payload["options"], "bgm": "tàu điện"}})
         assert bad.status_code == 400 and "mua" in bad.json()["detail"]
+
+
+def test_voice_bank_endpoint_ranks_voices_for_a_role(tmp_path, monkeypatch):
+    (tmp_path / "voice-bank.json").write_text(json.dumps({"voices": {
+        "aivis:1": {"label": "まお", "nickname": "Bé Mao", "gender": "nữ", "age": 8, "styles": ["trẻ con"]},
+        "aivis:2": {"label": "ろてじん", "nickname": "Ông Lão", "gender": "nam", "age": 75, "styles": ["trầm"]},
+    }}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("TEXTTS_USER_DATA", str(tmp_path))
+    data = client.get("/api/v1/voice-bank", params={"engine": "aivis", "q": "ông già giọng trầm"}).json()
+    assert data["items"][0]["voice"] == "2"
+    assert len(client.get("/api/v1/voice-bank").json()["items"]) == 2

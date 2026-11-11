@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from core.audio import add_background, loudness_normalize, time_stretch
 from core.appdata import output_root
+from core.voicebank import list_voices as bank_voices, search_voices
 from core.sounds import SoundNotFound, catalog_text, credits_for, find_sound, list_sounds, ref_of, search_sounds
 from core.builder import build, practice_items, to_srt
 from core.models import Config, LineItem, Project, Role, SfxItem, Timing, load_config
@@ -213,6 +214,17 @@ async def sounds(kind: Literal["sfx", "bgm"] | None = None, q: str | None = None
         return out
 
     return {"ok": True, "query": q, "items": [view(it) for it in items]}
+
+
+@app.get("/api/v1/voice-bank", summary="Ngân hàng giọng: ghi chú của giáo viên (biệt danh, giới tính, tuổi, chất giọng)")
+async def voice_bank(engine: Literal["voicevox", "aivis", "edge"] | None = None, q: str | None = None):
+    """Giọng giáo viên đã ghi chú trong app, để AI chọn giọng hợp vai.
+
+    `q` mô tả vai (vd. "bé gái 8 tuổi vui tươi", "ông già giọng trầm") → kết quả xếp theo độ hợp,
+    kèm `why`. Dùng `voice` làm mã giọng trong roles (đúng `engine`). Giọng bị ẩn không được trả về.
+    """
+    items = search_voices(q, engine) if q else bank_voices(engine)
+    return {"ok": True, "query": q, "items": items}
 
 
 @app.get("/api/v1/sounds/catalog", summary="Mục lục thư viện âm thanh dạng Markdown (cho AI đọc)")

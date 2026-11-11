@@ -44,7 +44,10 @@ ENGINES = ["voicevox", "aivis", "edge"]
 INSTRUCTIONS = """textts tạo bài nghe hội thoại tiếng Nhật (MP3, bản chậm 0.8x, phụ đề SRT, phiếu học tập HTML có furigana).
 Quy trình nên dùng:
 1. textts_status: xem engine nào đang chạy (VOICEVOX, AivisSpeech; Edge TTS cần Internet).
-2. textts_list_voices: lấy mã giọng của engine đã chọn, chọn giọng hợp với từng vai.
+2. Chọn giọng: gọi textts_find_voices với mô tả từng vai (vd. "bé gái 8 tuổi vui tươi", "ông già giọng trầm")
+   để lấy giọng giáo viên đã ghi chú trong Ngân hàng giọng (biệt danh, giới tính, tuổi, chất giọng; ★ là yêu thích).
+   Dùng đúng 'voice' và 'engine' trả về; các vai trong một bài phải cùng một engine. Nếu ngân hàng trống
+   hoặc không hợp, dùng textts_list_voices để xem toàn bộ giọng của engine.
 3. Soạn kịch bản: mỗi câu thoại một dòng, bắt đầu bằng số vai: "[1] こんにちは。" hoặc "1 こんにちは。".
    Chú âm chữ Hán khó bằng 漢字{かな} (ví dụ 面接{めんせつ}). Khoảng lặng thêm: dòng "[pause=1500]".
    Khoảng lặng giữa các câu được chèn tự động, không cần thêm [pause] cho mỗi câu.
@@ -76,6 +79,19 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {"engine": {"type": "string", "enum": ENGINES, "default": "voicevox"}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_find_voices",
+        "description": "Tìm giọng hợp vai trong Ngân hàng giọng của giáo viên (biệt danh, giới tính, tuổi, chất giọng "
+        "như vui, buồn, trẻ con, trầm). Trả về 'engine' và 'voice' dùng trong 'roles' của textts_create_audio.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Mô tả vai, vd. 'bé gái 8 tuổi vui tươi', 'nhân viên nam trẻ'"},
+                "engine": {"type": "string", "enum": ENGINES, "description": "Bỏ trống để tìm ở mọi engine"},
+            },
             "additionalProperties": False,
         },
     },
@@ -370,6 +386,26 @@ def _bgm_layers(value) -> list:
     return out
 
 
+def tool_find_voices(args: dict) -> str:
+    params = {k: v for k, v in (("engine", args.get("engine")), ("q", args.get("query"))) if v}
+    res = call_api("GET", "/api/v1/voice-bank" + (("?" + urllib.parse.urlencode(params)) if params else ""))
+    items = res.get("items", [])
+    if not items:
+        return ("Ngân hàng giọng chưa có giọng phù hợp (giáo viên chưa ghi chú, hoặc không khớp). "
+                "Dùng textts_list_voices để xem toàn bộ giọng của engine.")
+    lines = []
+    for v in items[:15]:
+        info = [v.get("gender") or "", f"{v['age']} tuổi" if v.get("age") is not None else "", ", ".join(v.get("styles") or [])]
+        name = (v.get("nickname") or v.get("label") or v["voice"]) + (" ★" if v.get("favorite") else "")
+        line = f"- engine={v['engine']} voice={v['voice']!r}: {name} ({v.get('label', '')}) — " + "; ".join(i for i in info if i)
+        if v.get("description"):
+            line += f" — {v['description']}"
+        if v.get("why"):
+            line += f" [khớp: {', '.join(v['why'])}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def tool_list_sounds(args: dict) -> str:
     kind = args.get("kind")
     if kind not in (None, "", "bgm", "sfx"):
@@ -403,6 +439,7 @@ def tool_list_sounds(args: dict) -> str:
 HANDLERS = {
     "textts_status": tool_status,
     "textts_list_sounds": tool_list_sounds,
+    "textts_find_voices": tool_find_voices,
     "textts_list_voices": tool_list_voices,
     "textts_check_script": tool_check_script,
     "textts_create_audio": tool_create_audio,

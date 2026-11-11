@@ -26,6 +26,7 @@ export default function Inspector({
   tab,
   onTabChange,
   exportPanel = null,
+  onOpenVoiceBank,
 }) {
   // Tab có thể do workspace điều khiển (tab/onTabChange); không truyền thì tự giữ trạng thái.
   const [ownTab, setOwnTab] = useState("roles"); // "roles" | "mixer" | "line" | "export"
@@ -102,6 +103,7 @@ export default function Inspector({
               sampling={sampling}
               recorder={recorder}
               library={library}
+              onOpenVoiceBank={onOpenVoiceBank}
             />
           </div>
         )}

@@ -22,8 +22,8 @@ def test_initialize_and_list_tools():
     assert "漢字{かな}" in init["result"]["instructions"]
     assert call("initialize", {"protocolVersion": "1999-01-01"})["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in call("tools/list")["result"]["tools"]]
-    assert names == ["textts_status", "textts_list_voices", "textts_list_sounds", "textts_check_script",
-                     "textts_create_audio"]
+    assert names == ["textts_status", "textts_list_voices", "textts_find_voices", "textts_list_sounds",
+                     "textts_check_script", "textts_create_audio"]
     assert mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     assert call("nope")["error"]["code"] == -32601
 

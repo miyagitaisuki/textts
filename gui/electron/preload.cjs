@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("textts", {
   checkForUpdates: () => ipcRenderer.invoke("update:check"),
   openFolder: (projectPath) => ipcRenderer.invoke("folder:open", { projectPath }),
   listVoices: (engine) => ipcRenderer.invoke("voices:list", { engine }),
+  getVoiceBank: (engine) => ipcRenderer.invoke("voicebank:get", { engine }),
+  setVoiceBank: (entry) => ipcRenderer.invoke("voicebank:set", entry),
   loadPresets: () => ipcRenderer.invoke("presets:load"),
   savePresets: (presets) => ipcRenderer.invoke("presets:save", { presets }),
   lint: (projectPath) => ipcRenderer.invoke("lint:check", { projectPath }),

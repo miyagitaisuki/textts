@@ -20,12 +20,14 @@ import ReadingsDialog from "./components/ReadingsDialog.jsx";
 import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
 import AboutDialog from "./components/AboutDialog.jsx";
 import SoundLibraryDialog from "./components/SoundLibraryDialog.jsx";
+import VoiceBankDialog from "./components/VoiceBankDialog.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
 import StatusBar from "./components/StatusBar.jsx";
 import { PanelHeader, Splitter, WorkspaceBar } from "./components/Workspace.jsx";
 import { WORKSPACES, loadWorkspace, patchLayout, resetLayout, saveWorkspace } from "./lib/workspace.js";
 import {
   PlayIcon,
+  UsersIcon,
   PlusIcon,
   ClockIcon,
   MusicIcon,
@@ -143,6 +145,7 @@ export default function App() {
     setWs((s) => patchLayout(s, { timeline: typeof v === "function" ? v(s.layouts[s.active].timeline) : v }));
   const resizeBase = useRef(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [showVoiceBank, setShowVoiceBank] = useState(false);
 
   useEffect(() => {
     saveWorkspace(window.localStorage, ws);
@@ -1043,6 +1046,7 @@ export default function App() {
     { id: "find", group: "Chỉnh sửa", label: "Tìm & thay", shortcut: "Ctrl+F", run: () => setSearchOpen(true), disabled: noProject },
     { id: "undo", group: "Chỉnh sửa", label: "Hoàn tác", shortcut: "Ctrl+Z", run: undo, disabled: busy || !canUndo },
     { id: "redo", group: "Chỉnh sửa", label: "Làm lại", shortcut: "Ctrl+Y", run: redo, disabled: busy || !canRedo },
+    { id: "voice-bank", group: "Giọng", label: "Ngân hàng giọng (biệt danh, tuổi, chất giọng)", keywords: "voice nhan vat vai", run: () => setShowVoiceBank(true) },
     { id: "readings", group: "Chỉnh sửa", label: "Từ điển cách đọc", run: () => setShowReadings(true), disabled: busy },
     { id: "preview-all", group: "Âm thanh", label: "Nghe thử toàn bài (không lưu)", shortcut: "Shift+Space", run: previewAll, disabled: noProject },
     { id: "preview-line", group: "Âm thanh", label: "Nghe thử câu đang chọn", shortcut: "F5", run: () => selectedLineId() && preview(selectedLineId()), disabled: noProject || !selectedLineId() },
@@ -1170,6 +1174,11 @@ export default function App() {
             label: "Engine giọng",
             content: (
               <>
+                <RibbonGroup label="Giọng">
+                  <RibbonButton highlight icon={<UsersIcon size={20} />} label="Ngân hàng giọng"
+                    title="Đặt biệt danh, giới tính, tuổi, chất giọng cho từng giọng để chọn vai nhanh và để AI chọn đúng"
+                    onClick={() => setShowVoiceBank(true)} />
+                </RibbonGroup>
                 <RibbonGroup label="VOICEVOX">
                   <span
                     className="status-pill"
@@ -1421,6 +1430,7 @@ export default function App() {
                     recorder={(id) => <Recorder projectPath={filePath} roleId={id} disabled={busy} />}
                     library={library}
                     output={output}
+                    onOpenVoiceBank={() => setShowVoiceBank(true)}
                     tab={layout.inspectorTab}
                     onTabChange={(t) => setWs((s) => patchLayout(s, { inspectorTab: t }))}
                     exportPanel={
@@ -1540,6 +1550,14 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         onChooseOutputRoot={chooseOutputRoot}
       />
+
+      {showVoiceBank && (
+        <VoiceBankDialog
+          initialEngine={project?.engine && project.engine !== "edge" ? project.engine : "voicevox"}
+          onClose={() => setShowVoiceBank(false)}
+          onChanged={() => project && loadVoices(project.engine || "edge")}
+        />
+      )}
 
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
 

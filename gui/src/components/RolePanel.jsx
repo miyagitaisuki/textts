@@ -81,6 +81,7 @@ export default function RolePanel({
   sampling = null,
   recorder,
   library,
+  onOpenVoiceBank,
 }) {
   const isEdge = !engine || engine === "edge";
   const options = voices.length ? voices : isEdge ? VOICES.map((v) => ({ value: v, label: v })) : [];
@@ -88,6 +89,11 @@ export default function RolePanel({
     <section className="roles">
       <div className="section-head" style={{ marginBottom: 8 }}>
         <h2>Vai</h2>
+        {onOpenVoiceBank && (
+          <button className="ghost" onClick={onOpenVoiceBank} title="Đặt biệt danh, tuổi, chất giọng cho từng giọng">
+            Ngân hàng giọng…
+          </button>
+        )}
         {onAddRole && (
           <button
             className="ghost"

@@ -28,6 +28,9 @@ const runtimeOpts = {
   exists: fs.existsSync,
 };
 const PYTHON = resolvePython({ env: process.env, ...runtimeOpts });
+const voiceBank = require("./voice-bank.cjs");
+const USER_DATA = app.getPath("userData");
+
 // Python (tts.py, server.py) đọc thư viện âm thanh và thư mục xuất của app qua các biến này.
 const CHILD_ENV = {
   ...buildChildEnv({ env: process.env, ...runtimeOpts }),
@@ -447,8 +450,8 @@ ipcMain.handle("presets:save", async (_evt, { presets }) => {
 });
 
 // Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
-ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
-  const eng = engine || "edge";
+// Danh sách giọng thô của engine (tts.py --list-voices) và ghi nhớ tên giọng vào ngân hàng giọng.
+function rawVoices(eng) {
   return new Promise((resolve) => {
     const child = spawn(PYTHON, [TTS_CLI, "--list-voices", eng], { cwd: REPO_ROOT, env: CHILD_ENV });
     let out = "";
@@ -456,13 +459,31 @@ ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
     child.on("error", () => resolve([]));
     child.on("close", (code) => {
       try {
-        resolve(code === 0 ? JSON.parse(out) : []);
+        const list = code === 0 ? JSON.parse(out) : [];
+        if (list.length) voiceBank.rememberLabels(USER_DATA, eng, list);
+        resolve(list);
       } catch {
         resolve([]);
       }
     });
   });
+}
+
+// Ô chọn giọng của vai: kèm biệt danh/tuổi/chất giọng từ ngân hàng giọng, yêu thích lên đầu, ẩn giọng bị ẩn.
+ipcMain.handle("voices:list", async (_evt, { engine } = {}) => {
+  const eng = engine || "edge";
+  const list = await rawVoices(eng);
+  return voiceBank.decorateOptions(eng, list, voiceBank.readBank(USER_DATA));
 });
+
+// Ngân hàng giọng: giọng thô của engine + ghi chú đã lưu (kể cả giọng đã ghi nhớ khi engine đang tắt).
+ipcMain.handle("voicebank:get", async (_evt, { engine } = {}) => {
+  const eng = engine || "edge";
+  const list = await rawVoices(eng);
+  return { engine: eng, online: list.length > 0, voices: list, bank: voiceBank.readBank(USER_DATA) };
+});
+
+ipcMain.handle("voicebank:set", async (_evt, entry = {}) => voiceBank.setVoice(USER_DATA, entry));
 
 // Kiểm tra kịch bản đã lưu (tts.py --lint): trả về [{id, level, message}].
 ipcMain.handle("lint:check", async (_evt, { projectPath }) => {
