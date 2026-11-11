@@ -79,7 +79,14 @@ $VvDir = Join-Path $Work "voicevox"
 $ProgressPreference = "SilentlyContinue"
 & curl.exe -fL --retry 3 -o $VvArchive $VvUrl
 if ($LASTEXITCODE -ne 0) { throw "Tải VOICEVOX ENGINE $VvVersion thất bại" }
-$VvHash = (Get-FileHash -Algorithm SHA256 $VvArchive).Hash.ToLower()
+$VvStream = [System.IO.File]::OpenRead($VvArchive)
+try {
+    $Sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        # Dùng API .NET trực tiếp: Get-FileHash không có sẵn trong mọi môi trường PowerShell trên runner.
+        $VvHash = ([System.BitConverter]::ToString($Sha.ComputeHash($VvStream)) -replace "-", "").ToLower()
+    } finally { $Sha.Dispose() }
+} finally { $VvStream.Dispose() }
 if ($VvHash -ne $VvSha256) { throw "SHA256 VOICEVOX không khớp (nhận $VvHash, cần $VvSha256)" }
 
 if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) { throw "Cần 7z (7-Zip) trong PATH để giải nén VOICEVOX" }
