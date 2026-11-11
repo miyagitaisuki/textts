@@ -5,8 +5,8 @@ from pydub import AudioSegment, effects
 
 DEFAULT_TIMING = {
     "lead_in_ms": 300,
-    "turn_gap_ms": 700,
-    "same_speaker_gap_ms": 400,
+    "turn_gap_ms": 1400,
+    "same_speaker_gap_ms": 800,
     "question_gap_ms": 300,
     "tail_ms": 500,
 }

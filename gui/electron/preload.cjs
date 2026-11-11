@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("textts", {
   generate: (projectPath, outputPath, options) =>
     ipcRenderer.invoke("tts:generate", { projectPath, outputPath, options }),
   preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
+  sampleVoice: (opts) => ipcRenderer.invoke("voice:sample", opts),
   suggestReadings: (texts) => ipcRenderer.invoke("reading:suggest", { texts }),
   loadOutput: (audioPath) => ipcRenderer.invoke("output:load", { audioPath }),
   pickAudioFile: () => ipcRenderer.invoke("file:pickAudio"),

@@ -16,6 +16,8 @@ export default function Inspector({
   voices = [],
   engine,
   onChangeEngine,
+  onSampleVoice,
+  sampling,
   timing,
   onChangeTiming,
   recorder,
@@ -76,6 +78,8 @@ export default function Inspector({
               voices={voices}
               engine={engine}
               onChangeEngine={onChangeEngine}
+              onSampleVoice={onSampleVoice}
+              sampling={sampling}
               recorder={recorder}
               library={library}
             />

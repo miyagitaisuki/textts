@@ -77,6 +77,8 @@ export default function RolePanel({
   voices = [],
   engine = "edge",
   onChangeEngine,
+  onSampleVoice,
+  sampling = null,
   recorder,
   library,
 }) {
@@ -135,16 +137,30 @@ export default function RolePanel({
                 </button>
               )}
             </div>
-            <label>
-              Giọng
-              <select value={role.voice} disabled={disabled}
-                onChange={(e) => onChange(id, { voice: e.target.value })}>
-                {options.some((o) => o.value === role.voice) ? null : (
-                  <option value={role.voice}>{role.voice}</option>
+            <div className="voice-field">
+              <span className="voice-label" id={`voice-label-${id}`}>Giọng</span>
+              <div className="voice-row">
+                <select value={role.voice} disabled={disabled} aria-labelledby={`voice-label-${id}`}
+                  onChange={(e) => onChange(id, { voice: e.target.value })}>
+                  {options.some((o) => o.value === role.voice) ? null : (
+                    <option value={role.voice}>{role.voice}</option>
+                  )}
+                  {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {onSampleVoice && (
+                  <button
+                    type="button"
+                    className={`voice-sample ${sampling === id ? "playing" : ""}`}
+                    disabled={disabled || (sampling && sampling !== id)}
+                    onClick={() => onSampleVoice(id)}
+                    title={sampling === id ? "Đang đọc mẫu… (bấm để dừng)" : "Nghe thử giọng này (một câu mẫu ngắn)"}
+                    aria-label={`Nghe thử giọng của vai ${id}`}
+                  >
+                    {sampling === id ? "■" : "▶"}
+                  </button>
                 )}
-                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
+              </div>
+            </div>
             <Segmented label="Cảm xúc" options={EMOTIONS} labels={EMOTION_LABELS} value={role.emotion}
               disabled={disabled} onChange={(v) => onChange(id, { emotion: v })} />
             <Segmented label="Tốc độ" options={SPEEDS} labels={SPEED_LABELS} value={role.speed}
