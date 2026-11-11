@@ -31,7 +31,16 @@ import {
   BookOpenIcon,
   HardDriveIcon,
   InfoIcon,
+  SlidersIcon,
+  FileTextIcon,
+  FolderIcon,
+  ClipboardIcon,
+  SaveIcon,
+  ServerIcon,
+  ExternalLinkIcon,
+  RefreshIcon,
 } from "./components/Icons.jsx";
+import Ribbon, { RibbonButton, RibbonGroup } from "./components/Ribbon.jsx";
 
 const nextId = (items) => {
   const nums = items.map((it) => Number(it.id.slice(1))).filter((n) => !Number.isNaN(n));
@@ -694,127 +703,151 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Top Studio Navbar */}
-      <header className="studio-navbar">
-        <div className="studio-brand">
-          <span className="brand-dot" />
-          <span>textts Studio</span>
-        </div>
-
-        <button className="nav-btn primary" onClick={openScript} disabled={busy}>
-          Mở kịch bản .txt
-        </button>
-        <button className="nav-btn" onClick={openProject} disabled={busy}>
-          Mở dự án
-        </button>
-        <button className="nav-btn ghost" onClick={() => setPasting((v) => !v)} disabled={busy}>
-          Dán kịch bản
-        </button>
-
-        <button
-          className="nav-btn ghost"
-          onClick={openProjectFolder}
-          disabled={busy || !filePath}
-          title="Mở thư mục chứa file dự án"
-        >
-          Thư mục
-        </button>
-
-        <button
-          className="nav-btn ghost"
-          onClick={() => setShowReadings(true)}
-          disabled={busy}
-          title="Mở từ điển cách đọc Kanji (readings.yaml)"
-        >
-          <BookOpenIcon size={14} />
-          <span>Từ điển</span>
-        </button>
-
-        <button
-          className="nav-btn ghost"
-          onClick={() => setShowCache(true)}
-          disabled={busy}
-          title="Quản lý bộ nhớ đệm cache âm thanh"
-        >
-          Cache
-        </button>
-
-        <button
-          className="nav-btn ghost"
-          onClick={() => setShowAbout(true)}
-          disabled={busy}
-          title="Hướng dẫn sử dụng CLI, kết nối AI & Giới thiệu"
-        >
-          <InfoIcon size={14} />
-          <span>Hướng dẫn</span>
-        </button>
-
-        <button
-          className={`nav-btn ghost ${searchOpen ? "active" : ""}`}
-          onClick={() => setSearchOpen((v) => !v)}
-          disabled={busy || !project}
-          title="Tìm kiếm & Thay thế (Ctrl+F)"
-        >
-          <SearchIcon size={14} />
-          <span>Tìm</span>
-        </button>
-
-        <button
-          className={`nav-btn ghost ${apiServer.running ? "active" : ""}`}
-          onClick={toggleApiServer}
-          title={apiServer.running ? "API Server đang bật trên cổng 8000. Bấm để tắt" : "Bật API Server cho AI"}
-        >
-          <span className={`status-dot ${apiServer.running ? "dot-green" : "dot-gray"}`} />
-          <span>API {apiServer.running ? ":8000" : "Tắt"}</span>
-        </button>
-
-        {apiServer.running && (
-          <button className="nav-btn ghost" onClick={openDocs} title="Mở trang tài liệu Swagger UI">
-            Docs
-          </button>
-        )}
-
-        <span
-          className="status-pill"
-          title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
-        >
-          <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
-          <span>VOICEVOX</span>
-        </span>
-
-        <VoicevoxButton />
-        <AivisButton />
-
-        <span className="nav-spacer" />
-
-        <button
-          className="nav-btn ghost"
-          onClick={undo}
-          disabled={busy || !canUndo}
-          title="Hoàn tác (Ctrl+Z)"
-          aria-label="Hoàn tác"
-        >
-          <UndoIcon size={14} />
-        </button>
-        <button
-          className="nav-btn ghost"
-          onClick={redo}
-          disabled={busy || !canRedo}
-          title="Làm lại (Ctrl+Shift+Z)"
-          aria-label="Làm lại"
-        >
-          <RedoIcon size={14} />
-        </button>
-
-        <button
-          className="nav-btn ghost"
-          onClick={save}
-          disabled={busy || !project || !dirty}
-          title="Lưu dự án (Ctrl+S)"
-        >
-          Lưu {dirty ? "●" : ""}
-        </button>
-      </header>
+      {/* Ribbon kiểu Word: các chức năng gom theo tab */}
+      <Ribbon
+        brand={
+          <div className="studio-brand">
+            <span className="brand-dot" />
+            <span>textts Studio</span>
+          </div>
+        }
+        quickAccess={
+          <>
+            <button
+              type="button"
+              className="qat-btn"
+              onClick={save}
+              disabled={busy || !project || !dirty}
+              title="Lưu dự án (Ctrl+S)"
+              aria-label="Lưu"
+            >
+              <SaveIcon size={14} />
+              {dirty && <span className="qat-dirty" />}
+            </button>
+            <button type="button" className="qat-btn" onClick={undo} disabled={busy || !canUndo}
+              title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">
+              <UndoIcon size={14} />
+            </button>
+            <button type="button" className="qat-btn" onClick={redo} disabled={busy || !canRedo}
+              title="Làm lại (Ctrl+Shift+Z)" aria-label="Làm lại">
+              <RedoIcon size={14} />
+            </button>
+          </>
+        }
+        status={
+          <span
+            className="status-pill"
+            title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
+          >
+            <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
+            <span>VOICEVOX</span>
+          </span>
+        }
+        tabs={[
+          {
+            id: "home",
+            label: "Trang chủ",
+            content: (
+              <>
+                <RibbonGroup label="Dự án">
+                  <RibbonButton primary icon={<FileTextIcon size={20} />} label="Mở kịch bản .txt"
+                    onClick={openScript} disabled={busy} />
+                  <RibbonButton icon={<FolderIcon size={20} />} label="Mở dự án" onClick={openProject} disabled={busy} />
+                  <div className="ribbon-stack">
+                    <RibbonButton size="small" icon={<ClipboardIcon size={14} />} label="Dán kịch bản"
+                      active={pasting} onClick={() => setPasting((v) => !v)} disabled={busy} />
+                    <RibbonButton size="small" icon={<SaveIcon size={14} />} label={dirty ? "Lưu ●" : "Lưu"}
+                      title="Lưu dự án (Ctrl+S)" onClick={save} disabled={busy || !project || !dirty} />
+                    <RibbonButton size="small" icon={<FolderIcon size={14} />} label="Mở thư mục"
+                      title="Mở thư mục chứa file dự án" onClick={openProjectFolder} disabled={busy || !filePath} />
+                  </div>
+                </RibbonGroup>
+                <RibbonGroup label="Chèn">
+                  <RibbonButton icon={<PlusIcon size={20} />} label="Câu thoại" title="Thêm câu thoại mới (Ctrl+Enter)"
+                    onClick={addLine} disabled={busy || !project} />
+                  <RibbonButton icon={<ClockIcon size={20} />} label="Khoảng nghỉ" title="Thêm khoảng nghỉ giữa các câu"
+                    onClick={addPause} disabled={busy || !project} />
+                  <RibbonButton icon={<MusicIcon size={20} />} label="Hiệu ứng SFX" title="Chèn hiệu ứng âm thanh SFX"
+                    onClick={addSfx} disabled={busy || !project} />
+                </RibbonGroup>
+                <RibbonGroup label="Chỉnh sửa">
+                  <RibbonButton icon={<SearchIcon size={20} />} label="Tìm & thay" title="Tìm kiếm & Thay thế (Ctrl+F)"
+                    active={searchOpen} onClick={() => setSearchOpen((v) => !v)} disabled={busy || !project} />
+                  <div className="ribbon-stack">
+                    <RibbonButton size="small" icon={<UndoIcon size={14} />} label="Hoàn tác" title="Hoàn tác (Ctrl+Z)"
+                      onClick={undo} disabled={busy || !canUndo} />
+                    <RibbonButton size="small" icon={<RedoIcon size={14} />} label="Làm lại" title="Làm lại (Ctrl+Shift+Z)"
+                      onClick={redo} disabled={busy || !canRedo} />
+                  </div>
+                </RibbonGroup>
+                <RibbonGroup label="Âm thanh">
+                  <RibbonButton primary icon={<SparklesIcon size={20} />} label="Tạo âm thanh"
+                    title="Tạo file âm thanh cho toàn bộ kịch bản" onClick={generate} disabled={busy || !project} />
+                  <RibbonButton icon={<SlidersIcon size={20} />} label="Tùy chọn xuất"
+                    title="Tùy chọn xuất file (SRT, MP3, Chậm 0.8x, Phiếu học tập)"
+                    onClick={() => setShowExport(true)} disabled={busy || !project} />
+                </RibbonGroup>
+              </>
+            ),
+          },
+          {
+            id: "engine",
+            label: "Engine giọng",
+            content: (
+              <>
+                <RibbonGroup label="VOICEVOX">
+                  <span
+                    className="status-pill"
+                    title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
+                  >
+                    <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
+                    <span>{voicevoxOk ? "Đang chạy" : "Chưa bật"}</span>
+                  </span>
+                  <VoicevoxButton />
+                </RibbonGroup>
+                <RibbonGroup label="AivisSpeech">
+                  <AivisButton />
+                </RibbonGroup>
+                <RibbonGroup label="Kết nối AI">
+                  <RibbonButton icon={<ServerIcon size={20} />} active={apiServer.running}
+                    label={apiServer.running ? "API :8000" : "Bật API"}
+                    title={apiServer.running ? "API Server đang bật trên cổng 8000. Bấm để tắt" : "Bật API Server cho AI"}
+                    onClick={toggleApiServer} />
+                  <RibbonButton icon={<ExternalLinkIcon size={20} />} label="Tài liệu API"
+                    title="Mở trang tài liệu Swagger UI" onClick={openDocs} disabled={!apiServer.running} />
+                </RibbonGroup>
+              </>
+            ),
+          },
+          {
+            id: "tools",
+            label: "Công cụ",
+            content: (
+              <>
+                <RibbonGroup label="Cách đọc">
+                  <RibbonButton icon={<BookOpenIcon size={20} />} label="Từ điển"
+                    title="Mở từ điển cách đọc Kanji (readings.yaml)" onClick={() => setShowReadings(true)} disabled={busy} />
+                </RibbonGroup>
+                <RibbonGroup label="Bộ nhớ đệm">
+                  <RibbonButton icon={<HardDriveIcon size={20} />} label="Cache"
+                    title="Quản lý bộ nhớ đệm cache âm thanh" onClick={() => setShowCache(true)} disabled={busy} />
+                </RibbonGroup>
+              </>
+            ),
+          },
+          {
+            id: "help",
+            label: "Trợ giúp",
+            content: (
+              <RibbonGroup label="Trợ giúp">
+                <RibbonButton icon={<InfoIcon size={20} />} label="Hướng dẫn"
+                  title="Hướng dẫn sử dụng CLI, kết nối AI & Giới thiệu" onClick={() => setShowAbout(true)} />
+                <RibbonButton icon={<RefreshIcon size={20} />} label="Kiểm tra cập nhật" onClick={checkUpdates} />
+              </RibbonGroup>
+            ),
+          },
+        ]}
+      />
 
       {/* Popover Tìm kiếm & Thay thế */}
       {searchOpen && project && (
@@ -911,38 +944,6 @@ export default function App() {
                 <span>Kịch bản hội thoại</span>
                 <span className="line-counter">({lineCount} câu thoại)</span>
               </h2>
-              <div className="editor-actions-group">
-                <button
-                  type="button"
-                  className="editor-action-btn"
-                  onClick={addLine}
-                  disabled={busy}
-                  title="Thêm câu thoại mới (Ctrl+Enter)"
-                >
-                  <PlusIcon size={13} />
-                  <span>Câu thoại</span>
-                </button>
-                <button
-                  type="button"
-                  className="editor-action-btn"
-                  onClick={addPause}
-                  disabled={busy}
-                  title="Thêm khoảng nghỉ giữa các câu"
-                >
-                  <ClockIcon size={13} />
-                  <span>Khoảng nghỉ</span>
-                </button>
-                <button
-                  type="button"
-                  className="editor-action-btn"
-                  onClick={addSfx}
-                  disabled={busy}
-                  title="Chèn hiệu ứng âm thanh SFX"
-                >
-                  <MusicIcon size={13} />
-                  <span>Hiệu ứng SFX</span>
-                </button>
-              </div>
             </div>
 
             <div className="script-scroll-area">

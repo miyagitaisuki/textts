@@ -98,7 +98,7 @@ export default function RolePanel({
         )}
       </div>
       {onChangeEngine && (
-        <label>
+        <label className="engine-picker">
           Engine đọc
           <select value={engine || "edge"} disabled={disabled} onChange={(e) => onChangeEngine(e.target.value)}>
             {ENGINES.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
