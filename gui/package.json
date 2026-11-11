@@ -108,7 +108,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "artifactName": "textts-${version}-setup.${ext}"
+      "artifactName": "textts-${version}-setup.${ext}",
+      "include": "build/installer.nsh"
     }
   }
 }
