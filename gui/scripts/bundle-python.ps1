@@ -1,4 +1,4 @@
-# Đóng gói Python (embeddable) + thư viện + ffmpeg vào gui/python-runtime để electron-builder đưa vào bộ cài.
+﻿# Đóng gói Python (embeddable) + thư viện + ffmpeg vào gui/python-runtime để electron-builder đưa vào bộ cài.
 # Chạy trên Windows: npm run bundle:python  (được gọi tự động bởi npm run dist:win)
 # Kết quả:
 #   gui/python-runtime/python/   -> python.exe + thư viện (đóng gói vào resources/python)
@@ -100,10 +100,13 @@ if (-not (Test-Path (Join-Path $SzOut "7za.exe"))) { throw "Thiếu 7za.exe sau 
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
 & (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
-& (Join-Path $FfDir "ffmpeg.exe") -version | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { throw "ffmpeg.exe không chạy được" }
-& (Join-Path $FfDir "ffprobe.exe") -version | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { throw "ffprobe.exe không chạy được" }
+# Chạy hết lệnh rồi mới lấy dòng đầu: "| Select-Object -First 1" cắt luồng giữa chừng,
+# tiến trình bị dừng và $LASTEXITCODE khác 0 dù chương trình chạy được.
+foreach ($Name in @("ffmpeg.exe", "ffprobe.exe")) {
+    $Out = & (Join-Path $FfDir $Name) -version
+    if ($LASTEXITCODE -ne 0) { throw "$Name không chạy được" }
+    $Out | Select-Object -First 1
+}
 
 Remove-Item -Recurse -Force $Tmp
 Write-Host "Đã đóng gói runtime vào $Work"
