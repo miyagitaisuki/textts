@@ -23,7 +23,8 @@ def test_initialize_and_list_tools():
     assert call("initialize", {"protocolVersion": "1999-01-01"})["result"]["protocolVersion"] == "2025-06-18"
     names = [t["name"] for t in call("tools/list")["result"]["tools"]]
     assert names == ["textts_status", "textts_list_voices", "textts_find_voices", "textts_list_sounds",
-                     "textts_check_script", "textts_create_audio"]
+                     "textts_check_script", "textts_create_audio", "textts_create_lesson", "textts_check_audio",
+                     "textts_list_characters", "textts_levels"]
     assert mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     assert call("nope")["error"]["code"] == -32601
 
@@ -98,3 +99,33 @@ def test_stdio_end_to_end_starts_api(tmp_path):
     check = replies[3]["result"]
     assert check["isError"] is False, check
     assert "駅{えき}" in check["content"][0]["text"]
+
+
+def test_create_lesson_and_check_audio(monkeypatch):
+    seen = []
+
+    def fake(method, path, body=None, timeout=30):
+        seen.append((path, body))
+        if path == "/api/v1/check-audio":
+            return {"ok": False, "checked": 2, "suspicious": [
+                {"id": "L002", "score": 0.89, "display": "駅の近く", "heard": "敵の近く"}]}
+        return {"ok": True, "title": "Thuê nhà", "duration_s": 30, "line_count": 4, "folder": "C:/out/1-02",
+                "vocab_count": 1, "question_count": 1,
+                "files": {"audio": "C:/out/1-02/1-02.mp3", "vocab": "C:/out/1-02/1-02_tu-vung.mp3",
+                          "roleplay_2": "C:/out/1-02/1-02_dong-vai-ミン.mp3"}}
+
+    monkeypatch.setattr(mcp_server, "api_request", fake)
+    res = call("tools/call", {"name": "textts_create_lesson", "arguments": {
+        "title": "Thuê nhà", "filename": "1-02", "script": "[1]{fx=phone} もしもし。 // A lô.", "level": "N4",
+        "roles": {"2": {"character": "Minh"}},
+        "vocab": [{"word": "探{さが}す", "meaning": "tìm"}, {"meaning": "thiếu từ"}],
+        "questions": [{"question": "何を探していますか。", "choices": ["アパート", "仕事"], "answer": 1}]}})["result"]
+    text = res["content"][0]["text"]
+    assert "Từ vựng: C:/out/1-02/1-02_tu-vung.mp3" in text and "Bản đóng vai (2)" in text
+    path, body = seen[0]
+    assert path == "/api/v1/lesson"
+    assert body["options"]["level"] == "N4" and body["roles"] == {"2": {"character": "Minh"}}
+    assert len(body["vocab"]) == 1 and body["questions"][0]["answer"] == 1
+
+    res = call("tools/call", {"name": "textts_check_audio", "arguments": {"script": "[1] 駅の近く。"}})["result"]
+    assert "L002" in res["content"][0]["text"] and "敵の近く" in res["content"][0]["text"]
