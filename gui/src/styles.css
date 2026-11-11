@@ -1983,3 +1983,15 @@ kbd {
   border-color: var(--role-color, var(--accent-emerald));
   background: var(--bg-elevated);
 }
+
+/* Ngân hàng âm thanh */
+.sound-library-modal { width: min(640px, 94vw); }
+.sound-library-modal .muted { color: var(--text-muted); font-size: 12px; margin: 0; }
+.sound-library-modal .error-text { color: var(--accent-red); margin: 0; font-size: 13px; }
+.sound-tabs { display: flex; gap: 6px; align-items: center; }
+.sound-tabs button.active { background: var(--accent-blue); color: #fff; }
+.sound-list { display: flex; flex-direction: column; gap: 12px; max-height: 52vh; overflow-y: auto; }
+.sound-list h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-subtle); }
+.sound-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--radius-sm); }
+.sound-row:hover { background: var(--bg-card-hover); }
+.sound-row .sound-name { flex: 1; font-size: 13px; }

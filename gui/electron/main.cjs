@@ -267,6 +267,46 @@ ipcMain.handle("file:pickAudio", async () => {
   return path.resolve(res.filePaths[0]);
 });
 
+// --- Ngân hàng âm thanh (gói CC0 của textts + thư viện cá nhân) ---
+const soundLib = require("./sound-library.cjs");
+const SOUND_PACK = require("./sound-pack.json");
+const SOUND_LIB_DIR = path.join(app.getPath("userData"), "sound-library");
+const soundLibArgs = () => ({ libDir: SOUND_LIB_DIR, manifest: SOUND_PACK });
+
+ipcMain.handle("soundlib:list", async () => soundLib.listLibrary(soundLibArgs()));
+
+ipcMain.handle("soundlib:download", async (evt, { ids } = {}) => {
+  try {
+    const count = await soundLib.downloadPack({
+      ...soundLibArgs(),
+      ids: Array.isArray(ids) ? ids.filter((i) => typeof i === "string") : undefined,
+      log: (text) => evt.sender.send("tts:log", `${text}\n`),
+    });
+    return { ok: true, count, ...soundLib.listLibrary(soundLibArgs()) };
+  } catch (err) {
+    logger.log("ERROR", `Tải gói âm thanh: ${err.message}`);
+    return { ok: false, error: `Không tải được âm thanh: ${err.message}` };
+  }
+});
+
+ipcMain.handle("soundlib:import", async (_evt, { kind } = {}) => {
+  const res = await dialog.showOpenDialog({
+    title: kind === "bgm" ? "Thêm nhạc/âm nền vào thư viện" : "Thêm hiệu ứng vào thư viện",
+    filters: [{ name: "Âm thanh", extensions: ["mp3", "wav", "ogg", "m4a"] }],
+    properties: ["openFile", "multiSelections"],
+  });
+  if (res.canceled) return { ok: true, added: [], ...soundLib.listLibrary(soundLibArgs()) };
+  const added = soundLib.importToMine({ libDir: SOUND_LIB_DIR, kind, files: res.filePaths });
+  return { ok: true, added, ...soundLib.listLibrary(soundLibArgs()) };
+});
+
+ipcMain.handle("soundlib:remove", async (_evt, { file }) => {
+  soundLib.removeMine({ libDir: SOUND_LIB_DIR, file });
+  return soundLib.listLibrary(soundLibArgs());
+});
+
+ipcMain.handle("soundlib:read", async (_evt, { file }) => soundLib.readAsDataUrl({ libDir: SOUND_LIB_DIR, file }));
+
 // Mở phiếu in HTML bằng trình duyệt mặc định.
 ipcMain.handle("worksheet:open", async (_evt, { projectPath }) => {
   const proj = assertAllowed(projectPath, new Set([".json"]));

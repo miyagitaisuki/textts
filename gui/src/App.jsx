@@ -19,6 +19,7 @@ import ExportDialog from "./components/ExportDialog.jsx";
 import ReadingsDialog from "./components/ReadingsDialog.jsx";
 import CacheManagerDialog from "./components/CacheManagerDialog.jsx";
 import AboutDialog from "./components/AboutDialog.jsx";
+import SoundLibraryDialog from "./components/SoundLibraryDialog.jsx";
 import {
   PlayIcon,
   PlusIcon,
@@ -99,6 +100,8 @@ export default function App() {
   const [showReadings, setShowReadings] = useState(false);
   const [showCache, setShowCache] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  // Hộp thoại ngân hàng âm thanh đang mở: { kind: "sfx" | "bgm", resolve(path) }
+  const [soundPicker, setSoundPicker] = useState(null);
   const [readingsDict, setReadingsDict] = useState({});
   const [hasWorksheet, setHasWorksheet] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -752,10 +755,17 @@ export default function App() {
     });
   }
 
+  // Mở ngân hàng âm thanh, trả về đường dẫn file được chọn ("" nếu đóng hộp thoại).
+  function pickFromSoundLibrary(kind) {
+    if (!window.textts?.listSounds) return window.textts?.pickAudioFile?.() ?? Promise.resolve("");
+    return new Promise((resolve) => setSoundPicker({ kind, resolve }));
+  }
+
   async function addSfx() {
     let chosenPath = "";
-    if (window.textts?.pickAudioFile) {
-      chosenPath = await window.textts.pickAudioFile();
+    if (window.textts) {
+      chosenPath = await pickFromSoundLibrary("sfx");
+      if (!chosenPath) return;
     }
     if (!chosenPath) {
       chosenPath = window.prompt("Nhập đường dẫn file hiệu ứng âm thanh (.wav, .mp3):");
@@ -1299,11 +1309,25 @@ export default function App() {
           opts={exportOpts}
           onChange={setExportOpts}
           roles={project?.roles || {}}
-          onPickAudio={() => window.textts?.pickAudioFile?.()}
+          onPickAudio={() => pickFromSoundLibrary("bgm")}
           onOpenWorksheet={() => window.textts?.openWorksheet?.(filePath)}
           hasWorksheet={hasWorksheet}
           disabled={busy}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {soundPicker && (
+        <SoundLibraryDialog
+          kind={soundPicker.kind}
+          onPick={(file) => {
+            soundPicker.resolve(file);
+            soundPicker.resolve = () => {};
+          }}
+          onClose={() => {
+            soundPicker.resolve("");
+            setSoundPicker(null);
+          }}
         />
       )}
 

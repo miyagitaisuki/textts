@@ -176,7 +176,7 @@ export default function ExportDialog({
                   onChange={(e) => set({ bgmPath: e.target.value })}
                 />
                 <button type="button" className="ghost" onClick={pickBgm} disabled={disabled}>
-                  Chọn…
+                  🎵 Thư viện…
                 </button>
                 {opts.bgmPath && (
                   <button

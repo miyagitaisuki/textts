@@ -1,0 +1,227 @@
+{
+  "version": "v1",
+  "license": "CC0-1.0",
+  "baseUrl": "https://raw.githubusercontent.com/miyagitaisuki/textts/main/sound-pack/v1/",
+  "items": [
+    {
+      "id": "sfx-chuong-cua",
+      "kind": "sfx",
+      "name": "Chuông cửa (ピンポーン)",
+      "category": "Nhà cửa",
+      "file": "sfx-chuong-cua.mp3",
+      "bytes": 26664,
+      "sha256": "62096be4130650138fe58be228103379a9974e031239a493c31f2cc7db911eeb",
+      "duration": 2.15
+    },
+    {
+      "id": "sfx-go-cua",
+      "kind": "sfx",
+      "name": "Gõ cửa 3 tiếng",
+      "category": "Nhà cửa",
+      "file": "sfx-go-cua.mp3",
+      "bytes": 20082,
+      "sha256": "af120239f10ce8a1b11de4ddeed583d9bcf02a0b8940c2c555a5f267ae42af08",
+      "duration": 1.6
+    },
+    {
+      "id": "sfx-dien-thoai-reo",
+      "kind": "sfx",
+      "name": "Điện thoại reo",
+      "category": "Nhà cửa",
+      "file": "sfx-dien-thoai-reo.mp3",
+      "bytes": 60833,
+      "sha256": "c3a83f0441051fcecfe674ff7a8673002a065f08c81d11c02510caf66cc0fc9b",
+      "duration": 5.0
+    },
+    {
+      "id": "sfx-tin-nhan",
+      "kind": "sfx",
+      "name": "Báo tin nhắn",
+      "category": "Nhà cửa",
+      "file": "sfx-tin-nhan.mp3",
+      "bytes": 10364,
+      "sha256": "c869dcc1a17da7a87d8029379dd49652c4d147f14d0939facf2cae9736308f0d",
+      "duration": 0.8
+    },
+    {
+      "id": "sfx-chuong-truong",
+      "kind": "sfx",
+      "name": "Chuông trường (キーンコーン)",
+      "category": "Trường học",
+      "file": "sfx-chuong-truong.mp3",
+      "bytes": 102838,
+      "sha256": "346abc1f6c19040c97f37faf116f1ee05cf8cfa860ec58dce16bf58315667260",
+      "duration": 8.5
+    },
+    {
+      "id": "sfx-thong-bao-bat-dau",
+      "kind": "sfx",
+      "name": "Thông báo nhà ga (bắt đầu)",
+      "category": "Nhà ga / Công cộng",
+      "file": "sfx-thong-bao-bat-dau.mp3",
+      "bytes": 31993,
+      "sha256": "9a06350e8c7ff62fc6159a321461d6a2e9039c43d1167f726d0960da0ebefe1f",
+      "duration": 2.6
+    },
+    {
+      "id": "sfx-thong-bao-ket-thuc",
+      "kind": "sfx",
+      "name": "Thông báo nhà ga (kết thúc)",
+      "category": "Nhà ga / Công cộng",
+      "file": "sfx-thong-bao-ket-thuc.mp3",
+      "bytes": 31993,
+      "sha256": "e9bb454ec4b39438def5d3e0ddf819d32cfd22183aafe6da3d8e85f44dae27d7",
+      "duration": 2.6
+    },
+    {
+      "id": "sfx-dung",
+      "kind": "sfx",
+      "name": "Trả lời đúng (ピンポン)",
+      "category": "Lớp học / Quiz",
+      "file": "sfx-dung.mp3",
+      "bytes": 12872,
+      "sha256": "4b66bc438e714a5b6dc716c370c5c62f0e1389402d09bede557f0de14361ff58",
+      "duration": 1.0
+    },
+    {
+      "id": "sfx-sai",
+      "kind": "sfx",
+      "name": "Trả lời sai (ブー)",
+      "category": "Lớp học / Quiz",
+      "file": "sfx-sai.mp3",
+      "bytes": 9110,
+      "sha256": "fc481d3ec09e947d35be1dfc58058c60d34187cacedef2c7ac3c6bd187b29d91",
+      "duration": 0.7
+    },
+    {
+      "id": "sfx-vo-tay",
+      "kind": "sfx",
+      "name": "Vỗ tay",
+      "category": "Lớp học / Quiz",
+      "file": "sfx-vo-tay.mp3",
+      "bytes": 48921,
+      "sha256": "08c7cf69f944162e18ea3c44218ef7fad9d44f39d44184f12fc9e9da94434f4a",
+      "duration": 4.0
+    },
+    {
+      "id": "sfx-lat-trang",
+      "kind": "sfx",
+      "name": "Lật trang sách",
+      "category": "Lớp học / Quiz",
+      "file": "sfx-lat-trang.mp3",
+      "bytes": 7856,
+      "sha256": "885c678347ad20ffefca18d2663b49d634b02f6e33090a29a8afdafcb472d6a2",
+      "duration": 0.6
+    },
+    {
+      "id": "sfx-buoc-chan",
+      "kind": "sfx",
+      "name": "Tiếng bước chân",
+      "category": "Đời sống",
+      "file": "sfx-buoc-chan.mp3",
+      "bytes": 53623,
+      "sha256": "4d4c401d99366be10e1eacb7284b81dfed4c48bbe6d51df5eac61b43f97d141a",
+      "duration": 4.4
+    },
+    {
+      "id": "sfx-chup-anh",
+      "kind": "sfx",
+      "name": "Chụp ảnh",
+      "category": "Đời sống",
+      "file": "sfx-chup-anh.mp3",
+      "bytes": 5662,
+      "sha256": "8e87e9b21ef59a581afb3f8a19832ff791ceb538ab29360a0a633eae478991e4",
+      "duration": 0.4
+    },
+    {
+      "id": "sfx-cham-coc",
+      "kind": "sfx",
+      "name": "Chạm cốc",
+      "category": "Đời sống",
+      "file": "sfx-cham-coc.mp3",
+      "bytes": 10364,
+      "sha256": "436dad323a1b528e177b01d41c44bbc9c477fd4d75af659bb06fa1b4ec3d9804",
+      "duration": 0.8
+    },
+    {
+      "id": "bgm-quan-ca-phe",
+      "kind": "bgm",
+      "name": "Quán cà phê (rì rầm + tiếng cốc)",
+      "category": "Âm nền",
+      "file": "bgm-quan-ca-phe.mp3",
+      "bytes": 305653,
+      "sha256": "5cbc41749c6e20c11c5804c771b48001557031fbb22cf63a397cf2bd32d068d6",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-dam-dong",
+      "kind": "bgm",
+      "name": "Đám đông / sảnh chờ",
+      "category": "Âm nền",
+      "file": "bgm-dam-dong.mp3",
+      "bytes": 305653,
+      "sha256": "c33abab78382307118389d9f0f8aa3633499fb193ce9bf22aebb08d833467100",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-mua",
+      "kind": "bgm",
+      "name": "Mưa",
+      "category": "Thiên nhiên",
+      "file": "bgm-mua.mp3",
+      "bytes": 305653,
+      "sha256": "de612e2ffd05f76f35b12ea9f92057a151c33d1b5e3b45344d48b70bfb572658",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-gio",
+      "kind": "bgm",
+      "name": "Gió",
+      "category": "Thiên nhiên",
+      "file": "bgm-gio.mp3",
+      "bytes": 305653,
+      "sha256": "f0abcb0d5cdc1eb378c9ff601b3b878394d2e907c5d00bb38ca7209096ddbd89",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-song-bien",
+      "kind": "bgm",
+      "name": "Sóng biển",
+      "category": "Thiên nhiên",
+      "file": "bgm-song-bien.mp3",
+      "bytes": 305653,
+      "sha256": "b9d5936b0ea56dfea20c5fb0fe9385b68da4959e601fe0585d5a2f78ca1cb8b8",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-cong-vien",
+      "kind": "bgm",
+      "name": "Công viên (chim hót)",
+      "category": "Thiên nhiên",
+      "file": "bgm-cong-vien.mp3",
+      "bytes": 305653,
+      "sha256": "28cfa0788887e39e4f48093ad8ab27fc3766db3c398dc86416bc73fe58855a92",
+      "duration": 30.5
+    },
+    {
+      "id": "bgm-nhac-nhe",
+      "kind": "bgm",
+      "name": "Nhạc nền nhẹ nhàng",
+      "category": "Nhạc",
+      "file": "bgm-nhac-nhe.mp3",
+      "bytes": 320542,
+      "sha256": "6b83dc5b320e596bed59f5e75db7bacbf064e4f51e16eead5aac06ec982abe4b",
+      "duration": 32.0
+    },
+    {
+      "id": "bgm-nhac-vui",
+      "kind": "bgm",
+      "name": "Nhạc nền vui tươi",
+      "category": "Nhạc",
+      "file": "bgm-nhac-vui.mp3",
+      "bytes": 320542,
+      "sha256": "4758c3ed5d40ed500aa8a9f09bda4877e637a29f6bedd5e527d0bf00016ed12e",
+      "duration": 32.0
+    }
+  ]
+}
