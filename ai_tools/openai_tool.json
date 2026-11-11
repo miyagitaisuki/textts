@@ -32,6 +32,18 @@
               "enum": ["mp3", "wav"],
               "default": "mp3"
             },
+            "bgm": {
+              "type": "array",
+              "description": "Các lớp nhạc/âm nền phát chồng nhau suốt bài, lấy từ thư viện (GET /api/v1/sounds?kind=bgm). Ví dụ đường phố trời mưa: [{\"ref\": \"mua\", \"db\": -20}, {\"ref\": \"duong-pho\", \"db\": -26}]",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ref": { "type": "string" },
+                  "db": { "type": "number", "minimum": -40, "maximum": -6 }
+                },
+                "required": ["ref"]
+              }
+            },
             "slow": {
               "type": "boolean",
               "description": "Tạo thêm bản đọc chậm 0.8x cho học viên luyện nghe",

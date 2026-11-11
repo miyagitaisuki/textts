@@ -222,6 +222,16 @@
       "bytes": 320542,
       "sha256": "4758c3ed5d40ed500aa8a9f09bda4877e637a29f6bedd5e527d0bf00016ed12e",
       "duration": 32.0
+    },
+    {
+      "id": "bgm-duong-pho",
+      "kind": "bgm",
+      "name": "Đường phố / xe cộ (ô tô chạy qua, còi)",
+      "category": "Âm nền",
+      "file": "bgm-duong-pho.mp3",
+      "bytes": 305653,
+      "sha256": "aef0ae0b14c0408479c78698b7b16b60dd8ea98b05507d3b937fee976a779d81",
+      "duration": 30.5
     }
   ]
 }

@@ -28,7 +28,12 @@ const runtimeOpts = {
   exists: fs.existsSync,
 };
 const PYTHON = resolvePython({ env: process.env, ...runtimeOpts });
-const CHILD_ENV = buildChildEnv({ env: process.env, ...runtimeOpts });
+// Python (tts.py, server.py) đọc thư viện âm thanh và thư mục xuất của app qua các biến này.
+const CHILD_ENV = {
+  ...buildChildEnv({ env: process.env, ...runtimeOpts }),
+  TEXTTS_USER_DATA: app.getPath("userData"),
+  TEXTTS_SOUND_LIBRARY: path.join(app.getPath("userData"), "sound-library"),
+};
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -217,6 +222,16 @@ ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.
+// Các lớp nhạc/âm nền chồng nhau: mỗi lớp "--bgm <file>@<dB>". Bỏ qua file không còn tồn tại.
+function bgmArgs(options) {
+  const layers = Array.isArray(options.bgmLayers) ? options.bgmLayers : [];
+  return layers.flatMap((l) => {
+    if (!l || typeof l.path !== "string" || !fs.existsSync(l.path)) return [];
+    const db = Number.isFinite(Number(l.db)) ? Math.min(-6, Math.max(-40, Number(l.db))) : -18;
+    return ["--bgm", `${l.path}@${db}`];
+  });
+}
+
 // Mỗi lần xuất nằm trong thư mục riêng cạnh project: <thư mục dự án>/<tên file>/<tên file>.mp3 (+ bản chậm, SRT, phiếu, từng câu).
 // Tên file theo giáo trình (vd. "1-02"); bỏ trống thì dùng tên dự án.
 function exportTarget(proj, outputName, format, { create = true } = {}) {
@@ -261,12 +276,7 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputName, format = "
   if (options.worksheet) {
     args.push("--worksheet", out.replace(/\.[^./\\]+$/, ".html"));
   }
-  if (options.bgmPath && typeof options.bgmPath === "string" && fs.existsSync(options.bgmPath)) {
-    args.push("--bgm", options.bgmPath);
-    if (options.bgmDb !== undefined && Number.isFinite(Number(options.bgmDb))) {
-      args.push("--bgm-db", String(Number(options.bgmDb)));
-    }
-  }
+  args.push(...bgmArgs(options));
   return new Promise((resolve) => {
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
@@ -522,10 +532,7 @@ ipcMain.handle("tts:previewAll", async (evt, { projectPath, data, options = {} }
     if (options.lufs !== null && options.lufs !== undefined && String(options.lufs).trim() !== "" && Number.isFinite(Number(options.lufs))) {
       args.push("--lufs", String(Number(options.lufs)));
     }
-    if (options.bgmPath && typeof options.bgmPath === "string" && fs.existsSync(options.bgmPath)) {
-      args.push("--bgm", options.bgmPath);
-      if (Number.isFinite(Number(options.bgmDb))) args.push("--bgm-db", String(Number(options.bgmDb)));
-    }
+    args.push(...bgmArgs(options));
     const result = await new Promise((resolve) => {
       const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
       let log = "";

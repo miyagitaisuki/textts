@@ -258,6 +258,27 @@ def birds():
     return loopable(out)
 
 
+def street():
+    """Đường phố: tiếng ù xe cộ nền + xe chạy ngang (to dần rồi nhỏ, đổi cao độ) + thỉnh thoảng còi."""
+    x = t(LOOP)
+    out = fft_band(noise(LOOP), 40, 400) * 0.35 * (0.8 + 0.2 * np.sin(2 * np.pi * x / 11))
+    for _ in range(9):
+        at, dur = rng.uniform(0, LOOP - 6), rng.uniform(3.0, 5.5)
+        xc = t(dur)
+        swell = np.exp(-(((xc - dur / 2) / (dur / 5)) ** 2))
+        whoosh = fft_band(noise(dur), 120, 2500) * swell
+        f0 = rng.uniform(70, 110)
+        doppler = f0 * (1 + 0.08 * np.tanh((dur / 2 - xc) * 2))  # cao độ hạ xuống khi xe đi qua
+        engine = np.sin(2 * np.pi * np.cumsum(doppler) / SR) * swell * 0.6
+        place(out, whoosh + engine, at, rng.uniform(0.5, 1.0))
+    for _ in range(2):
+        at = rng.uniform(2, LOOP - 3)
+        xh = t(0.45)
+        horn = (np.sign(np.sin(2 * np.pi * 400 * xh)) + np.sign(np.sin(2 * np.pi * 500 * xh))) * 0.25
+        place(out, onepole_lp(horn, 2500) * np.minimum(1, np.minimum(xh / 0.02, (0.45 - xh) / 0.05)), at, 0.6)
+    return loopable(out)
+
+
 CHORDS_SOFT = [(261.6, 329.6, 392.0), (220.0, 261.6, 329.6), (174.6, 220.0, 261.6), (196.0, 246.9, 293.7)]
 
 
@@ -314,6 +335,7 @@ BGM = [
     ("cong-vien", "Công viên (chim hót)", "Thiên nhiên", birds),
     ("nhac-nhe", "Nhạc nền nhẹ nhàng", "Nhạc", soft_music),
     ("nhac-vui", "Nhạc nền vui tươi", "Nhạc", happy_music),
+    ("duong-pho", "Đường phố / xe cộ (ô tô chạy qua, còi)", "Âm nền", street),
 ]
 
 

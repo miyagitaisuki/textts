@@ -949,8 +949,7 @@ export default function App() {
       shadowGap: o.shadowGap,
       exportLines: o.exportLines,
       worksheet: o.worksheet,
-      bgmPath: o.bgmPath,
-      bgmDb: o.bgmDb,
+      bgmLayers: o.bgmLayers,
     };
   }
 
@@ -1472,7 +1471,7 @@ export default function App() {
                     playbackRate={playbackRate}
                     onChangeRate={changePlaybackRate}
                     disabled={busy}
-                    bgmPath={exportOpts.bgmPath}
+                    bgmLayers={exportOpts.bgmLayers}
                   />
                 ) : (
                   <div className="timeline-empty">

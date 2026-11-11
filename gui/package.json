@@ -56,6 +56,7 @@
           "ai_tools/**",
           "roles.yaml",
           "readings.example.yaml",
+          "gui/electron/sound-pack.json",
           "!**/__pycache__/**"
         ]
       },

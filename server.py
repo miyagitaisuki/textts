@@ -15,11 +15,14 @@ from typing import Any, Literal
 
 import aiohttp
 from fastapi import FastAPI, HTTPException, Request
+from pydub import AudioSegment
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from core.audio import loudness_normalize, time_stretch
+from core.audio import add_background, loudness_normalize, time_stretch
+from core.appdata import output_root
+from core.sounds import SoundNotFound, find_sound, list_sounds
 from core.builder import build, practice_items, to_srt
 from core.models import Config, LineItem, Project, Role, SfxItem, Timing, load_config
 from core.normalize import annotate, reading
@@ -56,7 +59,8 @@ app.add_middleware(
 )
 
 # Đảm bảo thư mục output tồn tại và mount static files để tải trực tiếp
-output_dir = Path(os.environ.get("TEXTTS_OUTPUT_DIR") or DEFAULT_OUTPUT_DIR)
+# Thứ tự: biến môi trường (app truyền khi tự bật server) → thư mục xuất đã chọn trong app → Documents/textts.
+output_dir = Path(os.environ.get("TEXTTS_OUTPUT_DIR") or output_root() or DEFAULT_OUTPUT_DIR)
 output_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=str(output_dir)), name="files")
 
@@ -71,6 +75,11 @@ class RoleInput(BaseModel):
     gain_db: float = Field(0.0, ge=-30.0, le=12.0, description="Độ lệch âm lượng dB")
 
 
+class BgmLayer(BaseModel):
+    ref: str = Field(..., description="Tên/mã âm nền trong thư viện, ví dụ 'mua'")
+    db: float | None = Field(None, ge=-40, le=-6, description="Âm lượng lớp này (dB); trống = bgm_db")
+
+
 class DialogueOptions(BaseModel):
     format: Literal["mp3", "wav"] = "mp3"
     lufs: float | None = Field(-16.0, description="Độ to chuẩn hóa LUFS (null để tắt)")
@@ -80,6 +89,13 @@ class DialogueOptions(BaseModel):
     role_play: str | None = Field(None, description="Mã vai luyện nói (các vai khác bị tắt tiếng)")
     shadow: bool = Field(False, description="Tạo bản shadowing (chèn khoảng lặng sau mỗi câu)")
     shadow_gap_ms: int = Field(1500, description="Khoảng lặng nghỉ trong bản shadowing")
+    bgm: str | list[str | BgmLayer] | None = Field(
+        None,
+        description="Nhạc/âm nền theo bối cảnh, lấy từ thư viện âm thanh (GET /api/v1/sounds?kind=bgm). "
+        "Một tên ('cong-vien') hoặc danh sách để chồng nhiều lớp cùng lúc, mỗi lớp chỉnh âm lượng riêng: "
+        "[{\"ref\": \"mua\", \"db\": -20}, {\"ref\": \"duong-pho\", \"db\": -26}].",
+    )
+    bgm_db: float = Field(-20.0, ge=-40, le=-6, description="Âm lượng mặc định của mỗi lớp nền so với lời thoại (dB)")
 
 
 class DialogueRequest(BaseModel):
@@ -168,6 +184,29 @@ async def get_speakers(engine: Literal["voicevox", "aivis", "edge"] = "voicevox"
                 status_code=503,
                 detail=f"Không kết nối được tới VOICEVOX Engine tại {vv_url}. Hãy chắc chắn rằng VOICEVOX đã được khởi động. Chi tiết: {exc}",
             )
+
+
+@app.get("/api/v1/sounds", summary="Liệt kê âm trong thư viện (nhạc/âm nền bgm và hiệu ứng sfx)")
+async def sounds(kind: Literal["sfx", "bgm"] | None = None):
+    """Âm dùng được cho options.bgm (kind=bgm) và dòng [sfx=<mã>] trong kịch bản (kind=sfx).
+
+    Gồm gói CC0 của textts (tự tải khi dùng) và âm giáo viên tự thêm vào thư viện trong app.
+    """
+    items = list_sounds(kind)
+    return {
+        "ok": True,
+        "items": [
+            {
+                "ref": it["id"].split("-", 1)[1] if it["source"] == "pack" else it["name"],
+                "kind": it["kind"],
+                "name": it["name"],
+                "category": it["category"],
+                "source": "thư viện của giáo viên" if it["source"] == "mine" else "gói textts",
+                "duration_s": it["duration"],
+            }
+            for it in items
+        ],
+    }
 
 
 @app.post("/api/v1/preview-script", summary="Phân tích kịch bản và gợi ý Furigana cho chữ Hán")
@@ -335,6 +374,19 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
             role_gains=gains,
         )
 
+    # Nhạc/âm nền từ thư viện, có thể nhiều lớp chồng nhau (trộn trước khi chuẩn hóa độ to)
+    raw_layers = req.options.bgm if isinstance(req.options.bgm, list) else ([req.options.bgm] if req.options.bgm else [])
+    bgm_layers: list[dict] = []
+    for layer in raw_layers:
+        ref, db = (layer, None) if isinstance(layer, str) else (layer.ref, layer.db)
+        try:
+            path = find_sound(ref, "bgm")
+        except SoundNotFound as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        db = req.options.bgm_db if db is None else db
+        audio = add_background(audio, AudioSegment.from_file(path), gain_db=db)
+        bgm_layers.append({"path": str(path), "db": db})
+
     # Chuẩn hóa LUFS
     if req.options.lufs is not None:
         audio = loudness_normalize(audio, req.options.lufs)
@@ -351,7 +403,7 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
 
     timeline_filename = f"{base_name}.timeline.json"
     timeline_path = export_dir / timeline_filename
-    write_timeline(audio, placed, timeline_path)
+    write_timeline(audio, placed, timeline_path, bgm=bgm_layers)
 
     base_url = str(request.base_url).rstrip("/")
     files_info: dict[str, Any] = {
@@ -407,6 +459,7 @@ async def generate_dialogue(req: DialogueRequest, request: Request):
         "ok": True,
         "title": req.title,
         "filename": base_name,
+        "bgm": bgm_layers,
         "folder": str(export_dir),
         "duration_s": round(len(audio) / 1000, 2),
         "line_count": len([it for it in project.items if isinstance(it, LineItem)]),

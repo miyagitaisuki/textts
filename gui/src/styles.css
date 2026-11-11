@@ -2223,3 +2223,11 @@ kbd {
 /* Tab của panel Thuộc tính: gọn để đủ 4 tab trong panel hẹp */
 .inspector-tab { white-space: nowrap; padding: 8px 6px; font-size: 12px; gap: 4px; min-width: 0; }
 .inspector-tab span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Các lớp nhạc/âm nền */
+.bgm-layers { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 13px; }
+.bgm-layers-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); }
+.bgm-layers .muted { margin: 0; font-size: 12px; color: var(--text-subtle); }
+.bgm-layer { display: grid; grid-template-columns: minmax(0, 1fr) 120px 52px 28px; align-items: center; gap: 6px; }
+.bgm-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
+.bgm-layer-db { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; }

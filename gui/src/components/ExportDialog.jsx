@@ -2,6 +2,8 @@
 // và các chế độ lớp học: Role-play, Shadowing, Xuất từng câu riêng, Phiếu in HTML, Nhạc nền BGM.
 import { useEffect } from "react";
 
+const fileStem = (p = "") => String(p).split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+
 export default function ExportDialog({
   opts,
   onChange,
@@ -25,11 +27,17 @@ export default function ExportDialog({
   const set = (patch) => onChange({ ...opts, ...patch });
   const roleEntries = Object.entries(roles);
 
-  async function pickBgm() {
+  const layers = Array.isArray(opts.bgmLayers) ? opts.bgmLayers : [];
+  const setLayers = (next) => set({ bgmLayers: next });
+
+  async function addLayer() {
     if (!onPickAudio) return;
     const file = await onPickAudio();
-    if (file) set({ bgmPath: file });
+    // Lớp thứ hai trở đi mặc định nhỏ hơn để không lấn lớp chính.
+    if (file) setLayers([...layers, { path: file, db: layers.length ? -26 : -18 }]);
   }
+  const patchLayer = (i, patch) => setLayers(layers.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const removeLayer = (i) => setLayers(layers.filter((_, j) => j !== i));
 
   const grid = (
         <div className="export-grid">
@@ -156,45 +164,37 @@ export default function ExportDialog({
               </div>
             )}
 
-            <label style={{ marginTop: 8 }}>
-              Nhạc nền (BGM)
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input
-                  style={{ flex: 1 }}
-                  placeholder="Đường dẫn file .mp3 / .wav"
-                  value={opts.bgmPath || ""}
-                  disabled={disabled}
-                  onChange={(e) => set({ bgmPath: e.target.value })}
-                />
-                <button type="button" className="ghost" onClick={pickBgm} disabled={disabled}>
-                  🎵 Thư viện…
+            {/* Nhiều lớp nhạc/âm nền phát chồng nhau suốt bài, mỗi lớp một âm lượng (vd. mưa + xe cộ) */}
+            <div className="bgm-layers">
+              <div className="bgm-layers-head">
+                <span>Nhạc / âm nền ({layers.length} lớp)</span>
+                <button type="button" className="ghost" onClick={addLayer} disabled={disabled}>
+                  ＋ Thêm lớp từ thư viện…
                 </button>
-                {opts.bgmPath && (
-                  <button
-                    type="button"
-                    className="ghost danger"
-                    onClick={() => set({ bgmPath: "" })}
-                    title="Xóa nhạc nền"
-                  >
+              </div>
+              {layers.length === 0 && <p className="muted">Chưa có. Có thể chồng nhiều lớp, ví dụ tiếng mưa + tiếng xe cộ.</p>}
+              {layers.map((l, i) => (
+                <div className="bgm-layer" key={`${l.path}-${i}`}>
+                  <span className="bgm-layer-name" title={l.path}>
+                    {fileStem(l.path)}
+                  </span>
+                  <input
+                    type="range"
+                    min={-40}
+                    max={-6}
+                    step={1}
+                    value={l.db ?? -18}
+                    disabled={disabled}
+                    aria-label={`Âm lượng lớp ${fileStem(l.path)}`}
+                    onChange={(e) => patchLayer(i, { db: Number(e.target.value) })}
+                  />
+                  <span className="bgm-layer-db">{l.db ?? -18} dB</span>
+                  <button type="button" className="ghost danger" title="Bỏ lớp này" onClick={() => removeLayer(i)} disabled={disabled}>
                     ✕
                   </button>
-                )}
-              </div>
-            </label>
-            {opts.bgmPath && (
-              <label>
-                Âm lượng nhạc nền: {opts.bgmDb ?? -18} dB
-                <input
-                  type="range"
-                  min={-40}
-                  max={-6}
-                  step={1}
-                  value={opts.bgmDb ?? -18}
-                  disabled={disabled}
-                  onChange={(e) => set({ bgmDb: Number(e.target.value) })}
-                />
-              </label>
-            )}
+                </div>
+              ))}
+            </div>
           </fieldset>
         </div>
   );

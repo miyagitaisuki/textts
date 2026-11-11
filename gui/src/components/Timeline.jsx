@@ -42,7 +42,7 @@ export default function Timeline({
   playbackRate = 1.0,
   onChangeRate,
   disabled,
-  bgmPath = "",
+  bgmLayers = [],
 }) {
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
@@ -53,7 +53,8 @@ export default function Timeline({
   const [zoom, setZoom] = useState(null); // null = vừa khung
   const tl = output?.timeline || {};
   const { peaks = [], items = [], duration_ms = 0, role_levels = {}, sfx = [] } = tl;
-  const bgm = tl.bgm || bgmPath;
+  // Các lớp nền: lấy từ timeline của bản đã dựng; bản cũ chỉ có một chuỗi đường dẫn.
+  const bgm = (Array.isArray(tl.bgm) ? tl.bgm : tl.bgm ? [{ path: tl.bgm }] : bgmLayers).filter((l) => l?.path);
   const nowMs = currentTime * 1000;
 
   // Đo bề rộng vùng cuộn để tính mức "vừa khung".
@@ -173,7 +174,7 @@ export default function Timeline({
   const tracks = [
     ...roleIds.map((r) => ({ key: `role-${r}`, kind: "role", role: r })),
     ...(sfx.length ? [{ key: "sfx", kind: "sfx" }] : []),
-    ...(bgm ? [{ key: "bgm", kind: "bgm" }] : []),
+    ...bgm.map((l, i) => ({ key: `bgm-${i}`, kind: "bgm", layer: l })),
   ];
   // Chiều cao mỗi track co giãn theo panel (giữ chỗ cho track Tổng và thanh cuộn ngang).
   const laneH = Math.round(Math.min(44, Math.max(20, (bodyH - 22 - 12 - 36) / Math.max(1, tracks.length))));
@@ -238,7 +239,9 @@ export default function Timeline({
             }
             return (
               <div key={t.key} className="mt-track-head mt-track-aux">
-                <span className="mt-track-name">{t.kind === "sfx" ? "Hiệu ứng (SFX)" : "Nhạc nền"}</span>
+                <span className="mt-track-name" title={t.layer?.path}>
+                  {t.kind === "sfx" ? "Hiệu ứng (SFX)" : `Nền: ${baseName(t.layer.path)}`}
+                </span>
               </div>
             );
           })}
@@ -306,9 +309,12 @@ export default function Timeline({
                       <span className="mt-clip-text">♪ {baseName(m.path)}</span>
                     </div>
                   ))}
-                {t.kind === "bgm" && bgm && (
-                  <div className="mt-clip mt-clip-bgm" style={{ left: 0, width: x(duration_ms) }} title={bgm}>
-                    <span className="mt-clip-text">♫ {baseName(bgm)}</span>
+                {t.kind === "bgm" && (
+                  <div className="mt-clip mt-clip-bgm" style={{ left: 0, width: x(duration_ms) }} title={t.layer.path}>
+                    <span className="mt-clip-text">
+                      ♫ {baseName(t.layer.path)}
+                      {Number.isFinite(t.layer.db) ? ` · ${t.layer.db} dB` : ""}
+                    </span>
                   </div>
                 )}
               </div>

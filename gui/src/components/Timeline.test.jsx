@@ -23,7 +23,10 @@ const output = {
       { id: "L002", role: "2", start_ms: 4000, end_ms: 6000 },
     ],
     sfx: [{ id: "L900", type: "sfx", path: "C:/a/chuong-cua.mp3", start_ms: 3000, end_ms: 3500 }],
-    bgm: null,
+    bgm: [
+      { path: "C:/lib/bgm-mua.mp3", db: -20 },
+      { path: "C:/lib/bgm-duong-pho.mp3", db: -26 },
+    ],
   },
 };
 const items = [
@@ -39,12 +42,18 @@ function setup(extra = {}) {
 }
 
 describe("Timeline", () => {
+  it("draws one track per background layer when several are stacked", () => {
+    setup();
+    expect(screen.getByText("Nền: bgm-mua")).toBeTruthy();
+    expect(screen.getByText("Nền: bgm-duong-pho")).toBeTruthy();
+    expect(screen.getByText(/bgm-duong-pho · -26 dB/)).toBeTruthy();
+  });
+
   it("draws one track per role plus SFX, with clip text", () => {
     setup();
     expect(screen.getByText("[1] 先生")).toBeTruthy();
     expect(screen.getByText("[2] 学生")).toBeTruthy();
     expect(screen.getByText("Hiệu ứng (SFX)")).toBeTruthy();
-    expect(screen.queryByText("Nhạc nền")).toBeNull(); // không có nhạc nền thì ẩn track
     expect(screen.getByText("こんにちは")).toBeTruthy();
     expect(screen.getByText("♪ chuong-cua")).toBeTruthy();
   });

@@ -25,6 +25,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from core.audio import add_background, limit_peak, loudness_normalize, peaks, role_levels, time_stretch
 from core.lint import lint_project
 from core.paths import sfx_path
+from core.sounds import SoundNotFound, parse_layer, resolve_bgm
 from core.readings import load_readings
 from core.builder import build, practice_items, to_srt, trim_edges
 from core.models import (
@@ -327,10 +328,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="xuất phiếu học tập HTML có furigana (không cần tạo âm thanh)")
     ap.add_argument("--export-lines", type=Path, metavar="DIR",
                     help="xuất từng câu thành file riêng để luyện tập")
-    ap.add_argument("--bgm", type=Path, metavar="FILE",
-                    help="nhạc nền lặp lại, trộn dưới lời thoại (mp3/wav/...)")
+    ap.add_argument("--bgm", action="append", default=[], metavar="FILE[@dB]",
+                    help="nhạc/âm nền lặp lại, trộn dưới lời thoại. Lặp lại để chồng nhiều lớp "
+                    "(vd. --bgm mua --bgm duong-pho@-24). Nhận đường dẫn file hoặc tên âm trong thư viện")
     ap.add_argument("--bgm-db", type=float, default=-18.0,
-                    help="độ nhỏ của nhạc nền so với lời thoại, dB (mặc định -18)")
+                    help="độ nhỏ mặc định của mỗi lớp nền so với lời thoại, dB (mặc định -18)")
     argv = sys.argv[1:] if argv is None else argv
     args = ap.parse_args(argv)
 
@@ -414,8 +416,13 @@ def main(argv: list[str] | None = None) -> int:
         str(sfx_path(it.path, base)) for it in project.items
         if isinstance(it, SfxItem) and not sfx_path(it.path, base).is_file()
     ]
-    if args.bgm and not args.bgm.is_file():
-        missing_files.append(str(args.bgm))
+    bgm_layers: list[tuple[Path, float]] = []
+    for spec in args.bgm:
+        ref, db = parse_layer(spec, args.bgm_db)
+        try:
+            bgm_layers.append((resolve_bgm(ref), db))
+        except SoundNotFound as exc:
+            missing_files.append(f"{ref} ({exc})")
     if missing_files:
         print("Không tìm thấy file âm thanh: " + ", ".join(missing_files), file=sys.stderr)
         return 2
@@ -469,9 +476,8 @@ def main(argv: list[str] | None = None) -> int:
             role_gains=gains,
             markers=markers,
         )
-    if args.bgm:
-        bgm = AudioSegment.from_file(args.bgm)
-        audio = add_background(audio, bgm, gain_db=args.bgm_db)
+    for bgm_file, db in bgm_layers:  # nhiều lớp nền chồng lên nhau, mỗi lớp một âm lượng
+        audio = add_background(audio, AudioSegment.from_file(bgm_file), gain_db=db)
     if args.lufs is not None:
         audio = loudness_normalize(audio, args.lufs)
 
@@ -480,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Đã xuất {args.output} ({len(audio) / 1000:.1f} s, {len(placed)} câu)")
     timeline_path = args.output.with_name(f"{args.output.stem}.timeline.json")
     write_timeline(audio, placed, timeline_path, markers=markers,
-                   bgm=str(args.bgm) if args.bgm else None)
+                   bgm=[{"path": str(f), "db": db} for f, db in bgm_layers])
     print(f"Đã xuất dữ liệu timeline {timeline_path}")
 
     if args.srt:
@@ -515,11 +521,11 @@ def write_audio(audio, path: Path, fmt: str) -> None:
 
 
 def write_timeline(audio, placed: list[dict], path: Path, markers: list[dict] | None = None,
-                   bgm: str | None = None) -> None:
+                   bgm: list[dict] | None = None) -> None:
     """Vị trí từng câu, hiệu ứng sfx, nhạc nền và dữ liệu sóng, để giao diện vẽ timeline nhiều track."""
     data = {
         "sfx": markers or [],
-        "bgm": bgm,
+        "bgm": bgm or [],  # các lớp nền: [{"path", "db"}]
         "duration_ms": len(audio),
         "peaks": peaks(audio, bins=600),
         "role_levels": role_levels(audio, placed, bins=600),

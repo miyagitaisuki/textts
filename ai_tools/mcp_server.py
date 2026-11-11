@@ -48,8 +48,16 @@ Quy trình nên dùng:
 3. Soạn kịch bản: mỗi câu thoại một dòng, bắt đầu bằng số vai: "[1] こんにちは。" hoặc "1 こんにちは。".
    Chú âm chữ Hán khó bằng 漢字{かな} (ví dụ 面接{めんせつ}). Khoảng lặng thêm: dòng "[pause=1500]".
    Khoảng lặng giữa các câu được chèn tự động, không cần thêm [pause] cho mỗi câu.
-4. textts_check_script (tùy chọn): kiểm tra cú pháp và gợi ý furigana trước khi tạo.
-5. textts_create_audio: tạo file; trả về đường dẫn các file trên máy người dùng."""
+4. Bối cảnh & hiệu ứng: khi người dùng nêu bối cảnh (công viên, quán cà phê, trời mưa, nhà ga...) hoặc
+   kịch bản có tiếng động (chuông cửa, điện thoại, gõ cửa...), gọi textts_list_sounds để xem thư viện:
+   - Nhạc/âm nền: đặt 'bgm' của textts_create_audio là danh sách lớp nền hợp bối cảnh
+     (ưu tiên âm "thư viện của giáo viên" nếu khớp). Có thể chồng nhiều lớp cùng lúc, ví dụ đường phố
+     trời mưa: [{"ref": "mua", "db": -20}, {"ref": "duong-pho", "db": -26}]; lớp phụ nên nhỏ hơn lớp chính.
+     Không có âm phù hợp thì bỏ qua lớp đó và báo người dùng.
+   - Hiệu ứng: chèn một dòng riêng "[sfx=<ref>]" vào đúng chỗ trong kịch bản (vd. "[sfx=chuong-cua]").
+   Chỉ dùng 'ref' có trong danh sách, không tự đặt tên.
+5. textts_check_script (tùy chọn): kiểm tra cú pháp và gợi ý furigana trước khi tạo.
+6. textts_create_audio: tạo file; trả về đường dẫn các file trên máy người dùng."""
 
 TOOLS = [
     {
@@ -65,6 +73,17 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {"engine": {"type": "string", "enum": ENGINES, "default": "voicevox"}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_list_sounds",
+        "description": "Liệt kê âm trong thư viện của textts: nhạc/âm nền (bgm) theo bối cảnh như công viên, "
+        "quán cà phê, mưa, và hiệu ứng (sfx) như chuông cửa, điện thoại reo. Gồm gói CC0 của textts và âm "
+        "giáo viên tự thêm. Trường 'ref' dùng cho 'bgm' của textts_create_audio hoặc dòng [sfx=<ref>] trong kịch bản.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"kind": {"type": "string", "enum": ["bgm", "sfx"], "description": "Bỏ trống để lấy cả hai"}},
             "additionalProperties": False,
         },
     },
@@ -112,6 +131,25 @@ TOOLS = [
                         },
                         "required": ["voice"],
                     },
+                },
+                "bgm": {
+                    "type": "array",
+                    "description": "Các lớp nhạc/âm nền phát cùng lúc suốt bài (chồng lên nhau), 'ref' lấy từ "
+                    "textts_list_sounds (kind=bgm). Ví dụ trời mưa ngoài phố: "
+                    "[{\"ref\": \"mua\", \"db\": -20}, {\"ref\": \"duong-pho\", \"db\": -26}]. Bỏ trống nếu không cần.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "ref": {"type": "string"},
+                            "db": {"type": "number", "minimum": -40, "maximum": -6,
+                                   "description": "Âm lượng lớp này so với lời thoại; trống = bgm_db"},
+                        },
+                        "required": ["ref"],
+                    },
+                },
+                "bgm_db": {
+                    "type": "number", "minimum": -40, "maximum": -6, "default": -20,
+                    "description": "Âm lượng mặc định mỗi lớp nền so với lời thoại (dB); -20 là nền nhẹ, -12 là rõ hơn",
                 },
                 "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
                 "slow": {"type": "boolean", "default": True, "description": "Xuất thêm bản chậm 0.8x"},
@@ -282,6 +320,8 @@ def tool_create_audio(args: dict) -> str:
             "slow": bool(args.get("slow", True)),
             "srt": bool(args.get("srt", True)),
             "worksheet": bool(args.get("worksheet", True)),
+            **({"bgm": _bgm_layers(args["bgm"])} if args.get("bgm") else {}),
+            **({"bgm_db": float(args["bgm_db"])} if args.get("bgm_db") is not None else {}),
         },
     }
     if args.get("roles"):
@@ -296,6 +336,8 @@ def tool_create_audio(args: dict) -> str:
     ]
     lines = [f"Đã tạo bài nghe '{res.get('title')}': {res.get('line_count')} câu thoại, {res.get('duration_s')} giây."]
     lines += [f"- {label}: {files[key]}" for key, label in labels if files.get(key)]
+    for layer in res.get("bgm") or []:
+        lines.append(f"- Lớp nền: {layer['path']} ({layer['db']} dB)")
     if files.get("audio") and args.get("open_folder"):
         try:
             _open_folder(files["audio"])
@@ -304,8 +346,39 @@ def tool_create_audio(args: dict) -> str:
     return "\n".join(lines)
 
 
+def _bgm_layers(value) -> list:
+    """Nhận một tên, danh sách tên, hoặc danh sách {ref, db}."""
+    items = value if isinstance(value, list) else [value]
+    out = []
+    for it in items:
+        if isinstance(it, str) and it.strip():
+            out.append(it.strip())
+        elif isinstance(it, dict) and it.get("ref"):
+            out.append({"ref": str(it["ref"]), **({"db": float(it["db"])} if it.get("db") is not None else {})})
+    return out
+
+
+def tool_list_sounds(args: dict) -> str:
+    kind = args.get("kind")
+    if kind not in (None, "", "bgm", "sfx"):
+        raise ToolError("kind phải là 'bgm' hoặc 'sfx'")
+    res = call_api("GET", "/api/v1/sounds" + (f"?kind={kind}" if kind else ""))
+    items = res.get("items", [])
+    if not items:
+        return "Thư viện âm thanh trống."
+    lines = []
+    for k, title in (("bgm", "Nhạc/âm nền (dùng cho 'bgm')"), ("sfx", "Hiệu ứng (dùng dòng [sfx=<ref>])")):
+        group = [it for it in items if it["kind"] == k]
+        if not group:
+            continue
+        lines.append(f"{title}:")
+        lines += [f"- ref={it['ref']!r}: {it['name']} [{it['category']}; {it['source']}]" for it in group]
+    return "\n".join(lines)
+
+
 HANDLERS = {
     "textts_status": tool_status,
+    "textts_list_sounds": tool_list_sounds,
     "textts_list_voices": tool_list_voices,
     "textts_check_script": tool_check_script,
     "textts_create_audio": tool_create_audio,

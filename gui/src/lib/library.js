@@ -12,8 +12,8 @@ export const DEFAULT_SETTINGS = {
   shadowGap: 1500,
   exportLines: false,
   worksheet: true,
-  bgmPath: "",
-  bgmDb: -18,
+  // Các lớp nhạc/âm nền phát chồng lên nhau suốt bài: [{ path, db }]
+  bgmLayers: [],
 };
 const SETTINGS_KEY = "textts.settings";
 
@@ -42,7 +42,14 @@ export function patchFromPreset(preset) {
 /** Đọc cài đặt chung đã lưu; dữ liệu hỏng thì dùng mặc định. */
 export function loadSettings(storage) {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(storage.getItem(SETTINGS_KEY) || "{}") };
+    const saved = JSON.parse(storage.getItem(SETTINGS_KEY) || "{}");
+    // Bản cũ chỉ có một nhạc nền (bgmPath/bgmDb): chuyển thành một lớp.
+    if (!Array.isArray(saved.bgmLayers) && saved.bgmPath) {
+      saved.bgmLayers = [{ path: saved.bgmPath, db: Number.isFinite(saved.bgmDb) ? saved.bgmDb : -18 }];
+    }
+    delete saved.bgmPath;
+    delete saved.bgmDb;
+    return { ...DEFAULT_SETTINGS, ...saved };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
