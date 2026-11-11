@@ -7,25 +7,26 @@ const crypto = require("node:crypto");
 const { EventEmitter } = require("node:events");
 const { voicevoxInstalled, installVoicevox } = require("../electron/voicevox-install.cjs");
 
-const ARCHIVE = Buffer.from("voicevox-7z-bytes");
-const URL_ = "https://example.test/voicevox.7z.001";
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "vv-install-test-"));
+const BYTES = Buffer.from("voicevox-7z-bytes");
+const URL_ = "https://example.test/voicevox.7z.001";
+const cfg = (overrides = {}) => ({
+  version: "0.26.1",
+  parts: [{ name: "voicevox.7z.001", url: URL_, sha256: sha(BYTES), ...overrides }],
+});
 
-function tmp() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "vv-install-test-"));
+function fakeFetch(bytes) {
+  return async () => new Response(bytes, { status: 200 });
 }
 
-function fakeFetch(bytes, status = 200) {
-  return async () => new Response(bytes, { status });
-}
-
-// tar giả: ghi các file mẫu vào thư mục đích (không kiểm tra định dạng thật).
-function fakeTar(files) {
+// 7za giả: ghi các file mẫu vào thư mục đích.
+function fake7z(files) {
   return (cmd, args) => {
-    assert.equal(cmd, "tar");
-    const dest = args[3];
+    const dest = args[2].slice(2);
     const child = new EventEmitter();
     child.stderr = new EventEmitter();
+    child.stdout = new EventEmitter();
     queueMicrotask(() => {
       for (const [rel, content] of Object.entries(files)) {
         const full = path.join(dest, rel);
@@ -50,44 +51,46 @@ test("voicevoxInstalled looks for run.exe anywhere under the install folder", ()
   }
 });
 
-test("installVoicevox refuses without a source URL and hash", async () => {
+test("installVoicevox refuses without parts", async () => {
   await assert.rejects(
-    installVoicevox({ cfg: { url: "", sha256: "" }, installDir: "a", downloadDir: "b" }),
+    installVoicevox({ cfg: { version: "0.26.1", parts: [] }, installDir: "a", downloadDir: "b", sevenZip: "7za.exe" }),
     /Chưa cấu hình/
   );
 });
 
-test("installVoicevox downloads, verifies, extracts, and removes the archive", async () => {
+test("installVoicevox downloads, verifies, extracts with 7za, and removes temp files", async () => {
   const root = tmp();
   try {
     const installDir = path.join(root, "voicevox");
     const downloadDir = path.join(root, "dl");
     const result = await installVoicevox({
-      cfg: { version: "0.26.1", url: URL_, sha256: sha(ARCHIVE) },
+      cfg: cfg(),
       installDir,
       downloadDir,
-      fetchImpl: fakeFetch(ARCHIVE),
-      spawnFn: fakeTar({ "voicevox-engine-windows-cpu-0.26.1/run.exe": "exe" }),
+      sevenZip: "C:/app/7z/7za.exe",
+      fetchImpl: fakeFetch(BYTES),
+      spawnFn: fake7z({ "voicevox-engine-windows-cpu-0.26.1/run.exe": "exe" }),
     });
     assert.deepEqual(result, { installed: true });
     assert.equal(voicevoxInstalled(installDir), true);
-    assert.equal(fs.existsSync(path.join(downloadDir, "voicevox-engine.7z")), false);
+    assert.deepEqual(fs.readdirSync(downloadDir), []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("installVoicevox rejects an archive whose SHA-256 does not match", async () => {
+test("installVoicevox rejects a part whose SHA-256 does not match", async () => {
   const root = tmp();
   try {
     const installDir = path.join(root, "voicevox");
     await assert.rejects(
       installVoicevox({
-        cfg: { version: "0.26.1", url: URL_, sha256: "0".repeat(64) },
+        cfg: cfg({ sha256: "0".repeat(64) }),
         installDir,
         downloadDir: path.join(root, "dl"),
-        fetchImpl: fakeFetch(ARCHIVE),
-        spawnFn: fakeTar({ "run.exe": "exe" }),
+        sevenZip: "7za.exe",
+        fetchImpl: fakeFetch(BYTES),
+        spawnFn: fake7z({ "run.exe": "exe" }),
       }),
       /SHA-256 không khớp/
     );
@@ -102,40 +105,15 @@ test("installVoicevox fails if the archive extracts without run.exe", async () =
   try {
     await assert.rejects(
       installVoicevox({
-        cfg: { version: "0.26.1", url: URL_, sha256: sha(ARCHIVE) },
+        cfg: cfg(),
         installDir: path.join(root, "voicevox"),
         downloadDir: path.join(root, "dl"),
-        fetchImpl: fakeFetch(ARCHIVE),
-        spawnFn: fakeTar({ "readme.txt": "no engine here" }),
+        sevenZip: "7za.exe",
+        fetchImpl: fakeFetch(BYTES),
+        spawnFn: fake7z({ "readme.txt": "no engine here" }),
       }),
       /Không tìm thấy run\.exe/
     );
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("installVoicevox removes the archive when extraction fails", async () => {
-  const root = tmp();
-  try {
-    const downloadDir = path.join(root, "dl");
-    const failingTar = () => {
-      const child = new EventEmitter();
-      child.stderr = new EventEmitter();
-      queueMicrotask(() => child.emit("exit", 1));
-      return child;
-    };
-    await assert.rejects(
-      installVoicevox({
-        cfg: { version: "0.26.1", url: URL_, sha256: sha(ARCHIVE) },
-        installDir: path.join(root, "voicevox"),
-        downloadDir,
-        fetchImpl: fakeFetch(ARCHIVE),
-        spawnFn: failingTar,
-      }),
-      /Giải nén thất bại/
-    );
-    assert.equal(fs.existsSync(path.join(downloadDir, "voicevox-engine.7z")), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

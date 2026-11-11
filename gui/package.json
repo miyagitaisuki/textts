@@ -72,6 +72,13 @@
         "filter": [
           "ffmpeg.exe"
         ]
+      },
+      {
+        "from": "python-runtime/7z",
+        "to": "7z",
+        "filter": [
+          "7za.exe"
+        ]
       }
     ],
     "win": {

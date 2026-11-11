@@ -66,6 +66,35 @@ $FfExe = Get-ChildItem -Path (Join-Path $Tmp "ffmpeg") -Recurse -Filter "ffmpeg.
 if (-not $FfExe) { throw "Không tìm thấy ffmpeg.exe trong gói tải về" }
 Copy-Item $FfExe.FullName (Join-Path $FfDir "ffmpeg.exe")
 
+# 5b. 7-Zip (7za.exe) để app giải nén engine tải theo yêu cầu (VOICEVOX, AivisSpeech).
+# Lấy từ bản chính thức trên GitHub của ip7z/7zip; SHA256 của file nén được ghim cứng.
+$SzVersion = "26.06"
+$SzSha256 = "396c180f12d2247c24b0b1fcd482c6fc2a2700f61211ffede1061dd971f5e104"
+$SzUrl = "https://github.com/ip7z/7zip/releases/download/$SzVersion/7z2606-extra.7z"
+$SzArchive = Join-Path $Tmp "7z-extra.7z"
+$SzDir = Join-Path $Tmp "7zip"
+$SzOut = Join-Path $Work "7z"
+
+$ProgressPreference = "SilentlyContinue"
+& curl.exe -fL --retry 3 -o $SzArchive $SzUrl
+if ($LASTEXITCODE -ne 0) { throw "Tải 7-Zip $SzVersion thất bại" }
+$SzStream = [System.IO.File]::OpenRead($SzArchive)
+try {
+    $Sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $SzHash = ([System.BitConverter]::ToString($Sha.ComputeHash($SzStream)) -replace "-", "").ToLower()
+    } finally { $Sha.Dispose() }
+} finally { $SzStream.Dispose() }
+if ($SzHash -ne $SzSha256) { throw "SHA256 7-Zip không khớp (nhận $SzHash, cần $SzSha256)" }
+
+# Runner Windows có sẵn 7-Zip trong PATH; dùng nó để lấy x64\7za.exe ra khỏi gói extra.
+if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) { throw "Cần 7z trong PATH để giải nén 7-Zip" }
+& 7z x $SzArchive "-o$SzDir" -y "x64/7za.exe" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Giải nén 7za.exe thất bại" }
+New-Item -ItemType Directory -Force -Path $SzOut | Out-Null
+Copy-Item (Join-Path $SzDir "x64\7za.exe") (Join-Path $SzOut "7za.exe")
+if (-not (Test-Path (Join-Path $SzOut "7za.exe"))) { throw "Thiếu 7za.exe sau khi giải nén" }
+
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
 & (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
