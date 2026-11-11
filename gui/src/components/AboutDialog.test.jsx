@@ -18,7 +18,7 @@ describe("AboutDialog", () => {
     // Switch to AI tab
     fireEvent.click(screen.getByRole("tab", { name: "🤖 Kết nối với AI" }));
     expect(screen.getByText("Kết nối với AI (ChatGPT, Claude & AI Agents)")).toBeTruthy();
-    expect(screen.getByText(/Custom GPTs/)).toBeTruthy();
+    expect(screen.getByText(/Custom GPT Actions/)).toBeTruthy();
 
     // Switch to Syntax tab
     fireEvent.click(screen.getByRole("tab", { name: "📝 Cú pháp & Furigana" }));
@@ -28,7 +28,17 @@ describe("AboutDialog", () => {
     fireEvent.click(screen.getByRole("tab", { name: "ℹ Về textts" }));
     expect(screen.getByText("Giới thiệu ứng dụng textts")).toBeTruthy();
     expect(screen.getByText(/ThS\. Nguyễn Thanh Quang/)).toBeTruthy();
-    expect(screen.getByText(/1.1.0/)).toBeTruthy();
+    expect(screen.getByText(/1\.1\.1/)).toBeTruthy();
+  });
+
+  it("shows the Claude Desktop MCP config with this machine's paths", async () => {
+    const cfg = JSON.stringify({ mcpServers: { textts: { command: "C:\\py\\python.exe", args: ["C:\\e\\ai_tools\\mcp_server.py"] } } }, null, 2);
+    window.textts = { getMcpConfig: vi.fn(async () => cfg) };
+    render(<AboutDialog onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("tab", { name: "🤖 Kết nối với AI" }));
+    expect(await screen.findByText(/C:\\\\e\\\\ai_tools\\\\mcp_server\.py/)).toBeTruthy();
+    expect(screen.getByText(/Claude Desktop \(khuyên dùng\)/)).toBeTruthy();
+    delete window.textts;
   });
 
   it("triggers onClose on Escape key or close button click", () => {
