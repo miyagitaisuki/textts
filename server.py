@@ -42,7 +42,7 @@ AIVIS_DEFAULT_URL = "http://127.0.0.1:10101"
 app = FastAPI(
     title="textts TTS API",
     description="REST API cho AI sinh giọng nói hội thoại tiếng Nhật (VOICEVOX, AivisSpeech, Edge-TTS), phụ đề và phiếu bài tập Furigana.",
-    version="1.1.1",
+    version="1.1.2",
 )
 
 # Cho phép CORS để các client web / local AI tool có thể gọi
@@ -134,7 +134,7 @@ async def health_check():
         "aivis_connected": aivis_ok,
         "aivis_url": aivis_url,
         "cache_dir": str(DEFAULT_CACHE_DIR),
-        "version": "1.1.1",
+        "version": "1.1.2",
     }
 
 
