@@ -5,11 +5,11 @@ from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
 DEFAULT_TIMING = {
-    "lead_in_ms": 300,
+    "lead_in_ms": 2000,
     "turn_gap_ms": 1400,
     "same_speaker_gap_ms": 800,
     "question_gap_ms": 300,
-    "tail_ms": 500,
+    "tail_ms": 2000,
 }
 
 

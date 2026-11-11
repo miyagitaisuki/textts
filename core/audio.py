@@ -47,6 +47,14 @@ def loudness_normalize(seg: AudioSegment, target_lufs: float = -16.0) -> AudioSe
     return seg._spawn(pcm.reshape(-1).tobytes()).set_sample_width(seg.sample_width)
 
 
+def limit_peak(seg: AudioSegment, ceiling_db: float = -1.0) -> AudioSegment:
+    """Hạ âm lượng cả bài nếu đỉnh vượt `ceiling_db` dBFS, để chừa khoảng trống cho MP3/loa (tránh vỡ tiếng)."""
+    if len(seg) == 0 or seg.max == 0:
+        return seg
+    over = seg.max_dBFS - ceiling_db
+    return seg - over if over > 0 else seg
+
+
 def add_background(
     speech: AudioSegment,
     bgm: AudioSegment,

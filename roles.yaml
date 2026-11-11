@@ -4,13 +4,13 @@ engine: edge
 
 # Nhịp đọc (ms). Mức đề xuất cho bài nghe của người học.
 timing:
-  lead_in_ms: 300          # lặng đầu bài
+  lead_in_ms: 2000         # lặng đầu bài (tránh lặp đột ngột khi bật repeat)
   turn_gap_ms: 1400        # đổi người nói
   same_speaker_gap_ms: 800 # cùng người nói, sang câu thoại mới
   question_gap_ms: 300     # chờ thêm sau câu hỏi
   sentence_pause_ms: 800   # trong một câu thoại: dừng sau 。！？ (0 = đọc liền)
   comma_pause_scale: 1.5   # kéo dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech; 1.0 = như engine)
-  tail_ms: 500             # lặng cuối bài
+  tail_ms: 2000            # lặng cuối bài (tránh bị cắt mất câu cuối)
 
 roles:
   "1":

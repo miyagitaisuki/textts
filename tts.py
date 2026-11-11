@@ -22,7 +22,7 @@ from pydub import AudioSegment
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from core.audio import add_background, loudness_normalize, peaks, role_levels, time_stretch
+from core.audio import add_background, limit_peak, loudness_normalize, peaks, role_levels, time_stretch
 from core.lint import lint_project
 from core.paths import sfx_path
 from core.readings import load_readings
@@ -507,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def write_audio(audio, path: Path, fmt: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    audio.export(path, format=fmt)
+    limit_peak(audio).export(path, format=fmt)
 
 
 def write_timeline(audio, placed: list[dict], path: Path) -> None:

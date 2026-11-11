@@ -18,13 +18,13 @@ class Timing(BaseModel):
     """Nhịp đọc (ms). Mặc định chọn cho bài nghe của người học: chậm rãi, dễ theo kịp."""
 
     model_config = ConfigDict(extra="forbid")
-    lead_in_ms: int = Field(300, ge=0)
+    lead_in_ms: int = Field(2000, ge=0)        # lặng đầu bài: tránh lặp đột ngột khi bật repeat
     turn_gap_ms: int = Field(1400, ge=0)            # đổi người nói
     same_speaker_gap_ms: int = Field(800, ge=0)    # cùng người nói, sang câu thoại mới
     question_gap_ms: int = Field(300, ge=0)        # chờ thêm sau câu hỏi trước khi trả lời
     sentence_pause_ms: int = Field(800, ge=0)      # trong một câu thoại: sau 。！？ (0 = đọc liền)
     comma_pause_scale: float = Field(1.5, ge=0.0, le=3.0)  # độ dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech)
-    tail_ms: int = Field(500, ge=0)
+    tail_ms: int = Field(2000, ge=0)           # lặng cuối bài: tránh bị cắt mất câu cuối
 
 
 class Role(BaseModel):
