@@ -912,13 +912,13 @@ export default function App() {
             content: (
               <>
                 <RibbonGroup label="Dự án">
-                  <RibbonButton primary icon={<FileTextIcon size={20} />} label="Mở kịch bản .txt"
+                  <RibbonButton highlight icon={<ClipboardIcon size={20} />} label="Tạo kịch bản mới"
+                    title="Nhập hoặc dán kịch bản để tạo dự án mới"
+                    active={pasting} onClick={() => setPasting((v) => !v)} disabled={busy} />
+                  <RibbonButton icon={<FileTextIcon size={20} />} label="Mở kịch bản .txt"
                     onClick={openScript} disabled={busy} />
                   <RibbonButton icon={<FolderIcon size={20} />} label="Mở dự án" onClick={openProject} disabled={busy} />
                   <div className="ribbon-stack">
-                    <RibbonButton size="small" icon={<ClipboardIcon size={14} />} label="Tạo kịch bản mới"
-                      title="Nhập hoặc dán kịch bản để tạo dự án mới"
-                      active={pasting} onClick={() => setPasting((v) => !v)} disabled={busy} />
                     <RibbonButton size="small" icon={<SaveIcon size={14} />} label={dirty ? "Lưu ●" : "Lưu"}
                       title="Lưu dự án (Ctrl+S)" onClick={save} disabled={busy || !project || !dirty} />
                     <RibbonButton size="small" icon={<FolderIcon size={14} />} label="Mở thư mục"
@@ -1121,11 +1121,11 @@ export default function App() {
             xuất phiếu bài tập HTML.
           </p>
           <div className="empty-actions-row">
-            <button className="nav-btn primary" onClick={openScript} disabled={busy}>
-              Mở kịch bản .txt
-            </button>
-            <button className="nav-btn" onClick={() => setPasting(true)} disabled={busy}>
+            <button className="nav-btn primary" onClick={() => setPasting(true)} disabled={busy}>
               Tạo kịch bản mới
+            </button>
+            <button className="nav-btn" onClick={openScript} disabled={busy}>
+              Mở kịch bản .txt
             </button>
             <button className="nav-btn" onClick={openProject} disabled={busy}>
               Mở dự án (project.json)

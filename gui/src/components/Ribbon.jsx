@@ -14,8 +14,11 @@ function loadPrefs() {
 }
 
 // Nút trong ribbon: size "large" (biểu tượng trên, chữ dưới) hoặc "small" (biểu tượng cạnh chữ).
-export function RibbonButton({ icon, label, onClick, disabled, title, size = "large", active, primary, ...rest }) {
-  const cls = ["ribbon-btn", size, active ? "active" : "", primary ? "primary" : ""].filter(Boolean).join(" ");
+// primary: tô màu biểu tượng; highlight: nền màu nổi bật cho lệnh chính.
+export function RibbonButton({ icon, label, onClick, disabled, title, size = "large", active, primary, highlight, ...rest }) {
+  const cls = ["ribbon-btn", size, active ? "active" : "", primary ? "primary" : "", highlight ? "highlight" : ""]
+    .filter(Boolean)
+    .join(" ");
   return (
     <button type="button" className={cls} onClick={onClick} disabled={disabled} title={title ?? label} {...rest}>
       {icon && <span className="ribbon-btn-icon">{icon}</span>}

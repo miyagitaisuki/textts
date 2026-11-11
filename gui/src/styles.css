@@ -1929,3 +1929,22 @@ kbd {
   font-size: 12px;
   color: var(--text-subtle);
 }
+
+/* Lệnh chính của ribbon (Tạo kịch bản mới): nền màu nổi bật */
+.ribbon-btn.highlight {
+  background: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ribbon-btn.highlight .ribbon-btn-icon,
+.ribbon-btn.highlight:hover:not(:disabled) .ribbon-btn-icon {
+  color: #fff;
+}
+
+.ribbon-btn.highlight:hover:not(:disabled),
+.ribbon-btn.highlight.active {
+  background: var(--accent-emerald-hover);
+  border-color: var(--accent-emerald-hover);
+}
