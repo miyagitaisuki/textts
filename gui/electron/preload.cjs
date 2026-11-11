@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("textts", {
   saveProject: (filePath, data) => ipcRenderer.invoke("project:save", { filePath, data }),
   generate: (projectPath, outputName, format, options) =>
     ipcRenderer.invoke("tts:generate", { projectPath, outputName, format, options }),
+  checkPronunciation: (projectPath, level) => ipcRenderer.invoke("tts:check", { projectPath, level }),
   previewAll: (projectPath, data, options) => ipcRenderer.invoke("tts:previewAll", { projectPath, data, options }),
   preview: (projectPath, lineId) => ipcRenderer.invoke("tts:preview", { projectPath, lineId }),
   sampleVoice: (opts) => ipcRenderer.invoke("voice:sample", opts),

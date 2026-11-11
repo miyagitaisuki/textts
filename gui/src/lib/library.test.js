@@ -90,3 +90,10 @@ describe("bgm layers settings", () => {
     expect("bgmPath" in s).toBe(false);
   });
 });
+
+describe("characters (role presets)", () => {
+  it("store engine and description for the AI", () => {
+    const list = upsertPreset([], "Minh", { voice: "13", emotion: "happy", speed: "normal", pitch: 0 }, { engine: "voicevox", description: " nam sinh viên " });
+    expect(list[0]).toEqual({ name: "Minh", voice: "13", emotion: "happy", speed: "normal", pitch: 0, engine: "voicevox", description: "nam sinh viên" });
+  });
+});

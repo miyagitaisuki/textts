@@ -303,16 +303,16 @@ export default function App() {
 
   const library = {
     presets,
-    onSave: (name, role) => {
-      persistPresets(upsertPreset(presets, name, role));
-      addToast(`Đã lưu mẫu "${name}"`, "success");
+    onSave: (name, role, extra = {}) => {
+      persistPresets(upsertPreset(presets, name, role, extra));
+      addToast(`Đã lưu nhân vật "${name}"`, "success");
     },
     onRemove: (name) => {
       persistPresets(removePreset(presets, name));
       addToast(`Đã xóa mẫu "${name}"`, "info");
     },
     onApply: (roleId, preset) => {
-      patchRole(roleId, patchFromPreset(preset));
+      patchRole(roleId, { ...patchFromPreset(preset), name: preset.name });
       addToast(`Đã áp dụng mẫu "${preset.name}" cho vai ${roleId}`, "success");
     },
   };
@@ -836,6 +836,26 @@ export default function App() {
     }));
   }
 
+  // Chèn mục ngay sau mục đang chọn (không chọn gì thì thêm cuối).
+  function insertAfterSelected(p, item) {
+    const idx = p.items.findIndex((it) => it.id === selectedId);
+    const next = [...p.items];
+    next.splice(idx < 0 ? next.length : idx + 1, 0, item);
+    return { ...p, items: next };
+  }
+
+  // Đổi cảnh: từ vị trí này âm nền đổi sang âm chọn từ thư viện (hoặc tắt nền).
+  async function addScene(off = false) {
+    let layers = [];
+    if (!off) {
+      const file = await pickFromSoundLibrary("bgm");
+      if (!file) return;
+      layers = [`${file}@-20`];
+    }
+    edit((p) => insertAfterSelected(p, { id: nextId(p.items), type: "bgm", src_line: 0, layers }));
+    addToast(off ? "Đã chèn điểm tắt âm nền" : "Đã chèn cảnh mới: âm nền đổi từ vị trí này", "info");
+  }
+
   function duplicateItem(id) {
     edit((p) => {
       const idx = p.items.findIndex((it) => it.id === id);
@@ -953,6 +973,8 @@ export default function App() {
       exportLines: o.exportLines,
       worksheet: o.worksheet,
       bgmLayers: o.bgmLayers,
+      level: o.level,
+      bilingual: o.bilingual,
     };
   }
 
@@ -981,6 +1003,31 @@ export default function App() {
     }
     setBusy(false);
     return res?.code === 0;
+  }
+
+  // Tự kiểm tra phát âm: tts.py --check nghe lại từng câu (Whisper) và so với kịch bản.
+  async function checkPronunciation() {
+    if (!(await save())) return;
+    setBusy(true);
+    setLog("Kiểm tra phát âm: đang nghe lại từng câu (lần đầu tải mô hình nhận dạng ~460 MB)…\n");
+    const res = await window.textts?.checkPronunciation?.(filePath, exportOpts.level);
+    setBusy(false);
+    if (!res?.ok) {
+      setLog((prev) => prev + `\n${res?.error || "Không kiểm tra được"}`);
+      addToast(res?.error || "Không kiểm tra được phát âm", "error");
+      return;
+    }
+    const bad = res.results.filter((r) => !r.ok);
+    setErrorIds(bad.map((r) => r.id));
+    setLog((prev) =>
+      prev +
+      res.results.map((r) => `${r.ok ? "✓" : "✕"} ${r.id} (${Math.round(r.score * 100)}%) nghe: ${r.heard}`).join("\n") +
+      (bad.length ? "\n\nCâu ✕: thêm chú âm 漢字{かな} cho chữ bị đọc sai rồi nghe thử lại." : "")
+    );
+    if (bad.length) {
+      addToast(`${bad.length}/${res.results.length} câu có thể bị đọc sai (đánh dấu đỏ)`, "error");
+      setTimeout(() => document.getElementById(`row-${bad[0].id}`)?.scrollIntoView({ block: "center" }), 0);
+    } else addToast(`Đã nghe lại ${res.results.length} câu: đều khớp kịch bản`, "success");
   }
 
   function exportAll() {
@@ -1047,6 +1094,9 @@ export default function App() {
     { id: "undo", group: "Chỉnh sửa", label: "Hoàn tác", shortcut: "Ctrl+Z", run: undo, disabled: busy || !canUndo },
     { id: "redo", group: "Chỉnh sửa", label: "Làm lại", shortcut: "Ctrl+Y", run: redo, disabled: busy || !canRedo },
     { id: "voice-bank", group: "Giọng", label: "Ngân hàng giọng (biệt danh, tuổi, chất giọng)", keywords: "voice nhan vat vai", run: () => setShowVoiceBank(true) },
+    { id: "scene", group: "Chỉnh sửa", label: "Đổi cảnh: đổi âm nền từ vị trí đang chọn", keywords: "bgm canh nen", run: () => addScene(false), disabled: noProject },
+    { id: "scene-off", group: "Chỉnh sửa", label: "Tắt âm nền từ vị trí đang chọn", keywords: "bgm canh", run: () => addScene(true), disabled: noProject },
+    { id: "qc", group: "Âm thanh", label: "Kiểm tra phát âm (nghe lại, tìm câu đọc sai)", keywords: "whisper qc", run: checkPronunciation, disabled: noProject },
     { id: "readings", group: "Chỉnh sửa", label: "Từ điển cách đọc", run: () => setShowReadings(true), disabled: busy },
     { id: "preview-all", group: "Âm thanh", label: "Nghe thử toàn bài (không lưu)", shortcut: "Shift+Space", run: previewAll, disabled: noProject },
     { id: "preview-line", group: "Âm thanh", label: "Nghe thử câu đang chọn", shortcut: "F5", run: () => selectedLineId() && preview(selectedLineId()), disabled: noProject || !selectedLineId() },
@@ -1140,6 +1190,9 @@ export default function App() {
                     onClick={addPause} disabled={busy || !project} />
                   <RibbonButton icon={<MusicIcon size={20} />} label="Hiệu ứng SFX" title="Chèn hiệu ứng âm thanh SFX"
                     onClick={addSfx} disabled={busy || !project} />
+                  <RibbonButton icon={<MusicIcon size={20} />} label="Đổi cảnh"
+                    title="Đổi âm nền từ vị trí đang chọn (vào quán, ra phố...): chọn âm từ thư viện"
+                    onClick={() => addScene(false)} disabled={busy || !project} />
                 </RibbonGroup>
                 <RibbonGroup label="Chỉnh sửa">
                   <RibbonButton icon={<SearchIcon size={20} />} label="Tìm & thay" title="Tìm kiếm & Thay thế (Ctrl+F)"
@@ -1162,6 +1215,9 @@ export default function App() {
                   <RibbonButton icon={<HardDriveIcon size={20} />} label="Xuất tất cả"
                     title="Xuất một lần: âm thanh + phụ đề SRT + bản chậm 0.8× + phiếu học tập + từng câu riêng (Ctrl+Shift+G)"
                     onClick={exportAll} disabled={busy || !project} />
+                  <RibbonButton icon={<SearchIcon size={20} />} label="Kiểm tra phát âm"
+                    title="Nghe lại từng câu bằng nhận dạng giọng nói, đánh dấu câu có thể bị đọc sai (chữ Hán đọc nhầm...)"
+                    onClick={checkPronunciation} disabled={busy || !project} />
                   <RibbonButton icon={<SlidersIcon size={20} />} label="Tùy chọn xuất"
                     title="Tùy chọn xuất file (SRT, MP3, Chậm 0.8x, Phiếu học tập)"
                     onClick={() => setShowExport(true)} disabled={busy || !project} />

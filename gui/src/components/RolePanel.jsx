@@ -24,18 +24,28 @@ function Segmented({ label, options, labels, value, disabled, onChange }) {
   );
 }
 
-// Khối thư viện mẫu của một vai: áp mẫu có sẵn, hoặc lưu cấu hình hiện tại thành mẫu mới.
-function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled }) {
+// Nhân vật giáo trình: áp nhân vật có sẵn (giọng, cảm xúc, tốc độ, cao độ) cho vai, hoặc lưu vai hiện tại
+// thành nhân vật mới để mọi bài sau (và AI) dùng lại đúng giọng.
+function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled, engine }) {
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [choice, setChoice] = useState("");
   const [error, setError] = useState("");
-  const selected = presets.find((p) => p.name === choice);
+  // Chỉ nhân vật cùng engine (nhân vật cũ chưa ghi engine thì hiện ở mọi engine)
+  const usable = presets.filter((p) => !p.engine || p.engine === engine);
+  const selected = usable.find((p) => p.name === choice);
   return (
     <div className="preset-bar">
+      <span className="preset-title">Nhân vật giáo trình</span>
       <div className="preset-row">
-        <select value={choice} disabled={disabled} onChange={(e) => setChoice(e.target.value)}>
-          <option value="">— chọn mẫu —</option>
-          {presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+        <select value={choice} disabled={disabled} onChange={(e) => setChoice(e.target.value)} aria-label="Chọn nhân vật">
+          <option value="">— chọn nhân vật —</option>
+          {usable.map((p) => (
+            <option key={p.name} value={p.name} title={p.description || ""}>
+              {p.name}
+              {p.description ? ` — ${p.description}` : ""}
+            </option>
+          ))}
         </select>
         <button className="ghost" disabled={disabled || !selected}
           onClick={() => onApply(roleId, selected)}>Áp</button>
@@ -43,18 +53,23 @@ function PresetBar({ roleId, role, presets, onApply, onSave, onRemove, disabled 
           onClick={() => { onRemove(choice); setChoice(""); }}>Xóa</button>
       </div>
       <div className="preset-row">
-        <input placeholder="Tên mẫu mới" value={name} disabled={disabled}
+        <input placeholder="Tên nhân vật (vd. Minh)" value={name} disabled={disabled}
           onChange={(e) => setName(e.target.value)} />
         <button className="ghost" disabled={disabled}
           onClick={() => {
             try {
-              onSave(name, role);
+              onSave(name, role, { engine, description });
               setName("");
+              setDescription("");
               setError("");
             } catch (err) {
               setError(err.message);
             }
-          }}>Lưu mẫu</button>
+          }}>Lưu nhân vật</button>
+      </div>
+      <div className="preset-row">
+        <input placeholder="Mô tả cho AI (vd. nam sinh viên Việt Nam 20 tuổi, vui vẻ)" value={description}
+          disabled={disabled} onChange={(e) => setDescription(e.target.value)} />
       </div>
       {error && <div className="preset-error">{error}</div>}
     </div>
@@ -175,7 +190,7 @@ export default function RolePanel({
             {library && (
               <details className="preset-details">
                 <summary>Mẫu cấu hình</summary>
-                <PresetBar roleId={id} role={role} presets={library.presets} disabled={disabled}
+                <PresetBar roleId={id} role={role} presets={library.presets} disabled={disabled} engine={engine}
                   onApply={library.onApply} onSave={library.onSave} onRemove={library.onRemove} />
               </details>
             )}

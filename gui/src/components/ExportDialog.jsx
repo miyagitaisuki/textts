@@ -55,6 +55,23 @@ export default function ExportDialog({
               </select>
             </label>
 
+            <label title="Chỉnh tốc độ đọc và khoảng nghỉ theo trình độ người học">
+              Trình độ người học
+              <select value={opts.level || ""} disabled={disabled} onChange={(e) => set({ level: e.target.value })}>
+                <option value="">Theo “Nhịp đọc” của dự án</option>
+                <option value="N5">N5 — chậm, nghỉ lâu</option>
+                <option value="N4">N4</option>
+                <option value="N3">N3 — tự nhiên vừa</option>
+                <option value="N2">N2</option>
+                <option value="N1">N1 — gần người bản xứ</option>
+              </select>
+            </label>
+
+            <label className="check" title="Đọc bản dịch tiếng Việt (ô dưới mỗi câu) ngay sau câu đó; cần Internet">
+              <input type="checkbox" checked={Boolean(opts.bilingual)} disabled={disabled} onChange={(e) => set({ bilingual: e.target.checked })} />
+              Bản song ngữ (đọc bản dịch sau mỗi câu)
+            </label>
+
             <label>
               Độ to chuẩn hóa LUFS (để trống = không chuẩn hóa)
               <input

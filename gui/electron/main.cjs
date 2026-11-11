@@ -225,6 +225,14 @@ ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
 });
 
 // Chạy tts.py --project <file> -o <out>. Trả về mã thoát và log.
+// Trình độ (N5..N1) và bản song ngữ
+function levelArgs(options) {
+  const out = [];
+  if (["N5", "N4", "N3", "N2", "N1"].includes(options.level)) out.push("--level", options.level);
+  if (options.bilingual) out.push("--bilingual");
+  return out;
+}
+
 // Các lớp nhạc/âm nền chồng nhau: mỗi lớp "--bgm <file>@<dB>". Bỏ qua file không còn tồn tại.
 function bgmArgs(options) {
   const layers = Array.isArray(options.bgmLayers) ? options.bgmLayers : [];
@@ -280,6 +288,7 @@ ipcMain.handle("tts:generate", async (evt, { projectPath, outputName, format = "
     args.push("--worksheet", out.replace(/\.[^./\\]+$/, ".html"));
   }
   args.push(...bgmArgs(options));
+  args.push(...levelArgs(options));
   return new Promise((resolve) => {
     const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
     let log = "";
@@ -566,7 +575,7 @@ ipcMain.handle("tts:previewAll", async (evt, { projectPath, data, options = {} }
     if (options.lufs !== null && options.lufs !== undefined && String(options.lufs).trim() !== "" && Number.isFinite(Number(options.lufs))) {
       args.push("--lufs", String(Number(options.lufs)));
     }
-    args.push(...bgmArgs(options));
+    args.push(...bgmArgs(options), ...levelArgs(options));
     const result = await new Promise((resolve) => {
       const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
       let log = "";
@@ -594,6 +603,35 @@ ipcMain.handle("tts:previewAll", async (evt, { projectPath, data, options = {} }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+// Tự kiểm tra phát âm: tts.py --project <file> --check in JSON kết quả từng câu.
+ipcMain.handle("tts:check", async (evt, { projectPath, level }) => {
+  const proj = assertAllowed(projectPath, new Set([".json"]));
+  const args = [TTS_CLI, "--project", proj, "--check"];
+  if (["N5", "N4", "N3", "N2", "N1"].includes(level)) args.push("--level", level);
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON, args, { cwd: REPO_ROOT, env: CHILD_ENV });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => {
+      err += c;
+      evt.sender.send("tts:log", c.toString("utf-8"));
+    });
+    child.on("error", (e) => resolve({ ok: false, error: spawnErrorText(e) }));
+    child.on("close", (code) => {
+      if (code === 0 || code === 1) {
+        try {
+          return resolve({ ok: true, results: JSON.parse(out.trim().split("\n").pop()) });
+        } catch {
+          // rơi xuống báo lỗi
+        }
+      }
+      logger.log("ERROR", `Kiểm tra phát âm thất bại (mã ${code}): ${err.slice(-1500)}`);
+      resolve({ ok: false, error: err.trim().split("\n").pop() || `Kiểm tra thất bại (mã ${code})` });
+    });
+  });
 });
 
 // Cấu hình MCP cho Claude Desktop: chạy ai_tools/mcp_server.py bằng đúng Python mà textts đang dùng.
