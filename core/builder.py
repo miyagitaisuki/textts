@@ -6,9 +6,9 @@ from pydub.silence import detect_leading_silence
 
 DEFAULT_TIMING = {
     "lead_in_ms": 2000,
-    "turn_gap_ms": 1400,
-    "same_speaker_gap_ms": 800,
-    "question_gap_ms": 300,
+    "turn_gap_ms": 600,
+    "same_speaker_gap_ms": 400,
+    "question_gap_ms": 200,
     "tail_ms": 2000,
 }
 
