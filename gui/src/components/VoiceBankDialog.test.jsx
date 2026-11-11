@@ -5,15 +5,18 @@ import VoiceBankDialog from "./VoiceBankDialog.jsx";
 
 afterEach(cleanup);
 
+const BANK = { voices: { "voicevox:3": { nickname: "Zunda", gender: "nữ", age: 10, styles: ["trẻ con"], favorite: true } } };
+
 function makeApi() {
   return {
     getVoiceBank: vi.fn().mockResolvedValue({
       engine: "voicevox",
       online: true,
       voices: [{ value: "3", label: "ずんだもん" }, { value: "2", label: "四国めたん" }],
-      bank: { voices: { "voicevox:3": { nickname: "Zunda", gender: "nữ", age: 10, styles: ["trẻ con"], favorite: true } } },
+      bank: BANK,
     }),
-    setVoiceBank: vi.fn().mockResolvedValue({ voices: {} }),
+    // app trả lại cả ngân hàng sau khi lưu
+    setVoiceBank: vi.fn().mockResolvedValue({ voices: { ...BANK.voices, "voicevox:2": { nickname: "Chị Metan" } } }),
   };
 }
 
