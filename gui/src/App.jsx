@@ -916,7 +916,8 @@ export default function App() {
                     onClick={openScript} disabled={busy} />
                   <RibbonButton icon={<FolderIcon size={20} />} label="Mở dự án" onClick={openProject} disabled={busy} />
                   <div className="ribbon-stack">
-                    <RibbonButton size="small" icon={<ClipboardIcon size={14} />} label="Dán kịch bản"
+                    <RibbonButton size="small" icon={<ClipboardIcon size={14} />} label="Tạo kịch bản mới"
+                      title="Nhập hoặc dán kịch bản để tạo dự án mới"
                       active={pasting} onClick={() => setPasting((v) => !v)} disabled={busy} />
                     <RibbonButton size="small" icon={<SaveIcon size={14} />} label={dirty ? "Lưu ●" : "Lưu"}
                       title="Lưu dự án (Ctrl+S)" onClick={save} disabled={busy || !project || !dirty} />
@@ -1060,7 +1061,7 @@ export default function App() {
         </section>
       )}
 
-      {/* Dán kịch bản Overlay */}
+      {/* Tạo kịch bản mới (nhập/dán kịch bản) */}
       {pasting && (
         <section className="paste-panel-overlay">
           <p>
@@ -1071,7 +1072,7 @@ export default function App() {
             rows={7}
             value={pasteText}
             disabled={busy}
-            placeholder="Dán kịch bản tiếng Nhật vào đây..."
+            placeholder="Nhập hoặc dán kịch bản tiếng Nhật vào đây..."
             onChange={(e) => setPasteText(e.target.value)}
           />
           {pasteError && (
@@ -1124,7 +1125,7 @@ export default function App() {
               Mở kịch bản .txt
             </button>
             <button className="nav-btn" onClick={() => setPasting(true)} disabled={busy}>
-              Dán kịch bản
+              Tạo kịch bản mới
             </button>
             <button className="nav-btn" onClick={openProject} disabled={busy}>
               Mở dự án (project.json)
@@ -1133,6 +1134,9 @@ export default function App() {
               Hướng dẫn & Kết nối AI
             </button>
           </div>
+          <p className="empty-author">
+            Tác giả: ThS. Nguyễn Thanh Quang — Giảng viên chuyên ngành Nhật Bản học, Trường Đại học Quy Nhơn
+          </p>
           {log && (
             <details className="log-wrap" style={{ marginTop: 24, width: "100%", maxWidth: 640 }}>
               <summary>Nhật ký hệ thống</summary>

@@ -27,6 +27,7 @@ describe("AboutDialog", () => {
     // Switch to About tab
     fireEvent.click(screen.getByRole("tab", { name: "ℹ Về textts" }));
     expect(screen.getByText("Giới thiệu ứng dụng textts")).toBeTruthy();
+    expect(screen.getByText(/ThS\. Nguyễn Thanh Quang/)).toBeTruthy();
     expect(screen.getByText(/1.1.0/)).toBeTruthy();
   });
 

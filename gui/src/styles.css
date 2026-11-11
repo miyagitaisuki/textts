@@ -1923,3 +1923,9 @@ kbd {
 .paste-note {
   font-size: 12px;
 }
+
+.empty-author {
+  margin: 28px 0 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
