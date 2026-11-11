@@ -154,16 +154,13 @@ Bản phát hành là bộ cài `textts-<phiên bản>-setup.exe` (NSIS, cài th
 
 Phát hành một bản mới:
 
-1. Tăng `version` trong `gui/package.json` (ví dụ `0.1.0` → `0.1.1`) rồi merge vào `main`.
-2. Build trên máy Windows (`npm run dist:win` tạo bộ cài và `latest.yml` trong `gui/release/`):
+1. Tăng `version` trong `gui/package.json` (ví dụ `1.1.0` → `1.1.1`, dùng `npm version 1.1.1 --no-git-tag-version` trong `gui/` để sửa cả `package-lock.json`) rồi merge vào `main`.
+2. Vào **Actions → Windows build → Run workflow** trên `main`. Workflow build bộ cài rồi tự tạo **GitHub Release `v<phiên bản>`** (dạng nháp) và tải lên đủ 3 file: `textts-<phiên bản>-setup.exe`, `textts-<phiên bản>-setup.exe.blockmap` và `latest.yml`.
+   - Bỏ chọn **draft** để công bố ngay; bỏ chọn **release** nếu chỉ cần bộ cài trong Artifacts.
+   - Chạy lại khi Release còn là nháp sẽ thay file cũ. Release đã công bố thì workflow dừng: phải tăng phiên bản trước.
+3. Mở Release nháp trên GitHub, xem lại ghi chú thay đổi rồi bấm **Publish release**. App đã cài chỉ thấy bản mới sau khi Release được công bố (thiếu `latest.yml` thì cũng không thấy).
 
-```bash
-cd gui
-npm ci
-npm run dist:win
-```
-
-3. Tạo Release trên GitHub với tag `v<phiên bản>` (ví dụ `v0.1.1`), tải lên các file trong `gui/release/`: `textts-<phiên bản>-setup.exe`, `textts-<phiên bản>-setup.exe.blockmap` và `latest.yml`. Thiếu `latest.yml` thì app không thấy bản mới.
+Build thủ công trên máy Windows vẫn được: `cd gui && npm ci && npm run dist:win` tạo các file trên trong `gui/release/`.
 
 Build trên Linux cũng được nhưng cần `wine` và `wine32` (`apt install wine64 wine32:i386`), và phải khởi tạo prefix bằng `wineboot -i`.
 

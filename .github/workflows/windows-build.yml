@@ -1,13 +1,26 @@
 name: Windows build
 
-# Build bộ cài Windows (textts-<phiên bản>-setup.exe) trên runner Windows.
-# Chạy thủ công: Actions → Windows build → Run workflow. File cài đặt nằm trong Artifacts.
+# Build bộ cài Windows (textts-<phiên bản>-setup.exe) trên runner Windows rồi tạo GitHub Release.
+# Chạy thủ công: Actions → Windows build → Run workflow.
+# - Phiên bản lấy từ "version" trong gui/package.json; tag Release là v<phiên bản>.
+# - Release mặc định ở dạng nháp (draft): xem lại rồi bấm "Publish release" trên GitHub.
+#   App đã cài chỉ thấy bản mới khi Release đã được công bố (không phải nháp).
+# - Bộ cài, .blockmap và latest.yml cũng nằm trong Artifacts của lần chạy.
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Tạo GitHub Release v<phiên bản> và tải bộ cài lên"
+        type: boolean
+        default: true
+      draft:
+        description: "Để Release ở dạng nháp (bỏ chọn để công bố ngay)"
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
+  contents: write # tạo Release và tag
 
 jobs:
   build:
@@ -30,13 +43,31 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Phiên bản
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Dừng nếu Release đã công bố
+        if: inputs.release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          # Release đã công bố thì không ghi đè: phải tăng "version" trong gui/package.json trước.
+          if gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "::error::Release $TAG đã được công bố. Hãy tăng \"version\" trong gui/package.json rồi chạy lại."
+            exit 1
+          fi
+
       - name: Cài dependency
         run: npm ci
 
       - name: Build bộ cài (đóng gói Python, ffmpeg, NSIS)
         run: npm run dist:win
 
-      - name: Tải lên bộ cài
+      - name: Tải lên bộ cài (Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: textts-windows-setup
@@ -46,3 +77,26 @@ jobs:
             gui/release/latest.yml
           if-no-files-found: error
           retention-days: 14
+
+      - name: Tạo GitHub Release và tải bộ cài lên
+        if: inputs.release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          TAG="v$VERSION"
+          FILES=(release/textts-"$VERSION"-setup.exe release/textts-"$VERSION"-setup.exe.blockmap release/latest.yml)
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] || { echo "::error::Thiếu file $f"; ls -la release; exit 1; }
+          done
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Release nháp đã có (chạy lại build): thay file cũ bằng bản mới.
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            ARGS=(--title "textts $VERSION" --target "$GITHUB_SHA" --generate-notes)
+            [ "$DRAFT" = "true" ] && ARGS+=(--draft)
+            gh release create "$TAG" "${FILES[@]}" "${ARGS[@]}"
+          fi
+          echo "Release: $(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
