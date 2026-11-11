@@ -210,6 +210,10 @@ def run_batch(batch_dir: Path, outdir: Path, argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Khi GUI gọi qua pipe trên Windows, stdout mặc định dùng cp1252 và in tiếng Việt (ví dụ "Đ") sẽ làm tiến trình lỗi.
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="TTS hội thoại tiếng Nhật")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("script", nargs="?", type=Path, help="file kịch bản .txt")
