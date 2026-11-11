@@ -22,8 +22,24 @@ LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(?:\{([^}]*)\})?\s*(.*)$")
 BARE_LINE_RE = re.compile(r"^(\d+)[ \t:：.、]+(.+)$")
 PAUSE_RE = re.compile(r"^\s*\[\s*pause\s*=\s*(\d+)\s*\]\s*$", re.I)
 SFX_RE = re.compile(r"^\s*\[\s*sfx\s*=\s*(.+?)\s*\]\s*$", re.I)
-# 漢字{かな}: giữ chữ Hán để hiển thị, gửi kana cho engine
-RUBY_RE = re.compile(r"([一-鿿々]+)\{([぀-ヿー]+)\}")
+# 漢字{かな}, 漢字(かな) hoặc 漢字（かな）: giữ chữ Hán để hiển thị, gửi kana cho engine.
+# Chỉ nhận khi trong ngoặc toàn là kana và ngay trước ngoặc là chữ Hán, để không nuốt ghi chú thường.
+RUBY_RE = re.compile(r"([一-鿿々]+)(?:\{([぀-ヿー]+)\}|[(（]([぀-ヿー]+)[)）])")
+
+
+def ruby_reading(m: "re.Match[str]") -> str:
+    """Phần kana của một chú âm khớp RUBY_RE (dù viết bằng ngoặc nhọn hay ngoặc tròn)."""
+    return m[2] or m[3]
+
+
+def to_tts_text(display: str) -> str:
+    """Chuỗi gửi engine: thay mỗi 漢字(かな) bằng phần kana."""
+    return RUBY_RE.sub(ruby_reading, display)
+
+
+def to_plain(display: str) -> str:
+    """Bản không furigana (cho phụ đề): bỏ phần chú âm."""
+    return RUBY_RE.sub(r"\1", display)
 
 
 class ScriptError(ValueError):
@@ -88,8 +104,8 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
         it["id"] = f"L{i + 1:03d}"
         if it["type"] == "line":
             it["display"] = apply_readings(it["text"], readings or {})  # giữ furigana để hiển thị
-            it["tts_text"] = RUBY_RE.sub(r"\2", it["display"])  # gửi kana cho engine
-            it["plain"] = RUBY_RE.sub(r"\1", it["display"])     # bản không furigana cho phụ đề
+            it["tts_text"] = to_tts_text(it["display"])  # gửi kana cho engine
+            it["plain"] = to_plain(it["display"])        # bản không furigana cho phụ đề
     return items
 
 

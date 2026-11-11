@@ -2,11 +2,15 @@
 # Giá trị ở câu (ví dụ [2]{emotion=happy}) luôn đè lên giá trị ở đây.
 engine: edge
 
+# Nhịp đọc (ms). Mức đề xuất cho bài nghe của người học.
 timing:
-  lead_in_ms: 300
-  turn_gap_ms: 450
-  same_speaker_gap_ms: 200
-  tail_ms: 500
+  lead_in_ms: 300          # lặng đầu bài
+  turn_gap_ms: 700         # đổi người nói
+  same_speaker_gap_ms: 400 # cùng người nói, sang câu thoại mới
+  question_gap_ms: 300     # chờ thêm sau câu hỏi
+  sentence_pause_ms: 400   # trong một câu thoại: dừng sau 。！？ (0 = đọc liền)
+  comma_pause_scale: 1.5   # kéo dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech; 1.0 = như engine)
+  tail_ms: 500             # lặng cuối bài
 
 roles:
   "1":

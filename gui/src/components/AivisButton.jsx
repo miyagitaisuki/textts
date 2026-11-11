@@ -13,6 +13,7 @@ export default function AivisButton() {
       name="AivisSpeech"
       api={api}
       confirmText="Tải AivisSpeech Engine và bộ giọng JVNV (dung lượng lớn, cần mạng). Tiếp tục?"
+      startHint="(lần đầu có thể mất vài phút)"
     />
   );
 }

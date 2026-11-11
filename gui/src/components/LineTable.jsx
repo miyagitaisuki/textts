@@ -1,5 +1,6 @@
 // Trình soạn thảo kịch bản trực quan dạng Card/Block chuyên nghiệp (Script Editor)
 import { EMOTIONS, SPEEDS, EMOTION_LABELS, SPEED_LABELS } from "./RolePanel.jsx";
+import { splitRuby, hasRuby } from "../lib/ruby.js";
 import { indexIssues } from "../lib/library.js";
 import {
   PlayIcon,
@@ -342,29 +343,13 @@ function patchAttr(it, key, value) {
   return next;
 }
 
-function hasRuby(text = "") {
-  return /([一-鿿々]+)\{([぀-ヿー]+)\}/.test(text);
-}
-
 function renderRubyElements(text = "") {
-  const RUBY_RE = /([一-鿿々]+)\{([぀-ヿー]+)\}/g;
-  const parts = [];
-  let last = 0;
-  let match;
-  while ((match = RUBY_RE.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(text.slice(last, match.index));
-    }
-    parts.push(
-      <ruby key={match.index}>
-        {match[1]}
-        <rt>{match[2]}</rt>
+  return splitRuby(text).map((p) =>
+    typeof p === "string" ? p : (
+      <ruby key={p.index}>
+        {p.base}
+        <rt>{p.reading}</rt>
       </ruby>
-    );
-    last = RUBY_RE.lastIndex;
-  }
-  if (last < text.length) {
-    parts.push(text.slice(last));
-  }
-  return parts;
+    ),
+  );
 }

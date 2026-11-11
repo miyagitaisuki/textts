@@ -2,7 +2,7 @@
 // chưa cấu hình -> tải thêm -> bật -> đang chạy.
 import { useEffect, useState } from "react";
 
-export default function EngineButton({ name, api, confirmText }) {
+export default function EngineButton({ name, api, confirmText, startHint = "" }) {
   const [state, setState] = useState(null);
   const [message, setMessage] = useState("");
 
@@ -26,7 +26,7 @@ export default function EngineButton({ name, api, confirmText }) {
       const res = await api.install();
       setMessage(res?.ok ? "" : `Lỗi: ${res?.error ?? "không rõ"}`);
     } else if (!state.running) {
-      setMessage(`Đang bật ${name}…`);
+      setMessage(`Đang bật ${name}…${startHint ? ` ${startHint}` : ""}`);
       const res = await api.start();
       setMessage(res?.ok ? "" : `Không bật được: ${res?.error ?? "engine chưa phản hồi"}`);
     }
@@ -59,7 +59,11 @@ export default function EngineButton({ name, api, confirmText }) {
   return (
     <button className="nav-btn ghost" onClick={onClick} disabled={disabled} title={title}>
       <span>{label}</span>
-      {message && <span className="muted" style={{ marginLeft: 6 }}>{message}</span>}
+      {message && (
+        <span className="muted engine-message" title={message}>
+          {message}
+        </span>
+      )}
     </button>
   );
 }

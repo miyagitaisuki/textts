@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from core.parser import RUBY_RE
+from core.parser import to_plain, to_tts_text
 
 Emotion = Literal["neutral", "happy", "sad", "angry", "surprised"]
 Speed = Literal["slow", "normal", "fast"]
@@ -15,10 +15,15 @@ SCHEMA_VERSION = 1
 
 
 class Timing(BaseModel):
+    """Nhịp đọc (ms). Mặc định chọn cho bài nghe của người học: chậm rãi, dễ theo kịp."""
+
     model_config = ConfigDict(extra="forbid")
     lead_in_ms: int = Field(300, ge=0)
-    turn_gap_ms: int = Field(450, ge=0)
-    same_speaker_gap_ms: int = Field(200, ge=0)
+    turn_gap_ms: int = Field(700, ge=0)            # đổi người nói
+    same_speaker_gap_ms: int = Field(400, ge=0)    # cùng người nói, sang câu thoại mới
+    question_gap_ms: int = Field(300, ge=0)        # chờ thêm sau câu hỏi trước khi trả lời
+    sentence_pause_ms: int = Field(400, ge=0)      # trong một câu thoại: sau 。！？ (0 = đọc liền)
+    comma_pause_scale: float = Field(1.5, ge=0.0, le=3.0)  # độ dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech)
     tail_ms: int = Field(500, ge=0)
 
 
@@ -66,8 +71,8 @@ class LineItem(BaseModel):
     @model_validator(mode="after")
     def _derive_reading(self) -> "LineItem":
         # Cách đọc luôn suy ra từ chữ hiển thị, để sửa display là đủ.
-        self.tts_text = RUBY_RE.sub(r"\2", self.display)
-        self.plain = RUBY_RE.sub(r"\1", self.display)
+        self.tts_text = to_tts_text(self.display)
+        self.plain = to_plain(self.display)
         return self
 
 

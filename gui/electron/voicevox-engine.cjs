@@ -44,19 +44,30 @@ async function startEngine({
   spawn,
   log,
   onSpawn,
+  name = "VOICEVOX",
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   timeoutMs = READY_TIMEOUT_MS,
   intervalMs = POLL_INTERVAL_MS,
 }) {
   const versionUrl = `${url}/version`;
   if (await ping(versionUrl)) {
-    log("INFO", "VOICEVOX đã chạy sẵn, textts sẽ không tắt engine này khi thoát");
+    log("INFO", `${name} đã chạy sẵn, textts sẽ không tắt engine này khi thoát`);
     return { ready: true, managed: false, child: null };
   }
   if (!exe) return { ready: false, managed: false, child: null };
 
   const port = portFromUrl(url);
   let alive = true;
+  let exitCode = null;
+  // Giữ vài dòng log cuối của engine để báo cho người dùng khi khởi động thất bại.
+  const lastLines = [];
+  const remember = (text) => {
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      lastLines.push(line.trim());
+      if (lastLines.length > 8) lastLines.shift();
+    }
+  };
   let child;
   try {
     child = spawn(exe, ["--host", "127.0.0.1", "--port", String(port)], {
@@ -65,21 +76,31 @@ async function startEngine({
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err) {
-    log("ERROR", `[VOICEVOX] Không khởi động được run.exe: ${err.message}`);
-    return { ready: false, managed: false, child: null };
+    log("ERROR", `[${name}] Không khởi động được run.exe: ${err.message}`);
+    return { ready: false, managed: false, child: null, error: err.message, lastLines };
   }
   // Báo ngay khi đã spawn để app có thể tắt engine kể cả khi thoát lúc đang chờ sẵn sàng.
   onSpawn?.(child);
 
-  child.stdout?.on("data", (chunk) => log("INFO", `[VOICEVOX] ${chunk.toString().trim()}`));
-  child.stderr?.on("data", (chunk) => log("ERROR", `[VOICEVOX] ${chunk.toString().trim()}`));
+  child.stdout?.on("data", (chunk) => {
+    const text = chunk.toString();
+    remember(text);
+    log("INFO", `[${name}] ${text.trim()}`);
+  });
+  child.stderr?.on("data", (chunk) => {
+    const text = chunk.toString();
+    remember(text);
+    log("ERROR", `[${name}] ${text.trim()}`);
+  });
   child.on("error", (err) => {
     alive = false;
-    log("ERROR", `[VOICEVOX] Lỗi tiến trình: ${err.message}`);
+    remember(err.message);
+    log("ERROR", `[${name}] Lỗi tiến trình: ${err.message}`);
   });
   child.on("exit", (code) => {
     alive = false;
-    log("INFO", `[VOICEVOX] Tiến trình kết thúc (mã ${code})`);
+    exitCode = code;
+    log("INFO", `[${name}] Tiến trình kết thúc (mã ${code})`);
   });
 
   const ready = await waitUntilReady({
@@ -90,12 +111,17 @@ async function startEngine({
     timeoutMs,
     intervalMs,
   });
+  let error;
   if (ready) {
-    log("INFO", `VOICEVOX đã sẵn sàng tại ${url}`);
+    log("INFO", `${name} đã sẵn sàng tại ${url}`);
+  } else if (!alive) {
+    error = `${name} đã thoát (mã ${exitCode ?? "?"})`;
+    log("ERROR", error);
   } else {
-    log("ERROR", `VOICEVOX chưa phản hồi tại ${url} sau ${Math.round(timeoutMs / 1000)} giây`);
+    error = `${name} chưa phản hồi sau ${Math.round(timeoutMs / 1000)} giây (vẫn đang khởi động)`;
+    log("ERROR", `${error} tại ${url}`);
   }
-  return { ready, managed: true, child };
+  return { ready, managed: true, child, alive, error, lastLines };
 }
 
 // Tắt engine do textts khởi động (cả cây tiến trình trên Windows). Đồng bộ để chắc chắn chạy xong trước khi app thoát.

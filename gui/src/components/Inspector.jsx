@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { splitRuby, toTtsText } from "../lib/ruby.js";
+import TimingPanel from "./TimingPanel.jsx";
 import RolePanel from "./RolePanel.jsx";
 import Mixer from "./Mixer.jsx";
 import { UsersIcon, SlidersIcon, InfoIcon, ClockIcon } from "./Icons.jsx";
@@ -12,6 +14,10 @@ export default function Inspector({
   onPatchSelectedItem,
   disabled,
   voices = [],
+  engine,
+  onChangeEngine,
+  timing,
+  onChangeTiming,
   recorder,
   library,
   output,
@@ -43,7 +49,7 @@ export default function Inspector({
           title="Bộ trộn âm thanh & VU Meter"
         >
           <SlidersIcon size={14} />
-          <span>Mixer</span>
+          <span>Mixer &amp; nhịp</span>
         </button>
         <button
           type="button"
@@ -68,6 +74,8 @@ export default function Inspector({
               onDeleteRole={onDeleteRole}
               disabled={disabled}
               voices={voices}
+              engine={engine}
+              onChangeEngine={onChangeEngine}
               recorder={recorder}
               library={library}
             />
@@ -77,6 +85,7 @@ export default function Inspector({
         {activeTab === "mixer" && (
           <div className="tab-pane">
             <Mixer roles={roles} onChange={onChangeRole} disabled={disabled} />
+            {onChangeTiming && <TimingPanel timing={timing} onChange={onChangeTiming} disabled={disabled} />}
             {output?.timeline?.duration_ms && (
               <div className="mixer-meta">
                 <div className="meta-row">
@@ -153,10 +162,10 @@ export default function Inspector({
                   <small className="hint">Chèn khoảng lặng riêng trước khi bắt đầu nói câu này.</small>
                 </div>
 
-                {selectedItem.tts_text && (
+                {selectedItem.display && (
                   <div className="field-group">
                     <label>Chuỗi đọc gửi sang engine (Kana/TTS Text):</label>
-                    <div className="tts-text-preview">{selectedItem.tts_text}</div>
+                    <div className="tts-text-preview">{toTtsText(selectedItem.display)}</div>
                   </div>
                 )}
               </div>
@@ -170,25 +179,12 @@ export default function Inspector({
 
 function renderFuriganaHtml(text = "") {
   if (!text) return <span className="muted">— trống —</span>;
-  // Parse ruby regex
-  const parts = [];
-  const RUBY_RE = /([一-鿿々]+)\{([぀-ヿー]+)\}/g;
-  let last = 0;
-  let match;
-  while ((match = RUBY_RE.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(text.slice(last, match.index));
-    }
-    parts.push(
-      <ruby key={match.index}>
-        {match[1]}
-        <rt>{match[2]}</rt>
+  return splitRuby(text).map((p) =>
+    typeof p === "string" ? p : (
+      <ruby key={p.index}>
+        {p.base}
+        <rt>{p.reading}</rt>
       </ruby>
-    );
-    last = RUBY_RE.lastIndex;
-  }
-  if (last < text.length) {
-    parts.push(text.slice(last));
-  }
-  return parts;
+    ),
+  );
 }

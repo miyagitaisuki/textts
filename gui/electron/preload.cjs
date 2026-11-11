@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("textts", {
   openProject: () => ipcRenderer.invoke("project:open"),
   openScript: () => ipcRenderer.invoke("script:open"),
   importText: (text) => ipcRenderer.invoke("script:importText", { text }),
+  openManyScripts: () => ipcRenderer.invoke("script:openMany"),
   getOutputRoot: () => ipcRenderer.invoke("outputRoot:get"),
   pickOutputRoot: () => ipcRenderer.invoke("outputRoot:pick"),
   checkForUpdates: () => ipcRenderer.invoke("update:check"),

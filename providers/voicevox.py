@@ -26,6 +26,7 @@ DEFAULT_URL = "http://127.0.0.1:50021"
 class VoicevoxProvider(TTSProvider):
     name = "voicevox"
     ext = "wav"
+    supports_pause_scale = True
 
     def __init__(self, base_url: str | None = None, timeout: float = 60.0):
         self.base_url = (base_url or os.environ.get("VOICEVOX_URL") or DEFAULT_URL).rstrip("/")
@@ -43,6 +44,8 @@ class VoicevoxProvider(TTSProvider):
                 query = await r.json()
             query["speedScale"] = SPEED_SCALE[req.speed]
             query["pitchScale"] = max(-PITCH_LIMIT, min(PITCH_LIMIT, req.pitch / PITCH_HZ_PER_UNIT))
+            if "pauseLengthScale" in query:  # VOICEVOX ENGINE >= 0.19
+                query["pauseLengthScale"] = req.pause_scale
             async with session.post(
                 f"{self.base_url}/synthesis", params={"speaker": speaker}, json=query
             ) as r:

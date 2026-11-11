@@ -13,6 +13,8 @@ Thiết kế đầy đủ: xem kế hoạch kiến trúc (Phần 1–4). Trạng
 
 **Phạm vi sử dụng:** dùng cá nhân, không kinh doanh. Chỉ dùng engine miễn phí, mã mở. Không tích hợp dịch vụ trả phí (Gemini, OpenAI, ElevenLabs, Azure...).
 
+**Tác giả:** ThS. Nguyễn Thanh Quang — Giảng viên chuyên ngành Nhật Bản học, Trường Đại học Quy Nhơn.
+
 ## Cài đặt
 
 ```bash
@@ -273,7 +275,7 @@ Danh sách việc cần sửa sau khi rà soát `gui/src`. Đánh dấu `[x]` kh
 - [x] 1. Thanh công cụ quá tải: chuyển "Tùy chọn xuất" vào hộp thoại; đưa đường dẫn thư mục xuất xuống thanh trạng thái; thêm nút Hoàn tác/Làm lại.
 - [x] 2. Hành động chính: thanh hành động cố định ở đáy (Nghe thử / Tạo âm thanh / Xuất), theo mockup.
 - [x] 3. Trạng thái trùng: chỉ hiện "cần tạo lại" ở một chỗ.
-- [x] 4. Màn hình trống: hai nút lớn "Mở kịch bản .txt" và "Dán kịch bản".
+- [x] 4. Màn hình trống: hai nút lớn "Mở kịch bản .txt" và "Tạo kịch bản mới".
 - [x] 5. Bảng câu thoại: cho phép xuống dòng ở cột văn bản; ẩn cột ID; rút gọn tiêu đề; tăng vùng bấm của ↑ ↓ ✕; cột cảm xúc/tốc độ hiện chữ "theo vai" khi không ghi đè.
 - [x] 6. Thẻ vai: cảm xúc và tốc độ dùng nút chọn dạng nhóm; thư viện mẫu thu vào mục mở rộng.
 
@@ -319,7 +321,7 @@ Các engine mã mở khác cần kiểm tra trước khi đưa vào: giấy phé
 ## Dự án và thư mục xuất
 
 - **Thư mục xuất** là thư mục gốc chứa các dự án. Lần đầu sẽ hỏi chọn; sau đó được nhớ trong máy. Đổi bằng nút "Đổi…".
-- **Mở kịch bản .txt** hoặc **Dán kịch bản** tạo một dự án mới: `<thư mục xuất>/<tên dự án>/<tên dự án>.json`. Tên lấy từ tên file kịch bản (dán thì dùng `bai-moi-YYYYMMDD-HHMMSS`), nếu trùng sẽ thêm `-2`, `-3`...
+- **Mở kịch bản .txt** hoặc **Tạo kịch bản mới** (nhập/dán kịch bản) tạo một dự án mới: `<thư mục xuất>/<tên dự án>/<tên dự án>.json`. Tên lấy từ tên file kịch bản (dán thì dùng `bai-moi-YYYYMMDD-HHMMSS`), nếu trùng sẽ thêm `-2`, `-3`...
 - Mọi đầu ra của dự án (mp3, srt, timeline, phiếu, bản ghi âm) nằm trong thư mục đó. Nút "Mở thư mục dự án" mở thư mục này.
 - Đường dẫn `[sfx=...]` được ghi thành tuyệt đối khi nhập kịch bản, nên dự án vẫn tìm được file dù nằm ở thư mục khác.
 

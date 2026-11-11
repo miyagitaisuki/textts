@@ -1,0 +1,93 @@
+"""Chú âm dạng ngoặc tròn, tách câu trong một câu thoại và khoảng lặng giữa các câu."""
+import asyncio
+from pathlib import Path
+
+from pydub import AudioSegment
+from pydub.generators import Sine
+
+from core.builder import DEFAULT_TIMING
+from core.models import LineItem, Project, Role, Timing
+from core.parser import parse_script
+from providers.base import SynthRequest, TTSProvider
+from tts import cache_key, split_sentences, synth_all
+
+
+def test_parenthesised_furigana_sends_only_kana():
+    items = parse_script("[1] 素晴(すば)らしい意欲（いよく）ですね。駅{えき}はどこ？\n")
+    line = items[0]
+    assert line["tts_text"] == "すばらしいいよくですね。えきはどこ？"
+    assert line["plain"] == "素晴らしい意欲ですね。駅はどこ？"
+    assert line["display"] == "素晴(すば)らしい意欲（いよく）ですね。駅{えき}はどこ？"
+
+
+def test_ordinary_parentheses_are_kept():
+    item = LineItem(id="L001", src_line=1, role="1", display="はい(笑)。AI(エーアイ)です", tts_text="", plain="")
+    assert item.tts_text == "はい(笑)。AI(エーアイ)です"
+
+
+def test_split_sentences():
+    assert split_sentences("はい。貴社が開発されている、AIです！本当ですか？") == [
+        "はい。", "貴社が開発されている、AIです！", "本当ですか？"]
+    assert split_sentences("「はい。」そうです") == ["「はい。」", "そうです"]
+    assert split_sentences("読点だけ、の文") == ["読点だけ、の文"]
+
+
+def test_recommended_defaults_match():
+    t = Timing()
+    assert (t.turn_gap_ms, t.same_speaker_gap_ms, t.question_gap_ms) == (700, 400, 300)
+    assert t.sentence_pause_ms == 400 and t.comma_pause_scale == 1.5
+    for k, v in DEFAULT_TIMING.items():
+        assert getattr(t, k) == v
+
+
+def test_cache_key_keeps_old_value_and_changes_with_pause_scale():
+    import hashlib
+    req = SynthRequest(text="はい", voice="v")
+    legacy = hashlib.sha1("|".join(["edge", "v", "neutral", "normal", "0", "はい"]).encode()).hexdigest()
+    assert cache_key("edge", req) == legacy  # cache cũ vẫn dùng được
+    assert cache_key("edge", SynthRequest(text="はい", voice="v", pause_scale=1.5)) != legacy
+
+
+class ToneProvider(TTSProvider):
+    """Mỗi câu: 100 ms lặng + 300 ms tiếng + 100 ms lặng; ghi lại các câu và pause_scale nhận được."""
+
+    name = "tone"
+    ext = "wav"
+    supports_pause_scale = True
+
+    def __init__(self):
+        self.calls = []
+
+    async def synthesize(self, req, out_path):
+        self.calls.append((req.text, req.pause_scale))
+        seg = AudioSegment.silent(100) + Sine(440).to_audio_segment(300).apply_gain(-6) + AudioSegment.silent(100)
+        seg.export(out_path, format="wav")
+
+
+def _project(display, **timing):
+    return Project(
+        engine="tone",
+        timing=Timing(**timing),
+        roles={"1": Role(voice="v")},
+        items=[LineItem(id="L001", src_line=1, role="1", display=display, tts_text="", plain="")],
+    )
+
+
+def test_line_with_several_sentences_gets_pauses(tmp_path):
+    provider = ToneProvider()
+    project = _project("はい。そうです！", sentence_pause_ms=500, comma_pause_scale=1.5)
+    assert asyncio.run(synth_all(project, provider, tmp_path)) == []
+    assert sorted(provider.calls) == [("そうです！", 1.5), ("はい。", 1.5)]
+    joined = AudioSegment.from_file(project.items[0].audio)
+    # 2 câu x (300 ms tiếng + ~2 x 40 ms đệm) + 500 ms lặng; nếu không cắt lặng của engine sẽ là 1500 ms.
+    # Sai số do pydub dò lặng theo khối 10 ms.
+    assert abs(len(joined) - (2 * 380 + 500)) <= 60
+    assert len(joined) < 1400
+
+
+def test_sentence_pause_zero_reads_line_in_one_go(tmp_path):
+    provider = ToneProvider()
+    project = _project("はい。そうです！", sentence_pause_ms=0)
+    assert asyncio.run(synth_all(project, provider, tmp_path)) == []
+    assert provider.calls == [("はい。そうです！", 1.5)]
+    assert Path(project.items[0].audio).exists()

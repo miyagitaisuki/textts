@@ -12,11 +12,14 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
 from pydub import AudioSegment
+from pydub.silence import detect_leading_silence
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -71,8 +74,37 @@ def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
 
 
 def cache_key(engine: str, req: SynthRequest) -> str:
-    raw = "|".join([engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text])
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    parts = [engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text]
+    if req.pause_scale != 1.0:  # giữ nguyên khóa cũ khi không chỉnh chỗ ngắt
+        parts.append(f"pause={req.pause_scale:g}")
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
+
+
+# Một "câu" trong câu thoại: tới dấu kết câu 。！？!? (kèm ngoặc đóng ngay sau nếu có).
+_SENTENCE_RE = re.compile(r"[^。！？!?]+(?:[。！？!?]+[」』）)]*)?|[。！？!?]+[」』）)]*")
+
+
+def split_sentences(text: str) -> list[str]:
+    """Tách câu thoại tại 。！？ để chèn khoảng lặng giữa các câu (engine thường đọc liền)."""
+    parts = [p.strip() for p in _SENTENCE_RE.findall(text)]
+    return [p for p in parts if p]
+
+
+def _trim(seg: AudioSegment, pad_ms: int = 40, thresh_db: float = -45.0) -> AudioSegment:
+    """Bỏ khoảng lặng đầu/cuối đoạn engine trả về để khoảng nghỉ giữa các câu đúng như cài đặt."""
+    start = max(0, detect_leading_silence(seg, silence_threshold=thresh_db) - pad_ms)
+    end = max(start, len(seg) - max(0, detect_leading_silence(seg.reverse(), silence_threshold=thresh_db) - pad_ms))
+    return seg[start:end]
+
+
+def join_sentences(paths: list[Path], pause_ms: int, out: Path) -> None:
+    """Ghép các câu đã tổng hợp, chèn `pause_ms` lặng giữa từng câu, ghi WAV ra `out`."""
+    joined = AudioSegment.empty()
+    for i, p in enumerate(paths):
+        if i:
+            joined += AudioSegment.silent(pause_ms)
+        joined += _trim(AudioSegment.from_file(p))
+    joined.export(out, format="wav")
 
 
 async def synth_all(
@@ -99,24 +131,48 @@ async def synth_all(
     async def call(req: SynthRequest, out: Path) -> None:
         await provider.synthesize(req, str(out))
 
-    async def one(item: LineItem) -> None:
-        if only_ids is not None and item.id not in only_ids:
-            return
-        req = resolve(item, project.roles)
-        key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
+    engine = provider.name + getattr(provider, "cache_salt", "")
+    timing = project.timing
+    pause_scale = timing.comma_pause_scale if getattr(provider, "supports_pause_scale", False) else 1.0
+
+    async def ensure(req: SynthRequest) -> tuple[str, Path]:
+        """Tổng hợp `req` vào cache nếu chưa có. Trả về (khóa, đường dẫn)."""
+        key = cache_key(engine, req)
         out = cache_dir / f"{key}.{provider.ext}"
-        item.cache_key = key
         if not out.exists() or out.stat().st_size == 0:
             async with sem:
                 tmp = out.with_suffix(".part")
                 try:
                     await call(req, tmp)
                     tmp.replace(out)
-                except Exception as exc:  # noqa: BLE001 - báo lỗi theo câu, không dừng batch
+                except BaseException:
                     tmp.unlink(missing_ok=True)
-                    errors.append(f"{item.id} (dòng {item.src_line}): {exc}")
-                    item.audio = None
-                    return
+                    raise
+        return key, out
+
+    async def one(item: LineItem) -> None:
+        if only_ids is not None and item.id not in only_ids:
+            return
+        req = replace(resolve(item, project.roles), pause_scale=pause_scale)
+        sentences = split_sentences(req.text) if timing.sentence_pause_ms > 0 else []
+        try:
+            if len(sentences) <= 1:
+                item.cache_key, out = await ensure(req)
+            else:
+                # Nhiều câu trong một câu thoại: đọc từng câu rồi chèn khoảng lặng giữa chúng.
+                parts = await asyncio.gather(*(ensure(replace(req, text=s)) for s in sentences))
+                raw = "|".join([*(k for k, _ in parts), f"gap={timing.sentence_pause_ms}"])
+                key = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+                out = cache_dir / f"{key}.wav"
+                if not out.exists() or out.stat().st_size == 0:
+                    tmp = out.with_name(out.stem + ".part.wav")
+                    await asyncio.to_thread(join_sentences, [p for _, p in parts], timing.sentence_pause_ms, tmp)
+                    tmp.replace(out)
+                item.cache_key = key
+        except Exception as exc:  # noqa: BLE001 - báo lỗi theo câu, không dừng batch
+            errors.append(f"{item.id} (dòng {item.src_line}): {exc}")
+            item.audio = None
+            return
         item.audio = str(out)
 
     await asyncio.gather(*(one(it) for it in project.items if isinstance(it, LineItem)))
