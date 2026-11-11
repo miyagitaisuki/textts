@@ -2,7 +2,7 @@
 # Chạy trên Windows: npm run bundle:python  (được gọi tự động bởi npm run dist:win)
 # Kết quả:
 #   gui/python-runtime/python/   -> python.exe + thư viện (đóng gói vào resources/python)
-#   gui/python-runtime/ffmpeg/   -> ffmpeg.exe (đóng gói vào resources/ffmpeg)
+#   gui/python-runtime/ffmpeg/   -> ffmpeg.exe, ffprobe.exe (đóng gói vào resources/ffmpeg)
 
 $ErrorActionPreference = "Stop"
 
@@ -58,13 +58,15 @@ if ($LASTEXITCODE -ne 0) { throw "Build wheel cho requirements.txt thất bại"
 & (Join-Path $PyDir "python.exe") -m pip install --no-warn-script-location --no-index --find-links $Wheels -r (Join-Path $RepoDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "Cài requirements.txt thất bại" }
 
-# 5. ffmpeg (pydub cần ffmpeg.exe)
+# 5. ffmpeg + ffprobe (pydub dùng ffmpeg.exe để chuyển đổi và ffprobe.exe để đọc file âm thanh)
 $FfZip = Join-Path $Tmp "ffmpeg.zip"
 Invoke-WebRequest -Uri $FfmpegUrl -OutFile $FfZip
 Expand-Archive -Path $FfZip -DestinationPath (Join-Path $Tmp "ffmpeg") -Force
-$FfExe = Get-ChildItem -Path (Join-Path $Tmp "ffmpeg") -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-if (-not $FfExe) { throw "Không tìm thấy ffmpeg.exe trong gói tải về" }
-Copy-Item $FfExe.FullName (Join-Path $FfDir "ffmpeg.exe")
+foreach ($Name in @("ffmpeg.exe", "ffprobe.exe")) {
+    $Exe = Get-ChildItem -Path (Join-Path $Tmp "ffmpeg") -Recurse -Filter $Name | Select-Object -First 1
+    if (-not $Exe) { throw "Không tìm thấy $Name trong gói tải về" }
+    Copy-Item $Exe.FullName (Join-Path $FfDir $Name)
+}
 
 # 5b. 7-Zip (7za.exe) để app giải nén engine tải theo yêu cầu (VOICEVOX, AivisSpeech).
 # Lấy từ bản chính thức trên GitHub của ip7z/7zip; SHA256 của file nén được ghim cứng.
@@ -100,6 +102,8 @@ if (-not (Test-Path (Join-Path $SzOut "7za.exe"))) { throw "Thiếu 7za.exe sau 
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
 & (Join-Path $FfDir "ffmpeg.exe") -version | Select-Object -First 1
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg.exe không chạy được" }
+& (Join-Path $FfDir "ffprobe.exe") -version | Select-Object -First 1
+if ($LASTEXITCODE -ne 0) { throw "ffprobe.exe không chạy được" }
 
 Remove-Item -Recurse -Force $Tmp
 Write-Host "Đã đóng gói runtime vào $Work"

@@ -70,7 +70,8 @@
         "from": "python-runtime/ffmpeg",
         "to": "ffmpeg",
         "filter": [
-          "ffmpeg.exe"
+          "ffmpeg.exe",
+          "ffprobe.exe"
         ]
       },
       {
