@@ -454,17 +454,20 @@ def main(argv: list[str] | None = None) -> int:
     ]
     gains = {k: r.gain_db for k, r in project.roles.items()}
     timing = project.timing.model_dump()
-    audio, placed = build(build_items, timing, role_gains=gains)
+    markers: list[dict] = []
+    audio, placed = build(build_items, timing, role_gains=gains, markers=markers)
     if args.role_play or args.shadow:
         if args.role_play and args.role_play not in project.roles:
             print(f"Không có vai {args.role_play} trong project", file=sys.stderr)
             return 2
         shadow_gap = args.shadow_gap if args.shadow else None
+        markers = []
         audio, placed = build(
             practice_items(build_items, placed,
                            practice_role=args.role_play, shadow_gap_ms=shadow_gap),
             timing,
             role_gains=gains,
+            markers=markers,
         )
     if args.bgm:
         bgm = AudioSegment.from_file(args.bgm)
@@ -476,7 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     write_audio(audio, args.output, fmt)
     print(f"Đã xuất {args.output} ({len(audio) / 1000:.1f} s, {len(placed)} câu)")
     timeline_path = args.output.with_name(f"{args.output.stem}.timeline.json")
-    write_timeline(audio, placed, timeline_path)
+    write_timeline(audio, placed, timeline_path, markers=markers,
+                   bgm=str(args.bgm) if args.bgm else None)
     print(f"Đã xuất dữ liệu timeline {timeline_path}")
 
     if args.srt:
@@ -510,9 +514,12 @@ def write_audio(audio, path: Path, fmt: str) -> None:
     limit_peak(audio).export(path, format=fmt)
 
 
-def write_timeline(audio, placed: list[dict], path: Path) -> None:
-    """Vị trí từng câu và dữ liệu sóng, để giao diện vẽ timeline."""
+def write_timeline(audio, placed: list[dict], path: Path, markers: list[dict] | None = None,
+                   bgm: str | None = None) -> None:
+    """Vị trí từng câu, hiệu ứng sfx, nhạc nền và dữ liệu sóng, để giao diện vẽ timeline nhiều track."""
     data = {
+        "sfx": markers or [],
+        "bgm": bgm,
         "duration_ms": len(audio),
         "peaks": peaks(audio, bins=600),
         "role_levels": role_levels(audio, placed, bins=600),

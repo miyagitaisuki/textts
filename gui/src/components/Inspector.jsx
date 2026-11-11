@@ -23,8 +23,14 @@ export default function Inspector({
   recorder,
   library,
   output,
+  tab,
+  onTabChange,
+  exportPanel = null,
 }) {
-  const [activeTab, setActiveTab] = useState("roles"); // "roles" | "mixer" | "line"
+  // Tab có thể do workspace điều khiển (tab/onTabChange); không truyền thì tự giữ trạng thái.
+  const [ownTab, setOwnTab] = useState("roles"); // "roles" | "mixer" | "line" | "export"
+  const activeTab = tab ?? ownTab;
+  const setActiveTab = (t) => (onTabChange ? onTabChange(t) : setOwnTab(t));
 
   const roleList = Object.keys(roles);
 
@@ -40,7 +46,7 @@ export default function Inspector({
           title="Quản lý nhân vật và giọng nói"
         >
           <UsersIcon size={14} />
-          <span>Nhân vật ({roleList.length})</span>
+          <span>Vai ({roleList.length})</span>
         </button>
         <button
           type="button"
@@ -51,7 +57,7 @@ export default function Inspector({
           title="Bộ trộn âm thanh & VU Meter"
         >
           <SlidersIcon size={14} />
-          <span>Mixer &amp; nhịp</span>
+          <span>Mixer</span>
         </button>
         <button
           type="button"
@@ -64,9 +70,23 @@ export default function Inspector({
           <InfoIcon size={14} />
           <span>Chi tiết {selectedItem ? `[${selectedItem.id}]` : ""}</span>
         </button>
+        {exportPanel && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "export"}
+            className={`inspector-tab ${activeTab === "export" ? "active" : ""}`}
+            onClick={() => setActiveTab("export")}
+            title="Tùy chọn xuất file"
+          >
+            <span>Xuất bản</span>
+          </button>
+        )}
       </div>
 
       <div className="inspector-content">
+        {activeTab === "export" && exportPanel && <div className="tab-pane">{exportPanel}</div>}
+
         {activeTab === "roles" && (
           <div className="tab-pane">
             <RolePanel

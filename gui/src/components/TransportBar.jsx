@@ -100,20 +100,6 @@ export default function TransportBar({
           </span>
         )}
 
-        <div className="output-folder-info" title={outputRoot}>
-          <span className="output-folder-label">Lưu tại:</span>
-          <span className="output-folder-path">{outputRoot || "mặc định"}</span>
-          <button
-            type="button"
-            className="mini-ghost-btn"
-            disabled={busy}
-            onClick={onChooseOutputRoot}
-            title="Đổi thư mục xuất âm thanh"
-          >
-            Đổi
-          </button>
-        </div>
-
         <button
           type="button"
           className="export-trigger-btn"

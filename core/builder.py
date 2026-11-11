@@ -36,11 +36,13 @@ def build(
     items: list[dict],
     timing: dict | None = None,
     role_gains: dict[str, float] | None = None,
+    markers: list[dict] | None = None,
 ) -> tuple[AudioSegment, list[dict]]:
     """Ghép `items` đã có khóa `audio` (đường dẫn WAV) hoặc `pause`.
 
     `role_gains` là mixer: độ lệch dB cho từng vai (mặc định 0).
     Trả về (âm thanh, danh sách mục đã gắn `start_ms`/`end_ms`) để dựng phụ đề.
+    `markers` (nếu truyền) nhận thêm vị trí các hiệu ứng sfx để giao diện vẽ track SFX.
     """
     t = {**DEFAULT_TIMING, **(timing or {})}
     gains = role_gains or {}
@@ -62,7 +64,11 @@ def build(
             prev_plain = None
             continue
         if it["type"] == "sfx":
+            start = len(out)
             out += AudioSegment.from_file(it["path"])
+            if markers is not None:
+                markers.append({"id": it.get("id", ""), "type": "sfx", "path": str(it["path"]),
+                                "start_ms": start, "end_ms": len(out)})
             prev_role = None
             prev_plain = None
             continue

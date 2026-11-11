@@ -49,6 +49,17 @@ def test_builder_inserts_sfx_audio(tmp_path):
     assert placed == []
 
 
+def test_builder_reports_sfx_position_for_the_timeline(tmp_path):
+    sfx = tmp_path / "bell.wav"
+    _tone(500).export(sfx, format="wav")
+    markers = []
+    build([{"type": "sfx", "path": str(sfx), "id": "L009"}], {"lead_in_ms": 300, "tail_ms": 0}, markers=markers)
+    assert len(markers) == 1
+    m = markers[0]
+    assert (m["id"], m["type"], m["start_ms"]) == ("L009", "sfx", 300)
+    assert abs(m["end_ms"] - 800) < 30
+
+
 def test_background_loops_and_stays_under_speech():
     speech = _tone(5000, amp=0.3)
     bgm = _tone(1000, amp=0.3, freq=220)

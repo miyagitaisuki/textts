@@ -11,14 +11,16 @@ export default function ExportDialog({
   hasWorksheet = false,
   disabled,
   onClose,
+  inline = false, // nhúng trong panel Xuất bản thay vì hộp thoại
 }) {
   useEffect(() => {
+    if (inline) return undefined;
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, inline]);
 
   const set = (patch) => onChange({ ...opts, ...patch });
   const roleEntries = Object.entries(roles);
@@ -29,18 +31,7 @@ export default function ExportDialog({
     if (file) set({ bgmPath: file });
   }
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal export-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Tùy chọn xuất"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2>Tùy chọn xuất & Tài liệu lớp học</h2>
-        <p className="muted">Các tùy chọn này được nhớ làm mặc định cho lần tạo tiếp theo.</p>
-
+  const grid = (
         <div className="export-grid">
           <fieldset>
             <legend>Âm thanh & Phụ đề</legend>
@@ -206,6 +197,30 @@ export default function ExportDialog({
             )}
           </fieldset>
         </div>
+  );
+
+  if (inline) {
+    return (
+      <div className="modal export-inline">
+        <p className="muted">Tùy chọn được nhớ làm mặc định. Tên file nhập ở ô cạnh nút “Tạo & lưu”.</p>
+        {grid}
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal export-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tùy chọn xuất"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2>Tùy chọn xuất & Tài liệu lớp học</h2>
+        <p className="muted">Các tùy chọn này được nhớ làm mặc định cho lần tạo tiếp theo.</p>
+
+        {grid}
 
         <div className="modal-actions">
           <button onClick={onClose} autoFocus>
