@@ -225,3 +225,49 @@ def test_voice_bank_endpoint_ranks_voices_for_a_role(tmp_path, monkeypatch):
     data = client.get("/api/v1/voice-bank", params={"engine": "aivis", "q": "ông già giọng trầm"}).json()
     assert data["items"][0]["voice"] == "2"
     assert len(client.get("/api/v1/voice-bank").json()["items"]) == 2
+
+
+@patch("server.synth_cached", new_callable=AsyncMock)
+@patch("server.check_voicevox_alive", new_callable=AsyncMock)
+def test_assemble_joins_speech_files_and_pauses(mock_vv_alive, mock_synth, tmp_path):
+    """Ghép đề nghe: lời đọc (engine), file gửi kèm (base64) và khoảng lặng theo đúng thứ tự."""
+    import base64
+    import io
+    from pydub import AudioSegment
+    from pydub.generators import Sine
+    import server
+
+    mock_vv_alive.return_value = True
+    spoken = tmp_path / "spoken.wav"
+    Sine(440).to_audio_segment(duration=700).export(spoken, format="wav")
+    mock_synth.return_value = spoken
+    buf = io.BytesIO()
+    Sine(660).to_audio_segment(duration=1200).export(buf, format="wav")
+    clip = base64.b64encode(buf.getvalue()).decode()
+
+    payload = {"filename": "de_nghe_001", "format": "wav", "segments": [
+        {"type": "speech", "text": "1番{ばん}。"},
+        {"type": "audio", "audio_b64": clip, "format": "wav"},
+        {"type": "pause", "ms": 2000},
+    ]}
+    with patch.object(server, "output_dir", tmp_path):
+        res = client.post("/api/v1/assemble", json=payload)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["marks"] == [0, 700, 1900]
+    assert abs(data["duration_s"] - 3.9) < 0.05
+    assert data["files"]["audio_url"].endswith("/files/de_nghe_001/de_nghe_001.wav")
+    out = AudioSegment.from_file(data["files"]["audio"])
+    assert abs(len(out) - 3900) < 50
+    # lời đọc gửi engine là kana (bỏ chữ Hán có chú âm)
+    assert mock_synth.call_args.args[1].text == "1ばん。"
+
+
+def test_assemble_rejects_broken_audio(tmp_path):
+    import server
+
+    payload = {"segments": [{"type": "audio", "audio_b64": "không phải base64"}]}
+    with patch.object(server, "output_dir", tmp_path):
+        res = client.post("/api/v1/assemble", json=payload)
+    assert res.status_code == 400
+    assert "Đoạn 1" in res.json()["detail"]
