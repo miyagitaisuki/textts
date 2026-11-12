@@ -271,3 +271,14 @@ def test_assemble_rejects_broken_audio(tmp_path):
         res = client.post("/api/v1/assemble", json=payload)
     assert res.status_code == 400
     assert "Đoạn 1" in res.json()["detail"]
+
+
+def test_assemble_rejects_over_length_track(tmp_path):
+    """Đề ghép vượt trần độ dài bị từ chối trước khi cấp phát bộ nhớ cho khoảng lặng."""
+    import server
+
+    payload = {"segments": [{"type": "pause", "ms": 600_000} for _ in range(7)]}
+    with patch.object(server, "output_dir", tmp_path):
+        res = client.post("/api/v1/assemble", json=payload)
+    assert res.status_code == 400
+    assert "vượt" in res.json()["detail"]
