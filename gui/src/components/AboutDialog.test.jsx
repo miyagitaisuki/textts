@@ -28,7 +28,7 @@ describe("AboutDialog", () => {
     fireEvent.click(screen.getByRole("tab", { name: "ℹ Về textts" }));
     expect(screen.getByText("Giới thiệu ứng dụng textts")).toBeTruthy();
     expect(screen.getByText(/ThS\. Nguyễn Thanh Quang/)).toBeTruthy();
-    expect(screen.getByText(/1\.3\.0/)).toBeTruthy();
+    expect(screen.getByText(/1\.3\.1/)).toBeTruthy();
   });
 
   it("shows the Claude Desktop MCP config with this machine's paths", async () => {
