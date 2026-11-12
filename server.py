@@ -612,6 +612,67 @@ def limit_and_norm(audio, lufs):
     return loudness_normalize(audio, lufs) if lufs is not None else audio
 
 
+class AssembleSegment(BaseModel):
+    type: Literal["speech", "audio", "pause"] = Field(..., description="speech: đọc chữ; audio: file có sẵn; pause: khoảng lặng")
+    text: str = Field("", description="speech: chữ tiếng Nhật, chú âm 漢字{かな}")
+    voice: str | None = Field(None, description="speech: mã giọng; trống thì dùng giọng của yêu cầu")
+    audio_b64: str = Field("", description="audio: nội dung file mp3/wav mã hóa base64")
+    format: Literal["mp3", "wav", "ogg", "m4a"] = Field("mp3", description="audio: định dạng file")
+    ms: int = Field(0, ge=0, le=600_000, description="pause: độ dài khoảng lặng (ms)")
+
+
+class AssembleRequest(BaseModel):
+    filename: str = Field("ghep_am_thanh", description="Tên file (và thư mục) xuất")
+    engine: Literal["voicevox", "edge", "aivis"] = "voicevox"
+    voice: str | None = Field(None, description="Giọng đọc mặc định cho các đoạn speech (trống: giọng dẫn mặc định)")
+    segments: list[AssembleSegment] = Field(..., min_length=1, max_length=2000)
+    format: Literal["mp3", "wav"] = "mp3"
+    lufs: float | None = Field(-16.0, description="Chuẩn hóa độ to từng đoạn về cùng mức LUFS (null để tắt)")
+
+
+@app.post("/api/v1/assemble", summary="Ghép nhiều đoạn (lời đọc, file có sẵn, khoảng lặng) thành một file, ví dụ đề nghe")
+async def assemble(req: AssembleRequest, request: Request):
+    """Ghép theo thứ tự: đoạn speech được đọc bằng engine (có cache), đoạn audio là file gửi kèm (base64),
+    đoạn pause là khoảng lặng. Mỗi đoạn có tiếng được chuẩn hóa độ to để cả bài đều nhau.
+    Trả về `files.audio_url` và `marks` (thời điểm bắt đầu của từng đoạn, ms)."""
+    import base64
+    import binascii
+    import io
+
+    voice = req.voice or _default_voice(req.engine, "1")
+    speech = [s for s in req.segments if s.type == "speech" and s.text.strip()]
+    provider = await _provider_for(req.engine) if speech else None
+    paths = await asyncio.gather(*(
+        synth_cached(provider, SynthRequest(text=to_tts_text(s.text.strip()), voice=s.voice or voice), DEFAULT_CACHE_DIR)
+        for s in speech))
+    spoken = dict(zip(map(id, speech), paths))
+    track = AudioSegment.empty()
+    marks = []
+    for i, s in enumerate(req.segments):
+        marks.append(len(track))
+        if s.type == "pause":
+            track += AudioSegment.silent(s.ms)
+            continue
+        if s.type == "speech":
+            if id(s) not in spoken:
+                continue
+            seg = AudioSegment.from_file(spoken[id(s)])
+        else:
+            try:
+                seg = AudioSegment.from_file(io.BytesIO(base64.b64decode(s.audio_b64, validate=True)), format=s.format)
+            except (binascii.Error, ValueError, IndexError) as exc:
+                raise HTTPException(status_code=400, detail=f"Đoạn {i + 1}: không đọc được file âm thanh ({exc})")
+            except Exception as exc:  # pydub/ffmpeg báo lỗi giải mã
+                raise HTTPException(status_code=400, detail=f"Đoạn {i + 1}: file âm thanh hỏng hoặc sai định dạng ({exc})")
+        track += limit_and_norm(seg, req.lufs)
+    if not len(track):
+        raise HTTPException(status_code=400, detail="Không có đoạn nào có âm thanh")
+    ex = _Exporter(sanitize_filename(req.filename), request, req.format)
+    ex.audio("audio", "", track)
+    return {"ok": True, "filename": ex.base, "folder": str(ex.dir), "duration_s": round(len(track) / 1000, 2),
+            "files": ex.files, "marks": marks}
+
+
 @app.post("/api/v1/check-audio", summary="Tự kiểm tra phát âm: nghe lại từng câu và so với kịch bản")
 async def check_audio(req: CheckAudioRequest):
     """Đọc lại từng câu bằng nhận dạng giọng nói (Whisper) và so cách đọc với kịch bản.

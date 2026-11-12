@@ -105,6 +105,8 @@ python server.py --host 127.0.0.1 --port 8000
 
 ### 3. Claude Desktop qua MCP (khuyên dùng)
 
+**Ghép đề nghe:** `POST /api/v1/assemble` nhận danh sách đoạn theo thứ tự (`speech`: chữ để engine đọc, `audio`: file mp3/wav gửi kèm dạng base64, `pause`: khoảng lặng ms), chuẩn hóa độ to từng đoạn và xuất một file. QBank (repo demix) dùng endpoint này để xuất đề nghe cho từng mã đề.
+
 `ai_tools/mcp_server.py` là MCP server (stdio, chỉ dùng thư viện chuẩn của Python) để Claude Desktop tự soạn kịch bản và tạo bài nghe ngay trong khung chat. Server tự khởi động `server.py` nếu API chưa chạy, và tắt nó khi Claude Desktop thoát.
 
 Các công cụ Claude dùng được:
