@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import sys
+import uuid
 from dataclasses import replace
 from pathlib import Path
 
@@ -51,6 +52,12 @@ from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
 MAX_CONCURRENCY = 3
+
+
+def _part_path(final: Path) -> Path:
+    """Đường dẫn tạm riêng cho mỗi lần tổng hợp: hai yêu cầu cùng khóa chạy song song không ghi chung một file."""
+    return final.with_name(f"{final.stem}.{uuid.uuid4().hex}.part")
+
 
 PROVIDERS: dict[str, type[TTSProvider]] = {
     EdgeProvider.name: EdgeProvider,
@@ -136,7 +143,7 @@ async def synth_all(
         out = cache_dir / f"{key}.{provider.ext}"
         if not out.exists() or out.stat().st_size == 0:
             async with sem:
-                tmp = out.with_suffix(".part")
+                tmp = _part_path(out)
                 try:
                     await call(req, tmp)
                     tmp.replace(out)
@@ -184,7 +191,7 @@ async def sample_voice(provider: TTSProvider, req: SynthRequest, cache_dir: Path
     key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
     cached = cache_dir / f"{key}.{provider.ext}"
     if not cached.exists() or cached.stat().st_size == 0:
-        tmp = cached.with_suffix(".part")
+        tmp = _part_path(cached)
         try:
             await provider.synthesize(req, str(tmp))
             tmp.replace(cached)
@@ -238,7 +245,7 @@ async def synth_cached(provider: TTSProvider, req: SynthRequest, cache_dir: Path
     key = cache_key(provider.name + getattr(provider, "cache_salt", ""), req)
     cached = cache_dir / f"{key}.{provider.ext}"
     if not cached.exists() or cached.stat().st_size == 0:
-        tmp = cached.with_suffix(".part")
+        tmp = _part_path(cached)
         try:
             await provider.synthesize(req, str(tmp))
             tmp.replace(cached)

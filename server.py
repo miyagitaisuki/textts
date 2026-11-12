@@ -39,7 +39,7 @@ from providers.base import SynthRequest, TTSProvider
 from providers.edge import VOICES as EDGE_VOICES, EdgeProvider
 from providers.voicevox import VoicevoxProvider, list_speakers
 from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
-from tts import PROVIDERS, add_translations, cache_key, synth_all, synth_cached, write_audio, write_timeline
+from tts import MAX_CONCURRENCY, PROVIDERS, add_translations, cache_key, synth_all, synth_cached, write_audio, write_timeline
 
 ROOT = Path(__file__).resolve().parent
 # Không ghi vào thư mục cài đặt (bị xóa khi cập nhật). App truyền thư mục xuất người dùng chọn qua TEXTTS_OUTPUT_DIR.
@@ -612,6 +612,9 @@ def limit_and_norm(audio, lufs):
     return loudness_normalize(audio, lufs) if lufs is not None else audio
 
 
+ASSEMBLE_MAX_MS = 60 * 60 * 1000  # trần độ dài một file ghép (60 phút) để tránh cạn bộ nhớ
+
+
 class AssembleSegment(BaseModel):
     type: Literal["speech", "audio", "pause"] = Field(..., description="speech: đọc chữ; audio: file có sẵn; pause: khoảng lặng")
     text: str = Field("", description="speech: chữ tiếng Nhật, chú âm 漢字{かな}")
@@ -642,15 +645,26 @@ async def assemble(req: AssembleRequest, request: Request):
     voice = req.voice or _default_voice(req.engine, "1")
     speech = [s for s in req.segments if s.type == "speech" and s.text.strip()]
     provider = await _provider_for(req.engine) if speech else None
-    paths = await asyncio.gather(*(
-        synth_cached(provider, SynthRequest(text=to_tts_text(s.text.strip()), voice=s.voice or voice), DEFAULT_CACHE_DIR)
-        for s in speech))
+    # Giới hạn số câu tổng hợp chạy cùng lúc, tránh dồn 2000 yêu cầu vào engine một lúc.
+    sem = asyncio.Semaphore(MAX_CONCURRENCY)
+
+    async def _synth(s):
+        async with sem:
+            return await synth_cached(provider, SynthRequest(text=to_tts_text(s.text.strip()), voice=s.voice or voice), DEFAULT_CACHE_DIR)
+
+    paths = await asyncio.gather(*(_synth(s) for s in speech))
     spoken = dict(zip(map(id, speech), paths))
     track = AudioSegment.empty()
     marks = []
+
+    def _check_len(extra_ms: int, i: int) -> None:
+        if len(track) + extra_ms > ASSEMBLE_MAX_MS:
+            raise HTTPException(status_code=400, detail=f"Đoạn {i + 1}: file ghép vượt {ASSEMBLE_MAX_MS // 60_000} phút")
+
     for i, s in enumerate(req.segments):
         marks.append(len(track))
         if s.type == "pause":
+            _check_len(s.ms, i)
             track += AudioSegment.silent(s.ms)
             continue
         if s.type == "speech":
@@ -664,6 +678,7 @@ async def assemble(req: AssembleRequest, request: Request):
                 raise HTTPException(status_code=400, detail=f"Đoạn {i + 1}: không đọc được file âm thanh ({exc})")
             except Exception as exc:  # pydub/ffmpeg báo lỗi giải mã
                 raise HTTPException(status_code=400, detail=f"Đoạn {i + 1}: file âm thanh hỏng hoặc sai định dạng ({exc})")
+        _check_len(len(seg), i)
         track += limit_and_norm(seg, req.lufs)
     if not len(track):
         raise HTTPException(status_code=400, detail="Không có đoạn nào có âm thanh")
