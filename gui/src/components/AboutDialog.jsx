@@ -332,7 +332,7 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
                   <li>
                     <strong>Tác giả:</strong> ThS. Nguyễn Thanh Quang — Giảng viên chuyên ngành Nhật Bản học, Trường Đại học Quy Nhơn
                   </li>
-                  <li><strong>Phiên bản:</strong> 1.2.0 (workspace kiểu Adobe, ngân hàng âm thanh &amp; giọng cho AI, đạo diễn kịch bản, gói bài học, kiểm tra phát âm)</li>
+                  <li><strong>Phiên bản:</strong> 1.3.0 (workspace kiểu Adobe, ngân hàng âm thanh &amp; giọng cho AI, đạo diễn kịch bản, gói bài học, kiểm tra phát âm, tự điền giới tính/tuổi/tính cách cho giọng AivisHub)</li>
                   <li><strong>Giao diện:</strong> Electron + React + Vite</li>
                   <li><strong>Backend & Xử lý âm thanh:</strong> Python 3.11, Pydantic v2, PyDub, PyOpenJTalk (Offline NLP), PyLoudNorm (ITU-R BS.1770-4 LUFS)</li>
                   <li><strong>Hỗ trợ Engine:</strong>

@@ -68,6 +68,9 @@ async function fetchCatalog({ fetchImpl = fetch, apiBase = AIVIS_API, pageSize =
       title: m.name,
       author: m.user?.name ?? "",
       license: file.license_type ?? "",
+      voiceTimbre: m.voice_timbre ?? "",
+      tags: (m.tags ?? []).map((t) => t?.name).filter(Boolean),
+      description: m.description ?? "",
     }];
   });
 }
