@@ -29,6 +29,7 @@ const runtimeOpts = {
 };
 const PYTHON = resolvePython({ env: process.env, ...runtimeOpts });
 const voiceBank = require("./voice-bank.cjs");
+const { fillAivisVoiceBank } = require("./aivis-voicebank-fill.cjs");
 const USER_DATA = app.getPath("userData");
 
 // Python (tts.py, server.py) đọc thư viện âm thanh và thư mục xuất của app qua các biến này.
@@ -460,6 +461,8 @@ ipcMain.handle("presets:save", async (_evt, { presets }) => {
 
 // Danh sách giọng của engine (tts.py --list-voices). Trả về mảng {value, label} hoặc [] nếu lỗi.
 // Danh sách giọng thô của engine (tts.py --list-voices) và ghi nhớ tên giọng vào ngân hàng giọng.
+let aivisVoiceBankFilled = false; // chỉ gọi AivisHub một lần mỗi phiên chạy app
+
 function rawVoices(eng) {
   return new Promise((resolve) => {
     const child = spawn(PYTHON, [TTS_CLI, "--list-voices", eng], { cwd: REPO_ROOT, env: CHILD_ENV });
@@ -469,7 +472,16 @@ function rawVoices(eng) {
     child.on("close", (code) => {
       try {
         const list = code === 0 ? JSON.parse(out) : [];
-        if (list.length) voiceBank.rememberLabels(USER_DATA, eng, list);
+        if (list.length) {
+          voiceBank.rememberLabels(USER_DATA, eng, list);
+          // Giọng mới ghi nhớ xong mới có nhãn để khớp với catalog; không chặn phản hồi danh sách giọng.
+          if (eng === "aivis" && !aivisVoiceBankFilled) {
+            aivisVoiceBankFilled = true;
+            fillAivisVoiceBank({ dir: USER_DATA, log: (level, msg) => logger.log(level, msg) }).catch((err) => {
+              logger.log("WARN", `[AivisSpeech] Không điền được ngân hàng giọng: ${err?.message ?? err}`);
+            });
+          }
+        }
         resolve(list);
       } catch {
         resolve([]);
