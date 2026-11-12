@@ -30,6 +30,7 @@ function uniqueName(base, exists) {
   }
 }
 
+const fs = require("fs");
 const path = require("path");
 
 /** Giá trị thư mục xuất đọc từ config hợp lệ: đường dẫn tuyệt đối tới thư mục có thật, nếu không thì "". */
@@ -37,4 +38,10 @@ function validOutputRoot(value, isDirectory) {
   return typeof value === "string" && path.isAbsolute(value) && isDirectory(value) ? value : "";
 }
 
-module.exports = { sanitizeName, timestampName, uniqueName, validOutputRoot };
+// Lần lưu đầu tiên của dự án mới: thư mục (đặt tên theo kịch bản/thời điểm) chưa tồn tại, phải tạo trước khi ghi.
+function saveProject(filePath, data) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
+}
+
+module.exports = { sanitizeName, timestampName, uniqueName, validOutputRoot, saveProject };

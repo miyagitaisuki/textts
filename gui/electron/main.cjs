@@ -2,7 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const { createPathGuard } = require("./guard.cjs");
-const { sanitizeName, timestampName, uniqueName, validOutputRoot } = require("./projects.cjs");
+const { sanitizeName, timestampName, uniqueName, validOutputRoot, saveProject } = require("./projects.cjs");
 const fs = require("fs");
 const os = require("os");
 const { spawn } = require("child_process");
@@ -218,7 +218,7 @@ ipcMain.handle("project:save", async (_evt, { filePath, data }) => {
   // khiến mọi lần lưu bị coi là lỗi và chặn luôn "Nghe thử"/"Tạo âm thanh".
   try {
     const target = assertAllowed(filePath, new Set([".json"]));
-    fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n", "utf-8");
+    saveProject(target, data);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };

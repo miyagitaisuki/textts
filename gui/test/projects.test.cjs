@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { sanitizeName, timestampName, uniqueName, validOutputRoot } = require("../electron/projects.cjs");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { sanitizeName, timestampName, uniqueName, validOutputRoot, saveProject } = require("../electron/projects.cjs");
 
 test("sanitizeName removes characters invalid in paths", () => {
   assert.equal(sanitizeName('bài: 10 / "hỏi" <đường>'), "bài- 10 - -hỏi- -đường");
@@ -39,4 +42,27 @@ test("validOutputRoot accepts only absolute existing directories", () => {
   assert.equal(validOutputRoot("/home/u/gone", isDir), "");
   assert.equal(validOutputRoot(42, isDir), "");
   assert.equal(validOutputRoot(undefined, isDir), "");
+});
+
+test("saveProject creates the project's own folder on first save", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "project-save-"));
+  try {
+    const target = path.join(dir, "bai-moi-20261112-095047", "bai-moi-20261112-095047.json");
+    saveProject(target, { title: "Bài mới" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, "utf-8")), { title: "Bài mới" });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("saveProject overwrites an existing file without complaint", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "project-save-"));
+  try {
+    const target = path.join(dir, "bai.json");
+    saveProject(target, { title: "A" });
+    saveProject(target, { title: "B" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, "utf-8")), { title: "B" });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
