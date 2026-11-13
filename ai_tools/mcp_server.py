@@ -29,6 +29,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,7 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent  # thư mục chứa server.py (resources/engine trong bộ cài)
 API_URL = (os.environ.get("TEXTTS_API_URL") or "http://127.0.0.1:8000").rstrip("/")
 SERVER_NAME = "textts"
-SERVER_VERSION = "1.2.0"
+SERVER_VERSION = "1.3.0"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 ENGINES = ["voicevox", "aivis", "edge"]
 
@@ -260,6 +261,25 @@ TOOLS += [
         "description": "Nhân vật cố định của giáo trình (tên, giọng, cảm xúc, mô tả) để mọi bài dùng cùng nhân vật.",
         "inputSchema": {"type": "object", "properties": {"engine": {"type": "string", "enum": ENGINES}},
                         "additionalProperties": False},
+    },
+    {
+        "name": "textts_assemble",
+        "description": "Ghép nhiều đoạn thành MỘT file, ví dụ đề nghe: đoạn speech (đọc chữ bằng giọng chọn), "
+        "đoạn audio (file có sẵn trên máy, như chuông hay bài nghe đã tạo) và đoạn pause (khoảng lặng). "
+        "Trả về file ghép và thời điểm bắt đầu từng đoạn.",
+        "inputSchema": {"type": "object", "properties": {
+            "filename": {"type": "string", "description": "Tên file (và thư mục) xuất"},
+            "engine": {"type": "string", "enum": ENGINES},
+            "voice": {"type": "string", "description": "Giọng mặc định cho các đoạn speech"},
+            "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
+            "segments": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
+                "type": {"type": "string", "enum": ["speech", "audio", "pause"]},
+                "text": {"type": "string", "description": "speech: chữ tiếng Nhật, chú âm 漢字{かな}"},
+                "voice": {"type": "string", "description": "speech: giọng riêng cho đoạn này"},
+                "path": {"type": "string", "description": "audio: đường dẫn file mp3/wav/ogg/m4a trên máy"},
+                "ms": {"type": "integer", "description": "pause: độ dài khoảng lặng (ms)"},
+            }, "required": ["type"]}},
+        }, "required": ["segments"], "additionalProperties": False},
     },
     {
         "name": "textts_levels",
@@ -490,6 +510,29 @@ def tool_check_audio(args: dict) -> str:
     return "\n".join(lines)
 
 
+def tool_assemble(args: dict) -> str:
+    import base64
+    segments = []
+    for i, seg in enumerate(args.get("segments") or [], 1):
+        if not isinstance(seg, dict):
+            raise ToolError(f"Đoạn {i}: không hợp lệ")
+        item = {k: seg[k] for k in ("type", "text", "voice", "ms") if k in seg}
+        if seg.get("type") == "audio":
+            path = Path(str(seg.get("path") or "")).expanduser()
+            try:
+                item["audio_b64"] = base64.b64encode(path.read_bytes()).decode("ascii")
+            except OSError as exc:
+                raise ToolError(f"Đoạn {i}: không đọc được file '{path}' ({exc})") from None
+            item["format"] = path.suffix.lstrip(".").lower() or "mp3"
+        segments.append(item)
+    body = {k: args[k] for k in ("filename", "engine", "voice", "format") if args.get(k)}
+    res = call_api("POST", "/api/v1/assemble", {**body, "segments": segments}, timeout=900)
+    files = res.get("files", {})
+    return (f"Đã ghép {len(segments)} đoạn thành '{res.get('filename')}', {res.get('duration_s')} giây. "
+            f"Thư mục: {res.get('folder')}\n- Âm thanh: {files.get('audio')}\n"
+            f"- Thời điểm bắt đầu từng đoạn (ms): {res.get('marks')}")
+
+
 def tool_list_characters(args: dict) -> str:
     q = f"?engine={args['engine']}" if args.get("engine") else ""
     items = call_api("GET", "/api/v1/characters" + q).get("items", [])
@@ -575,6 +618,7 @@ HANDLERS = {
     "textts_create_audio": tool_create_audio,
     "textts_create_lesson": tool_create_lesson,
     "textts_check_audio": tool_check_audio,
+    "textts_assemble": tool_assemble,
     "textts_list_characters": tool_list_characters,
     "textts_levels": tool_levels,
 }
