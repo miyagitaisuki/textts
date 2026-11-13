@@ -75,9 +75,9 @@ def _project(display, **timing):
 
 def test_line_with_several_sentences_gets_pauses(tmp_path):
     provider = ToneProvider()
-    project = _project("はい。そうです！", sentence_pause_ms=500, comma_pause_scale=1.5)
+    project = _project("はい、わかりました。そうなんです！", sentence_pause_ms=500, comma_pause_scale=1.5)
     assert asyncio.run(synth_all(project, provider, tmp_path)) == []
-    assert sorted(provider.calls) == [("そうです！", 1.5), ("はい。", 1.5)]
+    assert sorted(provider.calls) == [("そうなんです！", 1.5), ("はい、わかりました。", 1.5)]
     joined = AudioSegment.from_file(project.items[0].audio)
     # 2 câu x (300 ms tiếng + ~2 x 40 ms đệm) + 500 ms lặng; nếu không cắt lặng của engine sẽ là 1500 ms.
     # Sai số do pydub dò lặng theo khối 10 ms.
@@ -129,3 +129,10 @@ def test_limit_peak_keeps_headroom():
     assert limit_peak(loud).max_dBFS <= -1.0 + 0.05
     quiet = Sine(440).to_audio_segment(500, volume=-12.0)
     assert abs(limit_peak(quiet).max_dBFS - quiet.max_dBFS) < 0.01
+
+
+def test_merge_short():
+    from tts import merge_short
+    assert merge_short(["はい。", "貴社が開発されているAIです。"]) == ["はい。貴社が開発されているAIです。"]
+    assert merge_short(["貴社が開発されているAIです。", "はい。"]) == ["貴社が開発されているAIです。はい。"]
+    assert merge_short(["はい。"]) == ["はい。"]
