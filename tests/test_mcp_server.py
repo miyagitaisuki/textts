@@ -24,7 +24,7 @@ def test_initialize_and_list_tools():
     names = [t["name"] for t in call("tools/list")["result"]["tools"]]
     assert names == ["textts_status", "textts_list_voices", "textts_find_voices", "textts_list_sounds",
                      "textts_check_script", "textts_create_audio", "textts_create_lesson", "textts_check_audio",
-                     "textts_list_characters", "textts_levels"]
+                     "textts_list_characters", "textts_assemble", "textts_levels"]
     assert mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     assert call("nope")["error"]["code"] == -32601
 
@@ -129,3 +129,29 @@ def test_create_lesson_and_check_audio(monkeypatch):
 
     res = call("tools/call", {"name": "textts_check_audio", "arguments": {"script": "[1] 駅の近く。"}})["result"]
     assert "L002" in res["content"][0]["text"] and "敵の近く" in res["content"][0]["text"]
+
+
+def test_assemble_encodes_local_audio_and_reports_marks(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake(method, path, body=None, timeout=30):
+        seen.update(path=path, body=body)
+        return {"ok": True, "filename": "de1", "folder": "C:/out/de1", "duration_s": 9.5,
+                "files": {"audio": "C:/out/de1/de1.mp3"}, "marks": [0, 1500]}
+
+    chime = tmp_path / "chime.mp3"
+    chime.write_bytes(b"ID3fake")
+    monkeypatch.setattr(mcp_server, "api_request", fake)
+    res = call("tools/call", {"name": "textts_assemble", "arguments": {
+        "filename": "de1", "engine": "aivis", "segments": [
+            {"type": "audio", "path": str(chime)}, {"type": "speech", "text": "一番です。"},
+            {"type": "pause", "ms": 2000}]}})["result"]
+    assert res["isError"] is False and "C:/out/de1/de1.mp3" in res["content"][0]["text"]
+    segs = seen["body"]["segments"]
+    assert seen["path"] == "/api/v1/assemble" and seen["body"]["engine"] == "aivis"
+    assert segs[0] == {"type": "audio", "audio_b64": "SUQzZmFrZQ==", "format": "mp3"}
+    assert segs[1] == {"type": "speech", "text": "一番です。"} and segs[2] == {"type": "pause", "ms": 2000}
+
+    bad = call("tools/call", {"name": "textts_assemble", "arguments": {
+        "segments": [{"type": "audio", "path": str(tmp_path / "none.mp3")}]}})["result"]
+    assert bad["isError"] is True and "không đọc được file" in bad["content"][0]["text"]

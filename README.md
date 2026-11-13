@@ -117,6 +117,7 @@ Các công cụ Claude dùng được:
 | `textts_list_voices` | Liệt kê mã giọng của một engine (`voicevox`, `aivis`, `edge`) |
 | `textts_check_script` | Kiểm tra cú pháp kịch bản và gợi ý furigana `漢字{かな}` |
 | `textts_create_audio` | Tạo âm thanh, bản chậm 0.8×, phụ đề SRT, phiếu học tập HTML; trả về đường dẫn file |
+| `textts_assemble` | Ghép đoạn đọc, file âm thanh có sẵn (đường dẫn trên máy) và khoảng lặng thành một file, ví dụ đề nghe |
 
 Cài đặt:
 
