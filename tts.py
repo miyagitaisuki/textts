@@ -92,6 +92,28 @@ def split_sentences(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
+MERGE_SHORT_CHARS = 6  # câu ngắn hơn ngưỡng này được gộp vào câu kế tiếp (đỡ một request)
+
+
+def merge_short(sentences: list[str], min_chars: int = MERGE_SHORT_CHARS) -> list[str]:
+    """Gộp câu quá ngắn (vd. 「はい。」) vào câu liền sau để giảm số request lên engine."""
+    out: list[str] = []
+    carry = ""
+    for s in sentences:
+        s = carry + s
+        carry = ""
+        if len(s) < min_chars:
+            carry = s
+        else:
+            out.append(s)
+    if carry:
+        if out:
+            out[-1] += carry
+        else:
+            out.append(carry)
+    return out
+
+
 def join_sentences(paths: list[Path], pause_ms: int, out: Path) -> None:
     """Ghép các câu đã tổng hợp, chèn `pause_ms` lặng giữa từng câu, ghi WAV ra `out`."""
     joined = AudioSegment.empty()
@@ -130,26 +152,35 @@ async def synth_all(
     timing = project.timing
     pause_scale = timing.comma_pause_scale if getattr(provider, "supports_pause_scale", False) else 1.0
 
+    inflight: dict[str, asyncio.Task] = {}
+
+    async def _make(req: SynthRequest, out: Path) -> None:
+        async with sem:
+            tmp = out.with_suffix(".part")
+            try:
+                await call(req, tmp)
+                tmp.replace(out)
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
+
     async def ensure(req: SynthRequest) -> tuple[str, Path]:
-        """Tổng hợp `req` vào cache nếu chưa có. Trả về (khóa, đường dẫn)."""
+        """Tổng hợp `req` vào cache nếu chưa có. Trả về (khóa, đường dẫn).
+        Cùng một câu xuất hiện nhiều lần chỉ gửi engine một lần."""
         key = cache_key(engine, req)
         out = cache_dir / f"{key}.{provider.ext}"
         if not out.exists() or out.stat().st_size == 0:
-            async with sem:
-                tmp = out.with_suffix(".part")
-                try:
-                    await call(req, tmp)
-                    tmp.replace(out)
-                except BaseException:
-                    tmp.unlink(missing_ok=True)
-                    raise
+            task = inflight.get(key)
+            if task is None:
+                task = inflight[key] = asyncio.ensure_future(_make(req, out))
+            await task
         return key, out
 
     async def one(item: LineItem) -> None:
         if only_ids is not None and item.id not in only_ids:
             return
         req = replace(resolve(item, project.roles), pause_scale=pause_scale)
-        sentences = split_sentences(req.text) if timing.sentence_pause_ms > 0 else []
+        sentences = merge_short(split_sentences(req.text)) if timing.sentence_pause_ms > 0 else []
         try:
             if len(sentences) <= 1:
                 item.cache_key, out = await ensure(req)
