@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  LINE_PARAMS, accentSpec, clampParam, paramSupported, parseAccentSpec, pitchPattern, readParam, toggleAccent, writeParam,
+  LINE_PARAMS, accentSpec, clampParam, paramSupported, parseAccentSpec, pitchPattern, pitchPoints, readParam, toggleAccent, writeParam,
 } from "./lineParams.js";
 
 const P = Object.fromEntries(LINE_PARAMS.map((p) => [p.key, p]));
@@ -47,5 +47,10 @@ describe("lineParams", () => {
     expect(pitchPattern(4, 0)).toEqual([false, true, true, true]);
     expect(pitchPattern(3, 1)).toEqual([true, false, false]);
     expect(pitchPattern(4, 3)).toEqual([false, true, true, false]);
+  });
+
+  it("toạ độ đường nối theo đường cao độ", () => {
+    expect(pitchPoints([false, true, true])).toBe("17,35 51,9 85,9");
+    expect(pitchPoints([true], { width: 10, high: 1, low: 5 })).toBe("5,1");
   });
 });

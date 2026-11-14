@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toTtsText } from "../lib/ruby.js";
-import { accentSpec, parseAccentSpec, pitchPattern, toggleAccent } from "../lib/lineParams.js";
+import { MORA_GEOMETRY, accentSpec, parseAccentSpec, pitchPattern, pitchPoints, toggleAccent } from "../lib/lineParams.js";
 import { PanelHeader } from "./Workspace.jsx";
 
 // Panel accent (học từ AivisSpeech): mỗi cụm là một nhóm mora, đường cao/thấp vẽ theo accent.
@@ -69,6 +69,14 @@ export default function AccentPanel({ item, engine, speaker, disabled, onChangeA
           const pattern = pitchPattern(p.moras.length, accent);
           return (
             <div key={pi} className={`accent-phrase ${accent !== engineAccents[pi] ? "changed" : ""}`}>
+              <svg
+                className="accent-line"
+                width={p.moras.length * MORA_GEOMETRY.width}
+                height={MORA_GEOMETRY.height}
+                aria-hidden="true"
+              >
+                <polyline points={pitchPoints(pattern)} />
+              </svg>
               {p.moras.map((m, mi) => (
                 <button
                   key={mi}

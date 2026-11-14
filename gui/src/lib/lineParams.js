@@ -77,3 +77,10 @@ export function pitchPattern(moraCount, accent) {
     return i > 0 && i < accent;
   });
 }
+
+// Toạ độ đường nối cao độ cho một cụm: mỗi mora rộng `width`, chấm cao ở y=`high`, thấp ở y=`low`.
+export const MORA_GEOMETRY = { width: 34, high: 9, low: 35, height: 72 };
+
+export function pitchPoints(pattern, { width, high, low } = MORA_GEOMETRY) {
+  return pattern.map((isHigh, i) => `${i * width + width / 2},${isHigh ? high : low}`).join(" ");
+}

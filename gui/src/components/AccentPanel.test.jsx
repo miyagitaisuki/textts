@@ -30,6 +30,9 @@ describe("AccentPanel", () => {
     await screen.findByText("ゴ");
     expect(window.textts.getAccentPhrases).toHaveBeenCalledWith("おはようございます", "888753760");
     expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1); // chỉ cụm 2 có accent ≠ 0
+    const lines = document.querySelectorAll(".accent-line polyline");
+    expect(lines).toHaveLength(2); // mỗi cụm một đường nối cao độ
+    expect(lines[0].getAttribute("points")).toBe("17,35 51,9 85,9 119,9"); // オハヨウ: bằng
   });
 
   it("bấm mora ghi accent=…; bấm lại về 0", async () => {
