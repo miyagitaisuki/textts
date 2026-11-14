@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld("textts", {
   installVoicevox: () => ipcRenderer.invoke("voicevox:install"),
   startVoicevox: () => ipcRenderer.invoke("voicevox:start"),
   getAivisStatus: () => ipcRenderer.invoke("aivis:status"),
+  getAccentPhrases: (text, speaker, emotion) => ipcRenderer.invoke("aivis:accentPhrases", { text, speaker, emotion }),
   installAivis: () => ipcRenderer.invoke("aivis:install"),
   startAivis: () => ipcRenderer.invoke("aivis:start"),
   openExternalUrl: (url) => ipcRenderer.invoke("url:openExternal", { url }),

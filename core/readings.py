@@ -60,3 +60,23 @@ def save_readings(path: Path, readings: dict[str, str]) -> None:
             raise ValueError(f"Cách đọc của '{word}' phải là kana: {kana!r}")
     lines = [f"{word}: {kana}" for word, kana in sorted(readings.items())]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def load_engine_dict(path: Path) -> dict[str, tuple[str, int]]:
+    """Từ điển riêng cho engine (aivis_dict.yaml): từ -> {reading: kana, accent: số mora}."""
+    if not path.is_file():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: cần là bảng 'từ: {{reading: kana, accent: số}}'")
+    out: dict[str, tuple[str, int]] = {}
+    for word, entry in data.items():
+        word = str(word).strip()
+        if not isinstance(entry, dict) or "reading" not in entry or "accent" not in entry:
+            raise ValueError(f"{path}: '{word}' cần có reading và accent")
+        reading = str(entry["reading"]).strip()
+        accent = int(entry["accent"])
+        if not KANA_RE.match(reading) or accent < 0:
+            raise ValueError(f"{path}: '{word}' có reading/accent không hợp lệ")
+        out[word] = (reading, accent)
+    return out

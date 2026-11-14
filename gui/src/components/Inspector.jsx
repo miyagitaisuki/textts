@@ -3,6 +3,7 @@ import { splitRuby, toTtsText } from "../lib/ruby.js";
 import TimingPanel from "./TimingPanel.jsx";
 import RolePanel from "./RolePanel.jsx";
 import Mixer from "./Mixer.jsx";
+import LineSliders from "./LineSliders.jsx";
 import { UsersIcon, SlidersIcon, InfoIcon, ClockIcon } from "./Icons.jsx";
 
 export default function Inspector({
@@ -186,6 +187,16 @@ export default function Inspector({
                     }
                   />
                   <small className="hint">Chèn khoảng lặng riêng trước khi bắt đầu nói câu này.</small>
+                </div>
+
+                <div className="field-group">
+                  <label>Nhịp, âm lượng và khoảng lặng:</label>
+                  <LineSliders
+                    attrs={selectedItem.attrs}
+                    engine={engine}
+                    disabled={disabled}
+                    onChange={(attrs) => onPatchSelectedItem({ attrs })}
+                  />
                 </div>
 
                 {selectedItem.display && (

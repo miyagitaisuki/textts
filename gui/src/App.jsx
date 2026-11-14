@@ -13,6 +13,7 @@ import LineTable from "./components/LineTable.jsx";
 import AivisButton from "./components/AivisButton.jsx";
 import VoicevoxButton from "./components/VoicevoxButton.jsx";
 import Timeline from "./components/Timeline.jsx";
+import AccentPanel from "./components/AccentPanel.jsx";
 import TransportBar from "./components/TransportBar.jsx";
 import ToastContainer from "./components/Toast.jsx";
 import ExportDialog from "./components/ExportDialog.jsx";
@@ -1111,6 +1112,7 @@ export default function App() {
     { id: "panel-inspector", group: "Workspace", label: `${layout.inspector ? "Ẩn" : "Hiện"} panel Thuộc tính`, shortcut: "Ctrl+\\", run: () => togglePanel("inspector") },
     { id: "panel-timeline", group: "Workspace", label: `${layout.timeline ? "Ẩn" : "Hiện"} panel Timeline`, run: () => togglePanel("timeline") },
     { id: "panel-log", group: "Workspace", label: `${layout.log ? "Ẩn" : "Hiện"} panel Nhật ký`, run: () => togglePanel("log") },
+    { id: "panel-accent", group: "Workspace", label: `${layout.accent ? "Ẩn" : "Hiện"} panel Accent`, run: () => togglePanel("accent") },
     { id: "reset", group: "Workspace", label: "Đặt lại bố cục workspace hiện tại", run: () => setWs((st) => resetLayout(st)) },
     { id: "theme", group: "Giao diện", label: ws.theme === "light" ? "Chế độ tối" : "Chế độ sáng", keywords: "theme dark light giao dien mau", run: toggleTheme },
     { id: "help", group: "Trợ giúp", label: "Hướng dẫn & kết nối AI", run: () => setShowAbout(true) },
@@ -1507,6 +1509,32 @@ export default function App() {
               </>
             )}
           </div>
+
+          {/* Panel accent (AivisSpeech): chỉnh accent từng cụm của câu đang chọn */}
+          {layout.accent && (
+            <>
+              <Splitter
+                direction="horizontal"
+                label="Chiều cao panel Accent"
+                onResizeStart={() => (resizeBase.current = layout.accentHeight)}
+                onResize={(dy) => setWs((s) => patchLayout(s, { accentHeight: resizeBase.current - dy }))}
+                onReset={() => setWs((s) => patchLayout(s, { accentHeight: WORKSPACES[s.active].layout.accentHeight }))}
+              />
+              <div className="panel accent-dock" style={{ height: layout.accentHeight }}>
+                <AccentPanel
+                  item={selectedItem}
+                  engine={project.engine}
+                  speaker={selectedItem?.type === "line" ? selectedItem.attrs?.voice || project.roles[selectedItem.role]?.voice : ""}
+                  emotion={selectedItem?.type === "line" ? selectedItem.attrs?.emotion || project.roles[selectedItem.role]?.emotion || "neutral" : "neutral"}
+                  disabled={busy}
+                  onChangeAttrs={(attrs) => selectedId && patchItem(selectedId, { attrs })}
+                  onPreview={preview}
+                  onNotice={(msg) => addToast(msg, "info")}
+                  onClose={() => togglePanel("accent")}
+                />
+              </div>
+            </>
+          )}
 
           {/* Panel Timeline nhiều track */}
           {layout.timeline && (

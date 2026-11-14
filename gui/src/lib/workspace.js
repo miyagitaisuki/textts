@@ -5,17 +5,17 @@ export const WORKSPACES = {
   edit: {
     label: "Soạn thảo",
     hint: "Soạn kịch bản và chú âm; timeline gọn",
-    layout: { inspectorWidth: 380, dockHeight: 210, inspector: true, timeline: true, log: false, inspectorTab: "roles" },
+    layout: { inspectorWidth: 380, dockHeight: 210, inspector: true, timeline: true, log: false, accent: false, accentHeight: 170, inspectorTab: "roles" },
   },
   audio: {
     label: "Âm thanh",
     hint: "Timeline nhiều track lớn, mixer và nhịp đọc",
-    layout: { inspectorWidth: 340, dockHeight: 420, inspector: true, timeline: true, log: false, inspectorTab: "mixer" },
+    layout: { inspectorWidth: 340, dockHeight: 420, inspector: true, timeline: true, log: false, accent: false, accentHeight: 170, inspectorTab: "mixer" },
   },
   publish: {
     label: "Xuất bản",
     hint: "Tùy chọn xuất, tên file theo giáo trình, nhật ký",
-    layout: { inspectorWidth: 460, dockHeight: 210, inspector: true, timeline: true, log: true, inspectorTab: "export" },
+    layout: { inspectorWidth: 460, dockHeight: 210, inspector: true, timeline: true, log: true, accent: false, accentHeight: 170, inspectorTab: "export" },
   },
 };
 
@@ -23,10 +23,11 @@ export const PANELS = [
   ["inspector", "Thuộc tính"],
   ["timeline", "Timeline"],
   ["log", "Nhật ký xử lý"],
+  ["accent", "Accent"],
 ];
 
 const KEY = "textts.workspace.v1";
-const LIMITS = { inspectorWidth: [260, 720], dockHeight: [120, 720] };
+const LIMITS = { inspectorWidth: [260, 720], dockHeight: [120, 720], accentHeight: [110, 400] };
 
 export function clampLayout(layout) {
   const out = { ...layout };

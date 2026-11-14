@@ -12,6 +12,9 @@ Cú pháp:
     fx=phone|whisper|far|radio|echo   hiệu ứng giọng (qua điện thoại, thì thầm, ở xa, loa thông báo, vang)
     vol=-6                            to/nhỏ hơn (dB)
     overlap=400                       nói chen: bắt đầu trước khi câu trước kết thúc 400 ms
+    accent=2/0                        (AivisSpeech) vị trí accent từng cụm, 0 = bằng; số cụm phải khớp câu
+    tempo=0.8..1.5                    (AivisSpeech) nhịp điệu của lời đọc, 1 = bình thường
+    pre=300, post=500                 lặng trước/sau câu, ms (post cộng vào khoảng nghỉ trước câu sau)
 Bản dịch: [1] こんにちは。 // Xin chào.
 Cảnh & hiệu ứng:
     [sfx=chuong-cua]                  chèn hiệu ứng (chiếm thời gian)
@@ -71,6 +74,22 @@ def parse_attrs(raw: str | None) -> dict[str, str]:
     return attrs
 
 
+def _check_line_attrs(attrs: dict[str, str], line_no: int) -> None:
+    """Kiểm tra sớm các thuộc tính đạo diễn có khoảng giá trị, để báo đúng dòng khi sai."""
+    if "accent" in attrs and not re.match(r"^\d+(/\d+)*$", attrs["accent"]):
+        raise ScriptError(f"Dòng {line_no}: accent phải dạng 2 hoặc 2/0, nhận được: {attrs['accent']}")
+    if "tempo" in attrs:
+        try:
+            ok = 0.5 <= float(attrs["tempo"]) <= 2.0
+        except ValueError:
+            ok = False
+        if not ok:
+            raise ScriptError(f"Dòng {line_no}: tempo phải là số từ 0.5 đến 2.0, nhận được: {attrs['tempo']}")
+    for key in ("pre", "post"):
+        if key in attrs and not re.match(r"^\d+$", attrs[key]):
+            raise ScriptError(f"Dòng {line_no}: {key} phải là số ms (không âm), nhận được: {attrs[key]}")
+
+
 def parse_sfx(spec: str, line_no: int) -> dict:
     """"chuong-cua, overlay, vol=-6" -> {"path": "chuong-cua", "overlay": True, "volume_db": -6.0}."""
     parts = [p.strip() for p in spec.split(",")]
@@ -107,10 +126,12 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
             items.append({"type": "bgm", "layers": layers, "src_line": line_no})
             cur = None
         elif m := LINE_RE.match(raw):
+            attrs = parse_attrs(m[2])
+            _check_line_attrs(attrs, line_no)
             cur = {
                 "type": "line",
                 "role": m[1],
-                "attrs": parse_attrs(m[2]),
+                "attrs": attrs,
                 "text": m[3].strip(),
                 "src_line": line_no,
             }

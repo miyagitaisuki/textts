@@ -137,6 +137,13 @@ ChatGPT chạy trên máy chủ của OpenAI nên **không gọi được** `127
 
 ---
 
+## Chỉnh accent và từ điển riêng (AivisSpeech)
+
+- **Accent theo câu:** thêm `accent=` vào thuộc tính câu, số = vị trí accent (mora) của từng cụm, cách nhau bằng `/`, 0 = bằng. Ví dụ `[1]{accent=2/0} ...`. Số cụm phải khớp với câu; nếu không khớp hệ thống sẽ cảnh báo và bỏ qua accent.
+- **Nhịp và khoảng lặng theo câu:** `tempo=1.2` (0.5–2.0, chỉ AivisSpeech), `pre=300` và `post=500` (ms lặng trước/sau câu). `post` cộng vào khoảng nghỉ trước câu kế tiếp. Âm lượng từng câu dùng `vol=-6` (dB) như trước.
+- **Trên giao diện:** tab "Chi tiết" có slider cho tempo, âm lượng, lặng trước/sau (bấm số để gõ, nhấp đúp để về mặc định). Panel **Accent** (menu Cửa sổ) lấy các cụm của câu từ AivisSpeech theo đúng giọng cảm xúc của câu; bấm một mora để đặt accent sau mora đó, bấm lại để về bằng.
+- **Từ điển riêng:** tạo `aivis_dict.yaml` (xem `aivis_dict.example.yaml`) rồi chạy `python tts.py --sync-aivis-dict aivis_dict.yaml` khi AivisSpeech đang chạy. Lệnh chỉ thay các mục có cùng từ trong file, không xóa từ khác trong từ điển AivisSpeech.
+
 ## Giao diện (Electron + React)
 
 Quyết định: **Electron + React**, thay cho Streamlit trong bản kế hoạch ban đầu. Lý do: bố cục giống mockup (bảng câu thoại, thẻ vai, timeline sóng âm ở giai đoạn 4) khó làm với Streamlit, và Electron cho một ứng dụng desktop đóng gói được.
