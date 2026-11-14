@@ -1,0 +1,5 @@
+# Từ điển riêng cho AivisSpeech: đồng bộ lên engine bằng
+#   python tts.py --sync-aivis-dict aivis_dict.yaml
+# reading: cách đọc hiragana; accent: vị trí accent tính theo mora (0 = bằng)
+駅: {reading: えき, accent: 0}
+橋: {reading: はし, accent: 2}

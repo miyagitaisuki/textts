@@ -12,6 +12,7 @@ Cú pháp:
     fx=phone|whisper|far|radio|echo   hiệu ứng giọng (qua điện thoại, thì thầm, ở xa, loa thông báo, vang)
     vol=-6                            to/nhỏ hơn (dB)
     overlap=400                       nói chen: bắt đầu trước khi câu trước kết thúc 400 ms
+    accent=2/0                        (AivisSpeech) vị trí accent từng cụm, 0 = bằng; số cụm phải khớp câu
 Bản dịch: [1] こんにちは。 // Xin chào.
 Cảnh & hiệu ứng:
     [sfx=chuong-cua]                  chèn hiệu ứng (chiếm thời gian)
@@ -107,10 +108,13 @@ def parse_script(text: str, readings: dict[str, str] | None = None) -> list[dict
             items.append({"type": "bgm", "layers": layers, "src_line": line_no})
             cur = None
         elif m := LINE_RE.match(raw):
+            attrs = parse_attrs(m[2])
+            if "accent" in attrs and not re.match(r"^\d+(/\d+)*$", attrs["accent"]):
+                raise ScriptError(f"Dòng {line_no}: accent phải dạng 2 hoặc 2/0, nhận được: {attrs['accent']}")
             cur = {
                 "type": "line",
                 "role": m[1],
-                "attrs": parse_attrs(m[2]),
+                "attrs": attrs,
                 "text": m[3].strip(),
                 "src_line": line_no,
             }

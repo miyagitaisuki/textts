@@ -11,6 +11,7 @@ Mỗi giọng có các style diễn cảm khác nhau (ノーマル, 幸せ, 悲�
 from __future__ import annotations
 
 import logging
+import re
 import os
 from pathlib import Path
 from typing import Any
@@ -109,6 +110,8 @@ class AivisProvider(TTSProvider):
                 query["pauseLengthScale"] = req.pause_scale
             if chosen_style != "ノーマル":
                 query["intonationScale"] = EMOTION_STRENGTH
+            if req.accent:
+                apply_accent(query, req.accent)
 
             # 3. Tổng hợp âm thanh
             async with session.post(
@@ -149,3 +152,70 @@ async def list_speakers(
                 "label": f'{speaker["name"]} ({style["name"]})',
             })
     return voices
+
+
+ACCENT_SPEC_RE = re.compile(r"^\d+(/\d+)*$")
+HIRA_TO_KATA_OFFSET = ord("ァ") - ord("ぁ")
+
+
+def parse_accent(spec: str) -> list[int]:
+    """"2/0" -> [2, 0]: vị trí accent (số mora, 0 = bằng) của từng cụm theo thứ tự."""
+    if not ACCENT_SPEC_RE.match(spec.strip()):
+        raise ValueError(f"accent không hợp lệ: {spec!r} (dạng đúng: 2 hoặc 2/0)")
+    return [int(x) for x in spec.strip().split("/")]
+
+
+def apply_accent(query: dict[str, Any], spec: str) -> None:
+    """Ghi accent vào từng cụm trong audio_query. Lệch số cụm thì cảnh báo và bỏ qua."""
+    accents = parse_accent(spec)
+    phrases = query.get("accent_phrases", [])
+    if len(accents) != len(phrases):
+        logger.warning(
+            "accent=%s có %d cụm nhưng câu có %d cụm; bỏ qua accent.", spec, len(accents), len(phrases)
+        )
+        return
+    for phrase, accent in zip(phrases, accents):
+        moras = len(phrase.get("moras", []))
+        if accent > moras:
+            logger.warning("accent %d vượt quá số mora (%d) của cụm; bỏ qua accent.", accent, moras)
+            return
+    for phrase, accent in zip(phrases, accents):
+        phrase["accent"] = accent
+
+
+def to_katakana(text: str) -> str:
+    return "".join(
+        chr(ord(c) + HIRA_TO_KATA_OFFSET) if "ぁ" <= c <= "ゖ" else c for c in text
+    )
+
+
+async def sync_user_dict(
+    words: dict[str, tuple[str, int]],
+    base_url: str | None = None,
+    timeout: float = 10.0,
+) -> int:
+    """Thay toàn bộ từ điển riêng của engine bằng `words` (từ -> (cách đọc kana, accent_type)).
+
+    Trả về số từ đã đăng ký. Chỉ xóa các mục do chính hàm này thêm (theo surface trùng khớp),
+    nên không ảnh hưởng các từ người dùng tự đăng ký trên AivisSpeech.
+    """
+    url = (base_url or os.environ.get("AIVIS_URL") or DEFAULT_URL).rstrip("/")
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+        async with session.get(f"{url}/user_dict") as resp:
+            resp.raise_for_status()
+            existing = await resp.json()  # uuid -> {surface, ...}
+
+        for uuid, entry in existing.items():
+            if entry.get("surface") in words:
+                async with session.delete(f"{url}/user_dict_word/{uuid}") as resp:
+                    resp.raise_for_status()
+
+        for surface, (reading, accent_type) in words.items():
+            params = {
+                "surface": surface,
+                "pronunciation": to_katakana(reading),
+                "accent_type": str(accent_type),
+            }
+            async with session.post(f"{url}/user_dict_word", params=params) as resp:
+                resp.raise_for_status()
+    return len(words)

@@ -28,7 +28,7 @@ from core.paths import sfx_path
 from core.levels import timing_for
 from core.render import build_items_for, finish, missing_scene_sounds, used_sound_paths
 from core.sounds import SoundNotFound, credits_for, parse_layer, resolve_bgm
-from core.readings import load_readings
+from core.readings import load_engine_dict, load_readings
 from core.builder import build, practice_items, to_srt, trim_edges
 from core.models import (
     Config,
@@ -46,7 +46,7 @@ from providers.base import SynthRequest, TTSProvider
 from providers.edge import VOICES as EDGE_VOICES
 from providers.edge import EdgeProvider
 from providers.voicevox import VoicevoxProvider, list_speakers
-from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
+from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers, sync_user_dict as aivis_sync_user_dict
 
 ROOT = Path(__file__).resolve().parent
 ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
@@ -72,6 +72,7 @@ def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
         emotion=str(merged["emotion"]),
         speed=str(merged["speed"]),
         pitch=int(merged["pitch"]),
+        accent=str(item.attrs.get("accent", "")),
     )
 
 
@@ -79,6 +80,8 @@ def cache_key(engine: str, req: SynthRequest) -> str:
     parts = [engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text]
     if req.pause_scale != 1.0:  # giữ nguyên khóa cũ khi không chỉnh chỗ ngắt
         parts.append(f"pause={req.pause_scale:g}")
+    if req.accent:  # giữ nguyên khóa cũ khi không chỉnh accent
+        parts.append(f"accent={req.accent}")
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
 
 
@@ -396,6 +399,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--clear-cache", action="store_true", help="xóa thư mục cache rồi thoát")
     ap.add_argument("--readings", type=Path, default=ROOT / "readings.yaml",
                     help="từ điển cách đọc (từ: kana), áp dụng khi nhập kịch bản")
+    ap.add_argument("--sync-aivis-dict", nargs="?", const=ROOT / "aivis_dict.yaml", type=Path, metavar="FILE",
+                    help="đồng bộ aivis_dict.yaml (từ, cách đọc, accent) lên AivisSpeech rồi thoát")
     ap.add_argument("--cache-dir", type=Path, default=ROOT / "cache")
     ap.add_argument("--save-project", type=Path, help="lưu kết quả phân tích ra project.json")
     ap.add_argument("--srt", action="store_true", help="xuất thêm phụ đề .srt")
@@ -443,6 +448,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Không đọc thử được giọng {args.voice}: {exc}", file=sys.stderr)
             return 1
         print(f"Đã xuất câu mẫu ra {args.output}")
+        return 0
+    if args.sync_aivis_dict is not None:
+        words = load_engine_dict(args.sync_aivis_dict)
+        n = asyncio.run(aivis_sync_user_dict(words))
+        print(f"Đã đồng bộ {n} từ vào từ điển của AivisSpeech")
         return 0
     if args.list_voices:
         if args.list_voices == "voicevox":

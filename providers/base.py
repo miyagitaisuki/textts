@@ -13,6 +13,7 @@ class SynthRequest:
     speed: str = "normal"
     pitch: int = 0  # Hz tương đối so với giọng gốc
     pause_scale: float = 1.0  # độ dài chỗ ngắt ở 、 (engine nào hỗ trợ thì dùng)
+    accent: str = ""  # vị trí accent từng cụm, cách nhau bằng "/" (vd "2/0"); rỗng = engine tự quyết
 
 
 class TTSProvider(ABC):
