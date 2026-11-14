@@ -2278,3 +2278,156 @@ kbd {
 .scene-card .sfx-badge { color: var(--accent-purple); }
 .scene-card .sfx-path { margin-right: 4px; }
 .preset-title { font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ===== Slider chỉnh theo câu (học bố cục AivisSpeech) ===== */
+.line-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slider-row.unsupported {
+  opacity: 0.5;
+}
+.slider-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slider-head label {
+  font-size: 13px;
+  color: var(--text-main);
+}
+.slider-help {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: help;
+}
+.slider-value {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  padding: 0 2px;
+  min-width: 56px;
+  text-align: right;
+  cursor: text;
+}
+.slider-value small {
+  margin-left: 3px;
+  color: var(--text-subtle);
+}
+.slider-row.changed .slider-value {
+  color: var(--accent-blue);
+}
+.field-group .slider-value-input {
+  width: 80px;
+  padding: 2px 6px;
+  text-align: right;
+}
+.field-group .slider-row input[type="range"] {
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent-blue);
+  width: 100%;
+}
+
+/* ===== Panel accent ===== */
+.accent-dock {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.accent-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.accent-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+.accent-body {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 12px;
+}
+.accent-note {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
+.accent-note.error {
+  color: var(--accent-amber);
+}
+.accent-phrases {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  min-width: max-content;
+  height: 100%;
+}
+.accent-phrase {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  padding: 4px;
+}
+.accent-phrase.changed {
+  border-color: var(--accent-blue);
+}
+.accent-mora {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  width: 34px;
+  min-height: 72px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.accent-mora:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+.accent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--accent-blue);
+  margin-top: 26px; /* thấp */
+}
+.accent-mora.high .accent-dot {
+  margin-top: 0; /* cao */
+}
+.accent-mora.nucleus .accent-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 35%, transparent);
+}
+.accent-mora.nucleus .accent-kana {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+.accent-kana {
+  font-size: 15px;
+}

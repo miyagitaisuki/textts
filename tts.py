@@ -186,7 +186,9 @@ async def synth_all(
         if only_ids is not None and item.id not in only_ids:
             return
         req = replace(resolve(item, project.roles), pause_scale=pause_scale)
-        sentences = merge_short(split_sentences(req.text)) if timing.sentence_pause_ms > 0 else []
+        # Câu có accent: gửi nguyên câu một lần, vì accent=2/0 đánh số cụm trên cả câu thoại.
+        split = timing.sentence_pause_ms > 0 and not req.accent
+        sentences = merge_short(split_sentences(req.text)) if split else []
         try:
             if len(sentences) <= 1:
                 item.cache_key, out = await ensure(req)

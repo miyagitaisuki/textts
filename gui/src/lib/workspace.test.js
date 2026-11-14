@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WORKSPACES, clampLayout, defaultState, loadWorkspace, patchLayout, resetLayout, saveWorkspace } from "./workspace.js";
+import { PANELS, WORKSPACES, clampLayout, defaultState, loadWorkspace, patchLayout, resetLayout, saveWorkspace } from "./workspace.js";
 
 const memory = () => {
   const m = new Map();
@@ -35,5 +35,14 @@ describe("workspace", () => {
     s = resetLayout(s);
     expect(s.layouts.audio.inspectorWidth).toBe(WORKSPACES.audio.layout.inspectorWidth);
     expect(s.layouts.edit.inspectorWidth).toBe(600);
+  });
+});
+
+describe("panel Accent", () => {
+  it("có trong menu Cửa sổ, mặc định ẩn, chiều cao bị kẹp", () => {
+    expect(PANELS.map(([k]) => k)).toContain("accent");
+    for (const w of Object.values(WORKSPACES)) expect(w.layout.accent).toBe(false);
+    expect(clampLayout({ accentHeight: 5 }).accentHeight).toBe(110);
+    expect(clampLayout({ accentHeight: 9999 }).accentHeight).toBe(400);
   });
 });

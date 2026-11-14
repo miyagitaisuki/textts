@@ -902,6 +902,9 @@ async function aivisState() {
 }
 
 ipcMain.handle("aivis:status", async () => aivisState());
+ipcMain.handle("aivis:accentPhrases", async (_e, { text, speaker }) =>
+  require("./aivis-accent.cjs").fetchAccentPhrases({ url: aivisCfg.AIVIS_URL, text, speaker }),
+);
 
 ipcMain.handle("aivis:install", async () => {
   if (aivisBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };

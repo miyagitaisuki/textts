@@ -115,3 +115,29 @@ def test_sync_user_dict_replaces_own_entries():
     assert deletes == [("DELETE", "/user_dict_word/u1")]  # không đụng vào từ khác
     posts = [c[1] for c in _DictHandler.calls if c[0] == "POST"]
     assert posts == [{"surface": "駅", "pronunciation": "エキ", "accent_type": "0"}]
+
+
+def test_line_with_accent_is_not_split_into_sentences(tmp_path):
+    """accent đánh số cụm trên cả câu: không được tách câu thành nhiều request."""
+    from core.models import LineItem, Project, Role
+    from providers.base import TTSProvider
+    from tts import synth_all
+
+    seen: list[str] = []
+
+    class Rec(TTSProvider):
+        name = "rec"
+        ext = "wav"
+
+        async def synthesize(self, req, out_path):
+            from pydub import AudioSegment
+            seen.append(req.text)
+            AudioSegment.silent(100).export(out_path, format="wav")
+
+    text = "おはようございます。今日はいい天気ですね。"
+    item = LineItem(id="L001", src_line=1, role="1", attrs={"accent": "4/1/0/2/1"},
+                    display=text, tts_text=text, plain=text)
+    project = Project(engine="rec", roles={"1": Role(voice="x")}, items=[item])
+    errors = asyncio.run(synth_all(project, Rec(), tmp_path))
+    assert errors == []
+    assert seen == [text]
