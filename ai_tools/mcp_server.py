@@ -67,6 +67,11 @@ Quy trình nên dùng:
    - Cảm xúc/tốc độ từng câu: [2]{emotion=happy, speed=slow} ...  (neutral|happy|sad|angry|surprised)
    - Hiệu ứng giọng: {fx=phone} qua điện thoại, {fx=whisper} thì thầm, {fx=far} ở xa, {fx=radio} loa thông báo,
      {fx=echo} phòng vang. To/nhỏ: {vol=-6}. Nói chen: {overlap=400} (bắt đầu trước khi câu trước dứt 400 ms).
+   - Ngừng trước/sau câu: {pre=300} (lặng 300 ms trước câu, vd. trước câu trả lời ngập ngừng),
+     {post=800} (lặng thêm sau câu, vd. sau câu hỏi để học viên kịp nghĩ). Giá trị là ms, số nguyên không âm.
+   - Nhịp đọc (chỉ engine aivis): {tempo=1.2} nhấn nhá nhanh hơn, {tempo=0.8} chậm rãi hơn (0.5..2.0).
+   - Accent (chỉ engine aivis): {accent=2/0} đặt vị trí accent cho từng cụm của câu. Chỉ dùng khi giáo viên đưa
+     sẵn giá trị (lấy từ panel Accent trên giao diện); không tự đoán vì số cụm phải khớp đúng với engine.
    - Ngập ngừng tự nhiên viết thẳng vào lời: えーと、あの…、うーん。 Câu cảm thán ngắn (はい、へえ、そうですか) giúp sống động.
    - Cảnh: dòng [bgm=quan-ca-phe] đổi âm nền từ chỗ đó (nhiều lớp: [bgm=mua+duong-pho@-26], tắt: [bgm=off]).
    - Hiệu ứng: [sfx=chuong-cua] chiếm thời gian riêng; [sfx=dien-thoai-reo, overlay, vol=-6] chồng lên câu kế tiếp.
