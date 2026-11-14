@@ -5,7 +5,7 @@ import { PanelHeader } from "./Workspace.jsx";
 
 // Panel accent (học từ AivisSpeech): mỗi cụm là một nhóm mora, đường cao/thấp vẽ theo accent.
 // Bấm một mora để accent rơi sau mora đó; bấm lại để về bằng (0). Kết quả ghi vào attrs.accent ("2/0").
-export default function AccentPanel({ item, engine, speaker, disabled, onChangeAttrs, onPreview, onNotice, onClose }) {
+export default function AccentPanel({ item, engine, speaker, emotion = "neutral", disabled, onChangeAttrs, onPreview, onNotice, onClose }) {
   const [state, setState] = useState({ status: "idle", phrases: [], error: "", text: "" });
   const reqId = useRef(0);
   const isLine = item?.type === "line";
@@ -20,14 +20,14 @@ export default function AccentPanel({ item, engine, speaker, disabled, onChangeA
     }
     setState({ status: "loading", phrases: [], error: "", text });
     window.textts
-      .getAccentPhrases(text, speaker)
+      .getAccentPhrases(text, speaker, emotion)
       .catch((e) => ({ ok: false, error: String(e?.message || e) }))
       .then((res) => {
         if (id !== reqId.current) return; // đã chọn câu khác hoặc sửa chữ trong lúc chờ
         if (res?.ok) setState({ status: "ready", phrases: res.phrases, error: "", text });
         else setState({ status: "error", phrases: [], error: res?.error || "Không lấy được accent", text });
       });
-  }, [usable, text, speaker]);
+  }, [usable, text, speaker, emotion]);
 
   // Chỉ tin danh sách cụm khi nó là của đúng chữ đang hiện (lúc vừa đổi câu, state còn của câu trước).
   const ready = state.status === "ready" && state.text === text;

@@ -902,8 +902,8 @@ async function aivisState() {
 }
 
 ipcMain.handle("aivis:status", async () => aivisState());
-ipcMain.handle("aivis:accentPhrases", async (_e, { text, speaker }) =>
-  require("./aivis-accent.cjs").fetchAccentPhrases({ url: aivisCfg.AIVIS_URL, text, speaker }),
+ipcMain.handle("aivis:accentPhrases", async (_e, { text, speaker, emotion }) =>
+  require("./aivis-accent.cjs").fetchAccentPhrases({ url: aivisCfg.AIVIS_URL, text, speaker, emotion }),
 );
 
 ipcMain.handle("aivis:install", async () => {

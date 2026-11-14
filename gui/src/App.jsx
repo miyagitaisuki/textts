@@ -1525,6 +1525,7 @@ export default function App() {
                   item={selectedItem}
                   engine={project.engine}
                   speaker={selectedItem?.type === "line" ? selectedItem.attrs?.voice || project.roles[selectedItem.role]?.voice : ""}
+                  emotion={selectedItem?.type === "line" ? selectedItem.attrs?.emotion || project.roles[selectedItem.role]?.emotion || "neutral" : "neutral"}
                   disabled={busy}
                   onChangeAttrs={(attrs) => selectedId && patchItem(selectedId, { attrs })}
                   onPreview={preview}

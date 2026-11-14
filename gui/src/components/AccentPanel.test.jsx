@@ -28,7 +28,7 @@ describe("AccentPanel", () => {
   it("lấy cụm từ engine bằng chữ đọc và giọng của vai", async () => {
     renderPanel();
     await screen.findByText("ゴ");
-    expect(window.textts.getAccentPhrases).toHaveBeenCalledWith("おはようございます", "888753760");
+    expect(window.textts.getAccentPhrases).toHaveBeenCalledWith("おはようございます", "888753760", "neutral");
     expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1); // chỉ cụm 2 có accent ≠ 0
     const lines = document.querySelectorAll(".accent-line polyline");
     expect(lines).toHaveLength(2); // mỗi cụm một đường nối cao độ
@@ -88,5 +88,16 @@ describe("AccentPanel", () => {
     await screen.findByText("ゴ");
     expect(h.onChangeAttrs).not.toHaveBeenCalled();
     expect(h.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("dùng cảm xúc của câu và tải lại khi đổi cảm xúc", async () => {
+    const h = { onChangeAttrs: vi.fn(), onPreview: vi.fn(), onNotice: vi.fn() };
+    const { rerender } = render(<AccentPanel item={line()} engine="aivis" speaker="1" emotion="happy" {...h} />);
+    await screen.findByText("ゴ");
+    expect(window.textts.getAccentPhrases).toHaveBeenLastCalledWith("おはようございます", "1", "happy");
+    rerender(<AccentPanel item={line()} engine="aivis" speaker="1" emotion="sad" {...h} />);
+    await waitFor(() =>
+      expect(window.textts.getAccentPhrases).toHaveBeenLastCalledWith("おはようございます", "1", "sad"),
+    );
   });
 });
