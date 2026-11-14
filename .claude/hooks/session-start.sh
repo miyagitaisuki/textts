@@ -6,6 +6,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+# Chạy nền: phiên bắt đầu ngay, cài đặt tiếp tục phía sau (tối đa 10 phút)
+echo '{"async": true, "asyncTimeout": 600000}'
+
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
 # ffmpeg: pydub cần để đọc/ghi âm thanh (giống CI)
