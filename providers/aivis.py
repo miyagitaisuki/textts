@@ -112,6 +112,8 @@ class AivisProvider(TTSProvider):
                 query["intonationScale"] = EMOTION_STRENGTH
             if req.accent:
                 apply_accent(query, req.accent)
+            if req.tempo != 1.0:
+                query["tempoDynamicsScale"] = req.tempo
 
             # 3. Tổng hợp âm thanh
             async with session.post(

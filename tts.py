@@ -73,6 +73,7 @@ def resolve(item: LineItem, roles: dict[str, Role]) -> SynthRequest:
         speed=str(merged["speed"]),
         pitch=int(merged["pitch"]),
         accent=str(item.attrs.get("accent", "")),
+        tempo=float(item.attrs.get("tempo", 1.0)),
     )
 
 
@@ -80,6 +81,8 @@ def cache_key(engine: str, req: SynthRequest) -> str:
     parts = [engine, req.voice, req.emotion, req.speed, str(req.pitch), req.text]
     if req.pause_scale != 1.0:  # giữ nguyên khóa cũ khi không chỉnh chỗ ngắt
         parts.append(f"pause={req.pause_scale:g}")
+    if req.tempo != 1.0:  # giữ nguyên khóa cũ khi không chỉnh tempo
+        parts.append(f"tempo={req.tempo:g}")
     if req.accent:  # giữ nguyên khóa cũ khi không chỉnh accent
         parts.append(f"accent={req.accent}")
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()

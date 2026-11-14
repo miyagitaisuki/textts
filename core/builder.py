@@ -97,6 +97,8 @@ def build(
         if gain:
             seg = seg + gain
         overlap = int(_num(attrs.get("overlap")))
+        pre_ms = int(_num(attrs.get("pre")))
+        post_ms = int(_num(attrs.get("post")))
 
         if overlap > 0 and placed:
             # Nói chen: bắt đầu trước khi câu trước kết thúc (không sớm hơn đầu câu trước)
@@ -108,6 +110,7 @@ def build(
                     gap += t["question_gap_ms"]  # chờ trả lời sau câu hỏi
                 out += AudioSegment.silent(gap)
             start = len(out)
+        start += pre_ms  # lặng trước câu
         if it.get("delay_ms"):
             start += it["delay_ms"]
         end = start + len(seg)
@@ -119,6 +122,8 @@ def build(
                 out += AudioSegment.silent(start + len(ov) - len(out), frame_rate=out.frame_rate)
             out = out.overlay(ov, position=start)
         pending_overlays.clear()
+        if post_ms > 0:  # lặng sau câu: đẩy khoảng nghỉ trước câu kế tiếp
+            out += AudioSegment.silent(post_ms, frame_rate=out.frame_rate)
         placed.append({**it, "start_ms": start, "end_ms": end})
         prev_role = it["role"]
         prev_plain = it.get("plain", "")
