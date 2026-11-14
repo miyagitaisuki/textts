@@ -13,7 +13,7 @@ Cú pháp:
     vol=-6                            to/nhỏ hơn (dB)
     overlap=400                       nói chen: bắt đầu trước khi câu trước kết thúc 400 ms
     accent=2/0                        (AivisSpeech) vị trí accent từng cụm, 0 = bằng; số cụm phải khớp câu
-    tempo=0.8..1.5                    (AivisSpeech/VOICEVOX) nhịp điệu của lời đọc, 1 = bình thường
+    tempo=0.8..1.5                    (AivisSpeech) nhịp điệu của lời đọc, 1 = bình thường
     pre=300, post=500                 lặng trước/sau câu, ms (post cộng vào khoảng nghỉ trước câu sau)
 Bản dịch: [1] こんにちは。 // Xin chào.
 Cảnh & hiệu ứng:

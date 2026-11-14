@@ -23,7 +23,12 @@ describe("LineSliders", () => {
   it("kéo slider ghi attrs; nhấp đúp về mặc định thì xoá khoá", () => {
     const onChange = vi.fn();
     render(<LineSliders attrs={{ vol: "-3", fx: "far" }} engine="aivis" onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText("Lặng trước câu"), { target: { value: "300" } });
+    const pre = screen.getByLabelText("Lặng trước câu");
+    fireEvent.change(pre, { target: { value: "200" } });
+    fireEvent.change(pre, { target: { value: "300" } });
+    expect(onChange).not.toHaveBeenCalled(); // đang kéo: chưa ghi
+    fireEvent.mouseUp(pre);
+    expect(onChange).toHaveBeenCalledTimes(1); // thả chuột: ghi một lần
     expect(onChange).toHaveBeenLastCalledWith({ vol: "-3", fx: "far", pre: "300" });
     fireEvent.doubleClick(screen.getByLabelText("Âm lượng"));
     expect(onChange).toHaveBeenLastCalledWith({ fx: "far" });

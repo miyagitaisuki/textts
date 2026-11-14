@@ -1524,7 +1524,7 @@ export default function App() {
                 <AccentPanel
                   item={selectedItem}
                   engine={project.engine}
-                  speaker={selectedItem?.type === "line" ? project.roles[selectedItem.role]?.voice : ""}
+                  speaker={selectedItem?.type === "line" ? selectedItem.attrs?.voice || project.roles[selectedItem.role]?.voice : ""}
                   disabled={busy}
                   onChangeAttrs={(attrs) => selectedId && patchItem(selectedId, { attrs })}
                   onPreview={preview}

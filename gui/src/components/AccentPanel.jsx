@@ -6,29 +6,34 @@ import { PanelHeader } from "./Workspace.jsx";
 // Panel accent (học từ AivisSpeech): mỗi cụm là một nhóm mora, đường cao/thấp vẽ theo accent.
 // Bấm một mora để accent rơi sau mora đó; bấm lại để về bằng (0). Kết quả ghi vào attrs.accent ("2/0").
 export default function AccentPanel({ item, engine, speaker, disabled, onChangeAttrs, onPreview, onNotice, onClose }) {
-  const [state, setState] = useState({ status: "idle", phrases: [], error: "" });
+  const [state, setState] = useState({ status: "idle", phrases: [], error: "", text: "" });
   const reqId = useRef(0);
   const isLine = item?.type === "line";
   const text = isLine ? toTtsText(item.display || "") : ""; // giống Python: cách đọc luôn suy ra từ display
   const usable = engine === "aivis" && isLine && Boolean(window.textts?.getAccentPhrases);
 
   useEffect(() => {
+    const id = ++reqId.current; // đổi câu/chữ: mọi phản hồi cũ đều bị bỏ
     if (!usable || !text.trim()) {
-      setState({ status: "idle", phrases: [], error: "" });
+      setState({ status: "idle", phrases: [], error: "", text: "" });
       return;
     }
-    const id = ++reqId.current;
-    setState((s) => ({ ...s, status: "loading", error: "" }));
-    window.textts.getAccentPhrases(text, speaker).then((res) => {
-      if (id !== reqId.current) return; // đã chọn câu khác hoặc sửa chữ trong lúc chờ
-      if (res?.ok) setState({ status: "ready", phrases: res.phrases, error: "" });
-      else setState({ status: "error", phrases: [], error: res?.error || "Không lấy được accent" });
-    });
+    setState({ status: "loading", phrases: [], error: "", text });
+    window.textts
+      .getAccentPhrases(text, speaker)
+      .catch((e) => ({ ok: false, error: String(e?.message || e) }))
+      .then((res) => {
+        if (id !== reqId.current) return; // đã chọn câu khác hoặc sửa chữ trong lúc chờ
+        if (res?.ok) setState({ status: "ready", phrases: res.phrases, error: "", text });
+        else setState({ status: "error", phrases: [], error: res?.error || "Không lấy được accent", text });
+      });
   }, [usable, text, speaker]);
 
+  // Chỉ tin danh sách cụm khi nó là của đúng chữ đang hiện (lúc vừa đổi câu, state còn của câu trước).
+  const ready = state.status === "ready" && state.text === text;
   const saved = isLine ? parseAccentSpec(item.attrs?.accent) : null;
-  const engineAccents = state.phrases.map((p) => p.accent);
-  const mismatch = state.status === "ready" && saved && saved.length !== state.phrases.length;
+  const engineAccents = ready ? state.phrases.map((p) => p.accent) : [];
+  const mismatch = ready && saved && saved.length !== state.phrases.length;
 
   // Sửa chữ làm số cụm thay đổi: xoá accent cũ để không đọc sai, và báo cho người dùng.
   useEffect(() => {
@@ -37,7 +42,7 @@ export default function AccentPanel({ item, engine, speaker, disabled, onChangeA
     delete next.accent;
     onChangeAttrs(next);
     onNotice?.(`Đã xoá accent của câu ${item.id} vì số cụm thay đổi sau khi sửa câu`);
-  }, [mismatch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mismatch, item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accents = saved && !mismatch ? saved : engineAccents;
 
@@ -55,7 +60,7 @@ export default function AccentPanel({ item, engine, speaker, disabled, onChangeA
   else if (!isLine) body = <p className="accent-note">Chọn một câu thoại để chỉnh accent.</p>;
   else if (!text.trim()) body = <p className="accent-note">Câu đang trống.</p>;
   else if (state.status === "error") body = <p className="accent-note error">{state.error}</p>;
-  else if (state.status !== "ready") body = <p className="accent-note">Đang lấy accent từ AivisSpeech…</p>;
+  else if (!ready) body = <p className="accent-note">Đang lấy accent từ AivisSpeech…</p>;
   else
     body = (
       <div className="accent-phrases" role="group" aria-label="Accent từng cụm">
@@ -91,7 +96,7 @@ export default function AccentPanel({ item, engine, speaker, disabled, onChangeA
         <button
           type="button"
           className="nav-btn"
-          disabled={disabled || !usable || state.status !== "ready"}
+          disabled={disabled || !usable || !ready}
           onClick={() => onPreview(item.id)}
         >
           ▶ Nghe

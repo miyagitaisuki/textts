@@ -70,4 +70,20 @@ describe("AccentPanel", () => {
     fireEvent.click(screen.getByText("▶ Nghe"));
     expect(h.onPreview).toHaveBeenCalledWith("L001");
   });
+
+  it("đổi sang câu khác số cụm: không xoá accent của câu mới (lỗi state cũ)", async () => {
+    const h = { onChangeAttrs: vi.fn(), onPreview: vi.fn(), onNotice: vi.fn() };
+    window.textts.getAccentPhrases.mockImplementation(async (text) => ({
+      ok: true,
+      phrases: text === "あ" ? [{ moras: ["ア"], accent: 0 }] : PHRASES,
+    }));
+    const a = { id: "L001", type: "line", role: "1", display: "あ", attrs: {} };
+    const b = { id: "L002", type: "line", role: "1", display: "おはようございます", attrs: { accent: "0/2" } };
+    const { rerender } = render(<AccentPanel item={a} engine="aivis" speaker="1" {...h} />);
+    await screen.findByText("ア");
+    rerender(<AccentPanel item={b} engine="aivis" speaker="1" {...h} />);
+    await screen.findByText("ゴ");
+    expect(h.onChangeAttrs).not.toHaveBeenCalled();
+    expect(h.onNotice).not.toHaveBeenCalled();
+  });
 });

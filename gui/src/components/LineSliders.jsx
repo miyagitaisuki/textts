@@ -23,9 +23,17 @@ export default function LineSliders({ attrs = {}, engine, disabled, onChange }) 
 function SliderRow({ param, value, supported, disabled, onCommit }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [drag, setDrag] = useState(null); // giá trị lúc đang kéo: chỉ ghi khi thả, để mỗi lần kéo là một bước undo
   const off = disabled || !supported;
+  const current = drag ?? value;
   const id = `line-param-${param.key}`;
-  const shown = value.toFixed(param.digits);
+  const shown = current.toFixed(param.digits);
+
+  function endDrag() {
+    if (drag === null) return;
+    setDrag(null);
+    if (drag !== value) onCommit(drag);
+  }
 
   function commitDraft() {
     setEditing(false);
@@ -33,7 +41,7 @@ function SliderRow({ param, value, supported, disabled, onCommit }) {
   }
 
   return (
-    <div className={`slider-row ${supported ? "" : "unsupported"} ${value !== param.def ? "changed" : ""}`}>
+    <div className={`slider-row ${supported ? "" : "unsupported"} ${current !== param.def ? "changed" : ""}`}>
       <div className="slider-head">
         <label htmlFor={id}>{param.label}</label>
         <span className="slider-help" title={param.help} aria-label={param.help} role="img">?</span>
@@ -77,11 +85,18 @@ function SliderRow({ param, value, supported, disabled, onCommit }) {
         min={param.min}
         max={param.max}
         step={param.step}
-        value={value}
+        value={current}
         disabled={off}
         title="Nhấp đúp để về mặc định"
-        onChange={(e) => onCommit(Number(e.target.value))}
-        onDoubleClick={() => onCommit(param.def)}
+        onChange={(e) => setDrag(Number(e.target.value))}
+        onMouseUp={endDrag}
+        onTouchEnd={endDrag}
+        onKeyUp={endDrag}
+        onBlur={endDrag}
+        onDoubleClick={() => {
+          setDrag(null);
+          onCommit(param.def);
+        }}
       />
       {!supported && <small className="hint">Chỉ áp dụng khi dùng AivisSpeech.</small>}
     </div>
