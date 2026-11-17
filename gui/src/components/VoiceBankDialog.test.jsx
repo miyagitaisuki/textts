@@ -5,18 +5,18 @@ import VoiceBankDialog from "./VoiceBankDialog.jsx";
 
 afterEach(cleanup);
 
-const BANK = { voices: { "voicevox:3": { nickname: "Zunda", gender: "nữ", age: 10, styles: ["trẻ con"], favorite: true } } };
+const BANK = { voices: { "aivis:3": { nickname: "Zunda", gender: "nữ", age: 10, styles: ["trẻ con"], favorite: true } } };
 
 function makeApi() {
   return {
     getVoiceBank: vi.fn().mockResolvedValue({
-      engine: "voicevox",
+      engine: "aivis",
       online: true,
       voices: [{ value: "3", label: "ずんだもん" }, { value: "2", label: "四国めたん" }],
       bank: BANK,
     }),
     // app trả lại cả ngân hàng sau khi lưu
-    setVoiceBank: vi.fn().mockResolvedValue({ voices: { ...BANK.voices, "voicevox:2": { nickname: "Chị Metan" } } }),
+    setVoiceBank: vi.fn().mockResolvedValue({ voices: { ...BANK.voices, "aivis:2": { nickname: "Chị Metan" } } }),
   };
 }
 
@@ -24,13 +24,13 @@ describe("VoiceBankDialog", () => {
   it("saves a nickname when leaving the field and filters by notes", async () => {
     const api = makeApi();
     const onChanged = vi.fn();
-    render(<VoiceBankDialog api={api} initialEngine="voicevox" onClose={() => {}} onChanged={onChanged} />);
+    render(<VoiceBankDialog api={api} initialEngine="aivis" onClose={() => {}} onChanged={onChanged} />);
     const nick = await screen.findByLabelText("Biệt danh 四国めたん");
     fireEvent.change(nick, { target: { value: "Chị Metan" } });
     fireEvent.blur(nick);
     await waitFor(() =>
       expect(api.setVoiceBank).toHaveBeenCalledWith(
-        expect.objectContaining({ engine: "voicevox", voice: "2", label: "四国めたん", meta: expect.objectContaining({ nickname: "Chị Metan" }) })
+        expect.objectContaining({ engine: "aivis", voice: "2", label: "四国めたん", meta: expect.objectContaining({ nickname: "Chị Metan" }) })
       )
     );
     expect(onChanged).toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe("VoiceBankDialog", () => {
 describe("VoiceBankDialog dropdowns", () => {
   it("adds a personality with the ＋ menu and sets age from a dropdown", async () => {
     const api = makeApi();
-    render(<VoiceBankDialog api={api} initialEngine="voicevox" onClose={() => {}} />);
+    render(<VoiceBankDialog api={api} initialEngine="aivis" onClose={() => {}} />);
     const add = await screen.findAllByLabelText("Thêm Tính cách / cảm xúc");
     fireEvent.change(add[1], { target: { value: "hiền lành" } }); // hàng thứ 2: 四国めたん
     await waitFor(() =>

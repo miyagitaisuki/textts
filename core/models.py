@@ -41,7 +41,7 @@ class Config(BaseModel):
     """Nội dung của roles.yaml."""
 
     model_config = ConfigDict(extra="forbid")
-    engine: str = "edge"
+    engine: str = "aivis"
     timing: Timing = Field(default_factory=Timing)
     roles: dict[str, Role]
 

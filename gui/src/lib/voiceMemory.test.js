@@ -5,20 +5,20 @@ const role = (name, voice) => ({ name, voice, emotion: "neutral", speed: "normal
 
 describe("voiceMemory", () => {
   it("remembers voices per engine by character name and role id", () => {
-    const m = rememberProject(emptyMemory(), { engine: "voicevox", roles: { 1: role("学生", "3"), 2: role("", "8") } });
-    expect(m.engine).toBe("voicevox");
-    expect(m.roles.voicevox["name:学生"].voice).toBe("3");
-    expect(m.roles.voicevox["#1"].voice).toBe("3");
-    expect(m.roles.voicevox["#2"].voice).toBe("8");
+    const m = rememberProject(emptyMemory(), { engine: "aivis", roles: { 1: role("学生", "1431611904"), 2: role("", "1937616896") } });
+    expect(m.engine).toBe("aivis");
+    expect(m.roles.aivis["name:学生"].voice).toBe("1431611904");
+    expect(m.roles.aivis["#1"].voice).toBe("1431611904");
+    expect(m.roles.aivis["#2"].voice).toBe("1937616896");
   });
 
   it("applies by name first, then by role id, and keeps gain", () => {
-    let m = rememberProject(emptyMemory(), { engine: "voicevox", roles: { 1: role("学生", "3"), 2: role("駅員", "8") } });
-    const imported = { engine: "edge", roles: { 1: role("駅員", "ja-JP-KeitaNeural"), 3: role("田中", "ja-JP-NanamiNeural") } };
+    let m = rememberProject(emptyMemory(), { engine: "aivis", roles: { 1: role("学生", "1431611904"), 2: role("駅員", "1937616896") } });
+    const imported = { engine: "aivis", roles: { 1: role("駅員", "111"), 3: role("田中", "222") } };
     const { project, applied } = applyMemory(imported, m);
-    expect(project.engine).toBe("voicevox");
-    expect(project.roles[1].voice).toBe("8"); // tên 駅員 thắng mã vai #1
-    expect(project.roles[3].voice).toBe("ja-JP-NanamiNeural"); // chưa nhớ
+    expect(project.engine).toBe("aivis");
+    expect(project.roles[1].voice).toBe("1937616896"); // tên 駅員 thắng mã vai #1
+    expect(project.roles[3].voice).toBe("222"); // chưa nhớ
     expect(applied).toEqual(["1"]);
   });
 

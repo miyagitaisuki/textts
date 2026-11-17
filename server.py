@@ -1,7 +1,7 @@
 """FastAPI REST API server cho textts.
 
 Cung cấp API để AI (ChatGPT, Claude, AI agents, scripts) tạo âm thanh hội thoại tiếng Nhật
-bằng VOICEVOX (hoặc Edge-TTS), xuất trọn gói tài liệu học tập (MP3/WAV, bản chậm 0.8x,
+bằng AivisSpeech, xuất trọn gói tài liệu học tập (MP3/WAV, bản chậm 0.8x,
 phụ đề .srt, phiếu Furigana HTML) và kiểm tra cách đọc Furigana.
 """
 from __future__ import annotations
@@ -22,36 +22,33 @@ from pydantic import BaseModel, Field
 
 from core.audio import add_background, loudness_normalize, time_stretch
 from core.appdata import output_root
-from core.characters import find_character, list_characters
+from core.characters import delete_character, find_character, list_characters, save_character
 from core.levels import GUIDE, LEVELS, timing_for
 from core.render import build_items_for, finish, used_sound_paths
 from core import qc
-from core.voicebank import list_voices as bank_voices, search_voices
+from core.voicebank import list_voices as bank_voices, search_voices, upsert_voice_note
 from core.sounds import SoundNotFound, catalog_text, credits_for, find_sound, list_sounds, ref_of, search_sounds
 from core.builder import build, practice_items, to_srt
 from core.models import Config, LineItem, Project, Role, SfxItem, Timing, load_config
 from core.normalize import annotate, reading
 from core.parser import parse_script, to_tts_text
 from core.paths import sfx_path
-from core.readings import load_readings
-from core.worksheet import worksheet_html
+from core.readings import load_readings, save_readings
+from core.worksheet import ruby_html, worksheet_html
 from providers.base import SynthRequest, TTSProvider
-from providers.edge import VOICES as EDGE_VOICES, EdgeProvider
-from providers.voicevox import VoicevoxProvider, list_speakers
-from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers
-from tts import PROVIDERS, add_translations, cache_key, synth_all, synth_cached, write_audio, write_timeline
+from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers, sync_user_dict as aivis_sync_user_dict
+from tts import PROVIDERS, cache_key, load_engine_dict, synth_all, synth_cached, write_audio, write_timeline
 
 ROOT = Path(__file__).resolve().parent
 # Không ghi vào thư mục cài đặt (bị xóa khi cập nhật). App truyền thư mục xuất người dùng chọn qua TEXTTS_OUTPUT_DIR.
 DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "textts"
 DEFAULT_CACHE_DIR = ROOT / "cache"
-VOICEVOX_DEFAULT_URL = "http://127.0.0.1:50021"
 AIVIS_DEFAULT_URL = "http://127.0.0.1:10101"
 
 app = FastAPI(
     title="textts TTS API",
-    description="REST API cho AI sinh giọng nói hội thoại tiếng Nhật (VOICEVOX, AivisSpeech, Edge-TTS), phụ đề và phiếu bài tập Furigana.",
-    version="1.2.0",
+    description="REST API cho AI sinh giọng nói hội thoại tiếng Nhật (AivisSpeech), phụ đề và phiếu bài tập Furigana.",
+    version="1.3.0",
 )
 
 # Cho phép CORS để các client web / local AI tool có thể gọi
@@ -73,7 +70,7 @@ app.mount("/files", StaticFiles(directory=str(output_dir)), name="files")
 # --- Models ---
 class RoleInput(BaseModel):
     voice: str | None = Field(
-        None, description="Mã giọng (VOICEVOX/AivisSpeech: số style; Edge: tên giọng). Bỏ trống nếu dùng 'character'."
+        None, description="Mã giọng (AivisSpeech: số style). Bỏ trống nếu dùng 'character'."
     )
     character: str | None = Field(
         None, description="Tên nhân vật cố định của giáo trình (GET /api/v1/characters), vd. 'Minh'. "
@@ -111,10 +108,6 @@ class DialogueOptions(BaseModel):
     level: Literal["N5", "N4", "N3", "N2", "N1"] | None = Field(
         None, description="Trình độ người học: chỉnh tốc độ đọc và khoảng nghỉ (N5 chậm nhất, N1 gần tự nhiên)"
     )
-    bilingual: bool = Field(
-        False, description="Bản song ngữ: đọc bản dịch tiếng Việt (phần sau '//' của mỗi câu) ngay sau câu đó. Cần Internet (Edge)."
-    )
-    translation_voice: str = Field("vi-VN-HoaiMyNeural", description="Giọng Edge đọc bản dịch (vi-VN-HoaiMyNeural / vi-VN-NamMinhNeural)")
 
 
 class DialogueRequest(BaseModel):
@@ -125,7 +118,7 @@ class DialogueRequest(BaseModel):
         "Mọi file của lần xuất nằm trong thư mục riêng <thư mục xuất>/<filename>/. Bỏ trống thì dùng title.",
     )
     script: str = Field(..., description="Kịch bản tiếng Nhật. Mỗi dòng bắt đầu bằng vai: [1] ... hoặc 1 ...")
-    engine: Literal["voicevox", "edge", "aivis"] = Field("voicevox", description="Engine TTS sử dụng (voicevox, aivis, edge)")
+    engine: Literal["aivis"] = Field("aivis", description="Engine TTS sử dụng (aivis)")
     roles: dict[str, RoleInput] | None = Field(
         None, description="Cấu hình vai tùy chọn (nếu để trống sẽ dùng cấu hình mặc định trong roles.yaml)"
     )
@@ -154,7 +147,7 @@ class LessonRequest(DialogueRequest):
 
 class CheckAudioRequest(BaseModel):
     script: str
-    engine: Literal["voicevox", "edge", "aivis"] = "voicevox"
+    engine: Literal["aivis"] = "aivis"
     roles: dict[str, RoleInput] | None = None
     threshold: float = Field(0.9, ge=0.5, le=1.0, description="Độ khớp tối thiểu (0-1) để coi là đọc đúng")
 
@@ -168,16 +161,6 @@ def sanitize_filename(name: str) -> str:
     return cleaned or "hoi_thoai"
 
 
-async def check_voicevox_alive(url: str | None = None) -> bool:
-    target = (url or os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2.0)) as session:
-            async with session.get(f"{target}/version") as r:
-                return r.status == 200
-    except Exception:
-        return False
-
-
 async def check_aivis_alive(url: str | None = None) -> bool:
     target = (url or os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
     try:
@@ -189,47 +172,31 @@ async def check_aivis_alive(url: str | None = None) -> bool:
 
 
 # --- Endpoints ---
-@app.get("/api/v1/health", summary="Kiểm tra trạng thái hệ thống, VOICEVOX và AivisSpeech")
+@app.get("/api/v1/health", summary="Kiểm tra trạng thái hệ thống và AivisSpeech")
 async def health_check():
-    vv_url = (os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
-    vv_ok = await check_voicevox_alive(vv_url)
     aivis_url = (os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
     aivis_ok = await check_aivis_alive(aivis_url)
     return {
         "status": "ok",
-        "voicevox_connected": vv_ok,
-        "voicevox_url": vv_url,
+        "default_engine": "aivis",
         "aivis_connected": aivis_ok,
         "aivis_url": aivis_url,
         "cache_dir": str(DEFAULT_CACHE_DIR),
-        "version": "1.2.0",
+        "version": "1.3.0",
     }
 
 
-@app.get("/api/v1/speakers", summary="Liệt kê danh sách giọng và phong cách nhân vật (VOICEVOX, Aivis, Edge)")
-async def get_speakers(engine: Literal["voicevox", "aivis", "edge"] = "voicevox"):
-    if engine == "edge":
-        return {"ok": True, "engine": "edge", "speakers": [{"value": v, "label": v} for v in EDGE_VOICES]}
-    elif engine == "aivis":
-        url = (os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
-        try:
-            speakers = await aivis_list_speakers(base_url=url, only_normal=True)
-            return {"ok": True, "engine": "aivis", "speakers": speakers}
-        except Exception as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Không kết nối được tới AivisSpeech Engine tại {url}. Hãy chắc chắn rằng AivisSpeech đã được khởi động. Chi tiết: {exc}",
-            )
-    else:
-        vv_url = (os.environ.get("VOICEVOX_URL") or VOICEVOX_DEFAULT_URL).rstrip("/")
-        try:
-            speakers = await list_speakers(base_url=vv_url)
-            return {"ok": True, "engine": "voicevox", "speakers": speakers}
-        except Exception as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Không kết nối được tới VOICEVOX Engine tại {vv_url}. Hãy chắc chắn rằng VOICEVOX đã được khởi động. Chi tiết: {exc}",
-            )
+@app.get("/api/v1/speakers", summary="Liệt kê danh sách giọng và phong cách nhân vật (AivisSpeech)")
+async def get_speakers(engine: Literal["aivis"] = "aivis"):
+    url = (os.environ.get("AIVIS_URL") or AIVIS_DEFAULT_URL).rstrip("/")
+    try:
+        speakers = await aivis_list_speakers(base_url=url, only_normal=True)
+        return {"ok": True, "engine": "aivis", "speakers": speakers}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Không kết nối được tới AivisSpeech Engine tại {url}. Hãy chắc chắn rằng AivisSpeech đã được khởi động. Chi tiết: {exc}",
+        )
 
 
 @app.get("/api/v1/sounds", summary="Mục lục âm thanh: nhạc/âm nền (bgm) và hiệu ứng (sfx), tìm theo nghĩa")
@@ -262,7 +229,7 @@ async def sounds(kind: Literal["sfx", "bgm"] | None = None, q: str | None = None
 
 
 @app.get("/api/v1/voice-bank", summary="Ngân hàng giọng: ghi chú của giáo viên (biệt danh, giới tính, tuổi, chất giọng)")
-async def voice_bank(engine: Literal["voicevox", "aivis", "edge"] | None = None, q: str | None = None):
+async def voice_bank(engine: Literal["aivis"] | None = None, q: str | None = None):
     """Giọng giáo viên đã ghi chú trong app, để AI chọn giọng hợp vai.
 
     `q` mô tả vai (vd. "bé gái 8 tuổi vui tươi", "ông già giọng trầm") → kết quả xếp theo độ hợp,
@@ -318,12 +285,16 @@ async def preview_script(req: PreviewRequest):
     }
 
 
-DEFAULT_VOICES = {"voicevox": ("3", "2"), "aivis": ("888753760", "888753770"), "edge": ("ja-JP-KeitaNeural", "ja-JP-NanamiNeural")}
+AIVIS_ROLE_VOICES = {
+    "0": "38453056",    # ぎんが (người dẫn)
+    "1": "1431611904",  # まい (nữ)
+    "2": "1937616896",  # にせ (nam)
+    "3": "38453056",    # ぎんが (người dẫn)
+}
 
 
 def _default_voice(engine: str, role_id: str) -> str:
-    first, second = DEFAULT_VOICES.get(engine, DEFAULT_VOICES["edge"])
-    return first if role_id == "1" else second
+    return AIVIS_ROLE_VOICES.get(str(role_id), "1937616896")
 
 
 def _build_roles(req) -> dict[str, Role]:
@@ -347,8 +318,7 @@ def _build_roles(req) -> dict[str, Role]:
             roles[k] = Role(name=name, gain_db=v.gain_db, **base)
         return roles
     roles = load_config(ROOT / "roles.yaml").roles
-    if req.engine != "edge":
-        roles = {k: (r if r.voice.isdigit() else r.model_copy(update={"voice": _default_voice(req.engine, k)})) for k, r in roles.items()}
+    roles = {k: (r if r.voice.isdigit() else r.model_copy(update={"voice": _default_voice(req.engine, k)})) for k, r in roles.items()}
     return roles
 
 
@@ -356,8 +326,6 @@ async def _provider_for(engine: str):
     if engine not in PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Engine không hỗ trợ: {engine}")
     provider = PROVIDERS[engine]()
-    if engine == "voicevox" and not await check_voicevox_alive(getattr(provider, "base_url", None)):
-        raise HTTPException(status_code=503, detail="VOICEVOX Engine chưa chạy. Hãy khởi động ứng dụng VOICEVOX trước khi gọi API.")
     if engine == "aivis" and not await check_aivis_alive(getattr(provider, "base_url", None)):
         raise HTTPException(status_code=503, detail="AivisSpeech Engine chưa chạy. Hãy khởi động ứng dụng AivisSpeech trước khi gọi API.")
     return provider
@@ -393,16 +361,6 @@ async def _prepare(req) -> tuple[Project, list[dict]]:
     except SoundNotFound as exc:
         raise HTTPException(status_code=400, detail=f"Âm nền của cảnh: {exc}") from None
     return project, build_items
-
-
-async def _add_translations(project: Project, build_items: list[dict], voice: str) -> list[dict]:
-    """Chèn bản dịch tiếng Việt (đọc bằng Edge) ngay sau mỗi câu có '// bản dịch'."""
-    try:
-        return await add_translations(project, build_items, voice, DEFAULT_CACHE_DIR)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=f"Bản song ngữ: {exc}") from None
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Không đọc được bản dịch qua Edge TTS (cần Internet): {exc}") from None
 
 
 def _bgm_layers(options: DialogueOptions) -> list[dict]:
@@ -522,8 +480,6 @@ def _result(req, project, ex: _Exporter, audio, placed, bgm_layers, credit_lines
 @app.post("/api/v1/dialogue", summary="Sinh âm thanh hội thoại trọn gói cho bài học")
 async def generate_dialogue(req: DialogueRequest, request: Request):
     project, build_items = await _prepare(req)
-    if req.options.bilingual:
-        build_items = await _add_translations(project, build_items, req.options.translation_voice)
     bgm_layers = _bgm_layers(req.options)
     audio, placed, markers = _render(
         project, build_items, req.options, bgm_layers, practice_role=req.options.role_play,
@@ -548,7 +504,7 @@ async def generate_lesson(req: LessonRequest, request: Request):
     """Từ một kịch bản (+ từ vựng, câu hỏi do AI soạn) xuất cả bộ tài liệu nghe vào một thư mục:
 
     - <tên>.mp3 (+ _slow, .srt, .timeline.json), <tên>_shadowing.mp3, <tên>_dong-vai-<vai>.mp3 cho từng vai
-    - <tên>_tu-vung.mp3: mỗi từ đọc 2 lần, kèm nghĩa tiếng Việt (Edge, nếu có Internet)
+    - <tên>_tu-vung.mp3: mỗi từ đọc 2 lần
     - <tên>_cau-hoi.mp3: câu hỏi + các lựa chọn đọc kèm số (kiểu JLPT 聴解)
     - <tên>.html: phiếu có hội thoại (furigana, bản dịch), từ vựng, câu hỏi và trang đáp án
     """
@@ -561,10 +517,6 @@ async def generate_lesson(req: LessonRequest, request: Request):
     credit_lines = _export_main(ex, project, req.options, audio, placed, markers, bgm_layers, build_items,
                                 worksheet_extra={"vocab": [v.model_dump() for v in req.vocab],
                                                  "questions": [q.model_dump() for q in req.questions]})
-    if req.options.bilingual:
-        bi_items = await _add_translations(project, build_items, req.options.translation_voice)
-        a, _, _ = _render(project, bi_items, req.options, bgm_layers)
-        ex.audio("bilingual", "_song-ngu", a)
     if req.shadowing:
         a, _, _ = _render(project, build_items, req.options, bgm_layers, shadow_gap=req.options.shadow_gap_ms)
         ex.audio("shadowing", "_shadowing", a)
@@ -579,21 +531,9 @@ async def generate_lesson(req: LessonRequest, request: Request):
     narrator = next(iter(project.roles.values())).voice
     if req.vocab:
         words = await _speak_list([v.word for v in req.vocab], req.engine, narrator)
-        meanings: list = [None] * len(req.vocab)
-        if any(v.meaning for v in req.vocab):
-            try:
-                edge = PROVIDERS["edge"]()
-                ps = await asyncio.gather(*(synth_cached(edge, SynthRequest(text=v.meaning, voice=req.options.translation_voice), DEFAULT_CACHE_DIR)
-                                           for v in req.vocab if v.meaning))
-                it_ps = iter(ps)
-                meanings = [_A.from_file(next(it_ps)) if v.meaning else None for v in req.vocab]
-            except Exception:  # noqa: BLE001 - không có Internet: chỉ đọc tiếng Nhật
-                meanings = [None] * len(req.vocab)
         track = _A.silent(1500)
-        for w, m in zip(words, meanings):
-            track += w + _A.silent(1200) + w + _A.silent(700)
-            if m is not None:
-                track += m + _A.silent(1200)
+        for w in words:
+            track += w + _A.silent(1200) + w + _A.silent(1200)
         ex.audio("vocab", "_tu-vung", limit_and_norm(track + _A.silent(1500), req.options.lufs))
     if req.questions:
         track = _A.silent(1500)
@@ -623,11 +563,12 @@ class AssembleSegment(BaseModel):
 
 class AssembleRequest(BaseModel):
     filename: str = Field("ghep_am_thanh", description="Tên file (và thư mục) xuất")
-    engine: Literal["voicevox", "edge", "aivis"] = "voicevox"
+    engine: Literal["aivis"] = "aivis"
     voice: str | None = Field(None, description="Giọng đọc mặc định cho các đoạn speech (trống: giọng dẫn mặc định)")
     segments: list[AssembleSegment] = Field(..., min_length=1, max_length=2000)
     format: Literal["mp3", "wav"] = "mp3"
     lufs: float | None = Field(-16.0, description="Chuẩn hóa độ to từng đoạn về cùng mức LUFS (null để tắt)")
+    level: Literal["N5", "N4", "N3", "N2", "N1"] | None = Field(None, description="Trình độ JLPT để đồng bộ tốc độ đọc các đoạn speech")
 
 
 @app.post("/api/v1/assemble", summary="Ghép nhiều đoạn (lời đọc, file có sẵn, khoảng lặng) thành một file, ví dụ đề nghe")
@@ -639,7 +580,8 @@ async def assemble(req: AssembleRequest, request: Request):
     import binascii
     import io
 
-    voice = req.voice or _default_voice(req.engine, "1")
+    voice = req.voice or (_default_voice("aivis", "0") if req.engine == "aivis" else _default_voice(req.engine, "1"))
+    _, rate = timing_for(req.level, {})
     speech = [s for s in req.segments if s.type == "speech" and s.text.strip()]
     provider = await _provider_for(req.engine) if speech else None
     paths = await asyncio.gather(*(
@@ -657,6 +599,8 @@ async def assemble(req: AssembleRequest, request: Request):
             if id(s) not in spoken:
                 continue
             seg = AudioSegment.from_file(spoken[id(s)])
+            if rate != 1.0:
+                seg = time_stretch(seg, rate)
         else:
             try:
                 seg = AudioSegment.from_file(io.BytesIO(base64.b64decode(s.audio_b64, validate=True)), format=s.format)
@@ -691,13 +635,358 @@ async def check_audio(req: CheckAudioRequest):
 
 
 @app.get("/api/v1/characters", summary="Nhân vật cố định của giáo trình (giọng + tính cách) để dùng lại giữa các bài")
-async def characters(engine: Literal["voicevox", "aivis", "edge"] | None = None):
+async def characters(engine: Literal["aivis"] | None = None):
     return {"ok": True, "items": list_characters(engine)}
 
 
 @app.get("/api/v1/levels", summary="Gợi ý soạn kịch bản và nhịp đọc theo trình độ JLPT")
 async def levels():
     return {"ok": True, "items": [{"level": k, "guide": GUIDE[k], **v} for k, v in LEVELS.items()]}
+
+
+# --- Đề thi nghe JLPT tự động ---
+
+class ExamQuestion(BaseModel):
+    number: int | None = Field(None, description="Số thứ tự câu trong Mondai (bỏ trống tự đánh 1, 2, ...)")
+    intro: str = Field("", description="Lời dẫn / câu hỏi mở đầu đọc trước hội thoại")
+    script: str = Field("", description="Kịch bản hội thoại (ví dụ '[1] ...\\n[2] ...') hoặc câu đọc đơn")
+    question: str = Field("", description="Câu hỏi nhắc lại sau hội thoại")
+    choices: list[str] = Field(default_factory=list, description="Danh sách lựa chọn (nếu cần đọc thành tiếng)")
+    repeat_question: bool = Field(True, description="Có đọc lại question sau hội thoại không")
+    think_ms: int = Field(5000, ge=0, le=60000, description="Thời gian im lặng để thí sinh chọn đáp án (ms)")
+    answer: int | None = Field(None, description="Số thứ tự đáp án đúng (1-based)")
+    explanation: str = Field("", description="Giải thích đáp án (tiếng Việt)")
+
+
+class ExamMondai(BaseModel):
+    title: str = Field("問題1", description="Tên phần thi, ví dụ '問題1'")
+    instruction: str = Field("", description="Hướng dẫn đầu Mondai đọc bằng giọng người dẫn")
+    questions: list[ExamQuestion] = Field(..., min_length=1)
+
+
+class ExamRequest(BaseModel):
+    title: str = Field("JLPT 聴解", description="Tên đề thi")
+    filename: str | None = Field(None, description="Tên thư mục/file xuất (bỏ trống dùng title)")
+    engine: Literal["aivis"] = "aivis"
+    level: Literal["N5", "N4", "N3", "N2", "N1"] | None = None
+    format: Literal["mp3", "wav"] = "mp3"
+    lufs: float | None = -16.0
+    bell: bool = Field(True, description="Chèn tiếng chuông báo bắt đầu và kết thúc đề thi")
+    roles: dict[str, RoleInput] | None = Field(None, description="Giọng người dẫn ('0') và các vai hội thoại ('1', '2', ...)")
+    mondai: list[ExamMondai] = Field(..., min_length=1)
+
+
+def _exam_html(req: ExamRequest, marks: list[dict]) -> str:
+    import html as _h
+    parts = [
+        "<!DOCTYPE html><html lang='ja'><head><meta charset='utf-8'>",
+        f"<title>{_h.escape(req.title)}</title>",
+        "<style>body{font-family:'Yu Gothic UI',Meiryo,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;line-height:1.7;color:#1e293b}"
+        "h1{border-bottom:2px solid #0f172a;padding-bottom:8px}h2{margin-top:28px;color:#0f172a}"
+        ".q{border:1px solid #cbd5e1;border-radius:8px;padding:12px 16px;margin:14px 0;background:#f8fafc}"
+        ".ans{page-break-before:always;margin-top:36px;border-top:2px dashed #94a3b8;padding-top:16px}"
+        "ruby rt{font-size:0.65em;color:#475569}</style></head><body>",
+        f"<h1>{_h.escape(req.title)}{f' ({req.level})' if req.level else ''}</h1>",
+    ]
+    answers_html = ["<div class='ans'><h2>Đáp án & Transcript</h2>"]
+    for m_idx, m in enumerate(req.mondai, 1):
+        parts.append(f"<h2>{ruby_html(m.title)}</h2>")
+        if m.instruction:
+            parts.append(f"<p><em>{ruby_html(m.instruction)}</em></p>")
+        answers_html.append(f"<h3>{ruby_html(m.title)}</h3>")
+        for q_idx, q in enumerate(m.questions, 1):
+            num = q.number or q_idx
+            parts.append(f"<div class='q'><strong>{num}番</strong>")
+            if q.intro:
+                parts.append(f"<p>{ruby_html(q.intro)}</p>")
+            if q.question and q.question != q.intro:
+                parts.append(f"<p>{ruby_html(q.question)}</p>")
+            if q.choices:
+                parts.append("<ol>" + "".join(f"<li>{ruby_html(c)}</li>" for c in q.choices) + "</ol>")
+            parts.append("</div>")
+            ans_str = f"Đáp án: <strong>{q.answer}</strong>" if q.answer else "Chưa ghi đáp án"
+            answers_html.append(f"<div class='q'><strong>{num}番</strong> — {ans_str}")
+            if q.script:
+                lines_html = "<br>".join(ruby_html(ln) for ln in q.script.splitlines() if ln.strip())
+                answers_html.append(f"<p>{lines_html}</p>")
+            if q.explanation:
+                answers_html.append(f"<p><em>Giải thích:</em> {_h.escape(q.explanation)}</p>")
+            answers_html.append("</div>")
+    answers_html.append("</div></body></html>")
+    return "\n".join([*parts, *answers_html])
+
+
+@app.post("/api/v1/exam", summary="Tạo đề thi nghe JLPT hoàn chỉnh (Mondai, câu hỏi, tiếng chuông, khoảng lặng, phiếu đáp án)")
+async def create_exam(req: ExamRequest, request: Request):
+    provider = await _provider_for(req.engine)
+    roles = _build_roles(req)
+    narrator = roles["0"].voice if "0" in roles else _default_voice(req.engine, "0")
+    _, rate = timing_for(req.level, {})
+    readings = load_readings(ROOT / "readings.yaml")
+
+    track = AudioSegment.silent(800)
+    marks: list[dict] = []
+    srt_items: list[dict] = []
+
+    def _add_bell(ref: str):
+        nonlocal track
+        if not req.bell:
+            return
+        try:
+            p = find_sound(ref, "sfx")
+            seg = limit_and_norm(AudioSegment.from_file(p), req.lufs)
+            track += seg + AudioSegment.silent(700)
+        except SoundNotFound:
+            pass
+
+    async def _speak_narration(text: str):
+        nonlocal track
+        if not text.strip():
+            return
+        clean = to_tts_text(text.strip())
+        p = await synth_cached(provider, SynthRequest(text=clean, voice=narrator), DEFAULT_CACHE_DIR)
+        seg = AudioSegment.from_file(p)
+        if rate != 1.0:
+            seg = time_stretch(seg, rate)
+        start = len(track)
+        track += limit_and_norm(seg, req.lufs)
+        srt_items.append({"start_ms": start, "end_ms": len(track), "role": "0", "plain": text.strip()})
+
+    _add_bell("thong-bao-bat-dau")
+    for m_idx, m in enumerate(req.mondai, 1):
+        marks.append({"type": "mondai", "index": m_idx, "title": m.title, "ms": len(track)})
+        await _speak_narration(m.title)
+        track += AudioSegment.silent(700)
+        if m.instruction:
+            await _speak_narration(m.instruction)
+            track += AudioSegment.silent(1200)
+        for q_idx, q in enumerate(m.questions, 1):
+            num = q.number or q_idx
+            marks.append({"type": "question", "mondai": m_idx, "number": num, "ms": len(track)})
+            await _speak_narration(f"{num}番{'' if num else ''}。")
+            track += AudioSegment.silent(600)
+            if q.intro:
+                await _speak_narration(q.intro)
+                track += AudioSegment.silent(1000)
+            if q.script.strip():
+                raw_lines = [ln for ln in q.script.splitlines() if ln.strip()]
+                has_role = any(re.match(r"^\s*(?:\[\d+\]|\d+\s)", ln) for ln in raw_lines)
+                script_text = q.script if has_role else "\n".join(f"[1] {ln}" for ln in raw_lines)
+                sub_req = DialogueRequest(
+                    title=f"{req.title}_{m_idx}_{num}",
+                    script=script_text,
+                    engine=req.engine,
+                    roles=req.roles,
+                    options=DialogueOptions(format=req.format, lufs=req.lufs, level=req.level, slow=False, srt=False, worksheet=False),
+                )
+                sub_proj, sub_items = await _prepare(sub_req)
+                sub_audio, sub_placed, _ = _render(sub_proj, sub_items, sub_req.options, [])
+                base_ms = len(track)
+                track += sub_audio
+                for p in sub_placed:
+                    if p.get("plain") or p.get("display"):
+                        srt_items.append({
+                            "start_ms": base_ms + p["start_ms"],
+                            "end_ms": base_ms + p["end_ms"],
+                            "role": p.get("role", "1"),
+                            "plain": p.get("plain") or p.get("display"),
+                        })
+                track += AudioSegment.silent(900)
+            if q.question and (q.repeat_question or not q.intro):
+                await _speak_narration(q.question)
+                track += AudioSegment.silent(800)
+            for c_idx, choice in enumerate(q.choices, 1):
+                await _speak_narration(f"{c_idx}、{choice}")
+                track += AudioSegment.silent(600)
+            if q.think_ms > 0:
+                track += AudioSegment.silent(q.think_ms)
+        track += AudioSegment.silent(1200)
+
+    _add_bell("thong-bao-ket-thuc")
+    track += AudioSegment.silent(1000)
+
+    import json as _json
+    ex = _Exporter(sanitize_filename(req.filename or req.title), request, req.format)
+    ex.audio("audio", "", track)
+    ex.text("srt", f"{ex.base}.srt", to_srt(srt_items))
+    ex.text("timeline_json", f"{ex.base}.timeline.json", _json.dumps({"title": req.title, "duration_ms": len(track), "marks": marks}, ensure_ascii=False, indent=2))
+    ex.text("worksheet_html", f"{ex.base}.html", _exam_html(req, marks))
+    return {
+        "ok": True,
+        "title": req.title,
+        "filename": ex.base,
+        "folder": str(ex.dir),
+        "duration_s": round(len(track) / 1000, 2),
+        "mondai_count": len(req.mondai),
+        "question_count": sum(len(m.questions) for m in req.mondai),
+        "marks": marks,
+        "files": ex.files,
+    }
+
+
+# --- Quản lý thư viện bài nghe đã tạo (output_dir) ---
+
+def _safe_output_subdir(name: str) -> Path:
+    if not name or "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(status_code=400, detail="Tên thư mục bài nghe không hợp lệ")
+    target = (output_dir / name).resolve()
+    root = output_dir.resolve()
+    if target.parent != root:
+        raise HTTPException(status_code=400, detail="Đường dẫn nằm ngoài thư mục xuất")
+    return target
+
+
+@app.get("/api/v1/outputs", summary="Liệt kê các bài nghe/đề thi đã tạo trong thư mục xuất")
+async def list_outputs(q: str | None = None):
+    items = []
+    if output_dir.exists():
+        for entry in sorted(output_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if q and q.lower() not in entry.name.lower():
+                continue
+            if entry.is_dir():
+                files = [f.name for f in sorted(entry.iterdir()) if f.is_file()]
+                size_kb = round(sum(f.stat().st_size for f in entry.iterdir() if f.is_file()) / 1024, 1)
+                items.append({
+                    "name": entry.name,
+                    "folder": str(entry),
+                    "modified": round(entry.stat().st_mtime),
+                    "size_kb": size_kb,
+                    "files": files,
+                })
+    return {"ok": True, "output_dir": str(output_dir), "items": items}
+
+
+@app.get("/api/v1/outputs/{name}", summary="Xem chi tiết một bài nghe đã tạo")
+async def get_output(name: str):
+    import json as _json
+    folder = _safe_output_subdir(name)
+    if not folder.is_dir():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bài nghe '{name}'")
+    files = {}
+    timeline = None
+    for f in sorted(folder.iterdir()):
+        if f.is_file():
+            files[f.name] = str(f)
+            if f.name.endswith(".timeline.json"):
+                try:
+                    timeline = _json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+    return {"ok": True, "name": folder.name, "folder": str(folder), "files": files, "timeline": timeline}
+
+
+class RenameOutputRequest(BaseModel):
+    new_name: str = Field(..., min_length=1)
+
+
+@app.patch("/api/v1/outputs/{name}", summary="Đổi tên thư mục bài nghe đã tạo")
+async def rename_output(name: str, req: RenameOutputRequest):
+    src = _safe_output_subdir(name)
+    if not src.is_dir():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bài nghe '{name}'")
+    clean = sanitize_filename(req.new_name)
+    dst = _safe_output_subdir(clean)
+    if dst.exists():
+        raise HTTPException(status_code=409, detail=f"Thư mục '{clean}' đã tồn tại")
+    src.rename(dst)
+    return {"ok": True, "old_name": name, "name": clean, "folder": str(dst)}
+
+
+@app.delete("/api/v1/outputs/{name}", summary="Xóa thư mục bài nghe đã tạo")
+async def delete_output(name: str):
+    import shutil
+    target = _safe_output_subdir(name)
+    if not target.is_dir():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bài nghe '{name}'")
+    shutil.rmtree(target)
+    return {"ok": True, "deleted": name}
+
+
+# --- Quản lý Ngân hàng giọng, Nhân vật và Từ điển cách đọc ---
+
+class VoiceBankNoteInput(BaseModel):
+    voice: str = Field(..., description="Mã giọng AivisSpeech")
+    engine: Literal["aivis"] = "aivis"
+    label: str | None = None
+    nickname: str | None = None
+    gender: Literal["nam", "nữ", ""] | None = None
+    age: int | None = Field(None, ge=1, le=120)
+    styles: list[str] | None = None
+    personality: list[str] | None = None
+    description: str | None = None
+    favorite: bool | None = None
+    hidden: bool | None = None
+
+
+@app.post("/api/v1/voice-bank", summary="Thêm hoặc cập nhật ghi chú giọng trong Ngân hàng giọng")
+async def update_voice_bank(req: VoiceBankNoteInput):
+    updates = req.model_dump(exclude={"voice", "engine"}, exclude_none=True)
+    saved = upsert_voice_note(req.voice, engine=req.engine, updates=updates)
+    return {"ok": True, "item": saved}
+
+
+class CharacterInput(BaseModel):
+    name: str = Field(..., min_length=1)
+    voice: str = Field(..., min_length=1)
+    engine: Literal["aivis"] = "aivis"
+    emotion: Literal["neutral", "happy", "sad", "angry", "surprised"] = "neutral"
+    speed: Literal["slow", "normal", "fast"] = "normal"
+    pitch: int = Field(0, ge=-50, le=50)
+    description: str = ""
+
+
+@app.post("/api/v1/characters", summary="Tạo hoặc cập nhật nhân vật cố định của giáo trình")
+async def upsert_character(req: CharacterInput):
+    saved = save_character(req.model_dump())
+    return {"ok": True, "item": saved}
+
+
+@app.delete("/api/v1/characters/{name}", summary="Xóa nhân vật cố định theo tên")
+async def remove_character(name: str):
+    if not delete_character(name):
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy nhân vật '{name}'")
+    return {"ok": True, "deleted": name}
+
+
+@app.get("/api/v1/readings", summary="Xem từ điển cách đọc chữ Hán (readings.yaml & aivis_dict.yaml)")
+async def get_readings():
+    r_path = ROOT / "readings.yaml"
+    a_path = ROOT / "aivis_dict.yaml"
+    return {
+        "ok": True,
+        "readings": load_readings(r_path),
+        "aivis_dict": load_engine_dict(a_path) if a_path.is_file() else [],
+    }
+
+
+class ReadingInput(BaseModel):
+    word: str = Field(..., min_length=1, description="Từ chữ Hán, ví dụ '日本'")
+    reading: str = Field(..., min_length=1, description="Cách đọc kana (hiragana/katakana), ví dụ 'にほん'")
+    accent: int | None = Field(None, ge=0, le=20, description="Vị trí accent (tùy chọn, thêm vào aivis_dict.yaml)")
+
+
+@app.post("/api/v1/readings", summary="Thêm hoặc sửa cách đọc trong từ điển readings.yaml / aivis_dict.yaml")
+async def add_reading(req: ReadingInput):
+    import yaml as _yaml
+    r_path = ROOT / "readings.yaml"
+    current = load_readings(r_path)
+    current[req.word.strip()] = req.reading.strip()
+    try:
+        save_readings(r_path, current)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    synced = False
+    if req.accent is not None:
+        a_path = ROOT / "aivis_dict.yaml"
+        items = load_engine_dict(a_path) if a_path.is_file() else []
+        items = [it for it in items if it.get("surface") != req.word.strip()]
+        items.append({"surface": req.word.strip(), "pronunciation": req.reading.strip(), "accent_type": req.accent})
+        a_path.write_text(_yaml.safe_dump(items, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        if await check_aivis_alive():
+            await aivis_sync_user_dict(items)
+            synced = True
+    return {"ok": True, "word": req.word.strip(), "reading": req.reading.strip(), "aivis_synced": synced}
 
 
 def main():

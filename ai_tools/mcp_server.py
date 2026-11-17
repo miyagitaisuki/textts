@@ -38,67 +38,45 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent  # thư mục chứa server.py (resources/engine trong bộ cài)
 API_URL = (os.environ.get("TEXTTS_API_URL") or "http://127.0.0.1:8000").rstrip("/")
 SERVER_NAME = "textts"
-SERVER_VERSION = "1.3.0"
+SERVER_VERSION = "2.0.0"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
-ENGINES = ["voicevox", "aivis", "edge"]
+ENGINES = ["aivis"]
 
-INSTRUCTIONS = """textts tạo bài nghe hội thoại tiếng Nhật (MP3, bản chậm 0.8x, phụ đề SRT, phiếu học tập HTML có furigana).
+INSTRUCTIONS = """textts tạo bài nghe hội thoại & đề thi nghe JLPT tiếng Nhật bằng AivisSpeech (MP3, bản chậm 0.8x, phụ đề SRT, phiếu học tập HTML có furigana).
 Quy trình nên dùng:
-1. textts_status: xem engine nào đang chạy (VOICEVOX, AivisSpeech; Edge TTS cần Internet).
+1. textts_status: kiểm tra textts API và AivisSpeech Engine (tự khởi động nếu đã cài trên máy).
 2. Chọn giọng: gọi textts_find_voices với mô tả từng vai (vd. "bé gái 8 tuổi vui tươi", "ông già giọng trầm")
    để lấy giọng giáo viên đã ghi chú trong Ngân hàng giọng (biệt danh, giới tính, tuổi, chất giọng; ★ là yêu thích).
-   Dùng đúng 'voice' và 'engine' trả về; các vai trong một bài phải cùng một engine. Nếu ngân hàng trống
-   hoặc không hợp, dùng textts_list_voices để xem toàn bộ giọng của engine.
+   Nếu ngân hàng trống hoặc không hợp, dùng textts_list_voices để xem toàn bộ giọng AivisSpeech.
+   Có thể tự cập nhật ghi chú giọng bằng textts_update_voice_note.
 3. Soạn kịch bản: mỗi câu thoại một dòng, bắt đầu bằng số vai: "[1] こんにちは。" hoặc "1 こんにちは。".
    Chú âm chữ Hán khó bằng 漢字{かな} (ví dụ 面接{めんせつ}). Khoảng lặng thêm: dòng "[pause=1500]".
-   Khoảng lặng giữa các câu được chèn tự động, không cần thêm [pause] cho mỗi câu.
-4. Bối cảnh & hiệu ứng: khi người dùng nêu bối cảnh (công viên, quán cà phê, trời mưa, nhà ga...) hoặc
-   kịch bản có tiếng động (chuông cửa, điện thoại, gõ cửa...), gọi textts_list_sounds (có thể kèm 'query',
-   vd. query="tiếng sấm") để đọc mục lục: mỗi âm có mô tả, từ khóa và "dùng tạm cho". Không cần nghe file.
-   Không có âm "khớp" thì dùng âm "gần đúng" phù hợp nhất (vd. không có sấm thì dùng mưa) và nói rõ với
-   người dùng là đang dùng tạm âm nào.
-   - Nhạc/âm nền: đặt 'bgm' của textts_create_audio là danh sách lớp nền hợp bối cảnh
-     (ưu tiên âm "thư viện của giáo viên" nếu khớp). Có thể chồng nhiều lớp cùng lúc, ví dụ đường phố
-     trời mưa: [{"ref": "mua", "db": -20}, {"ref": "duong-pho", "db": -26}]; lớp phụ nên nhỏ hơn lớp chính.
-     Không có âm phù hợp thì bỏ qua lớp đó và báo người dùng.
-   - Hiệu ứng: chèn một dòng riêng "[sfx=<ref>]" vào đúng chỗ trong kịch bản (vd. "[sfx=chuong-cua]").
-   Chỉ dùng 'ref' có trong danh sách, không tự đặt tên.
-5. Đạo diễn để hội thoại tự nhiên (viết thẳng trong kịch bản):
-   - Cảm xúc/tốc độ từng câu: [2]{emotion=happy, speed=slow} ...  (neutral|happy|sad|angry|surprised)
-   - Hiệu ứng giọng: {fx=phone} qua điện thoại, {fx=whisper} thì thầm, {fx=far} ở xa, {fx=radio} loa thông báo,
-     {fx=echo} phòng vang. To/nhỏ: {vol=-6}. Nói chen: {overlap=400} (bắt đầu trước khi câu trước dứt 400 ms).
-   - Ngừng trước/sau câu: {pre=300} (lặng 300 ms trước câu, vd. trước câu trả lời ngập ngừng),
-     {post=800} (lặng thêm sau câu, vd. sau câu hỏi để học viên kịp nghĩ). Giá trị là ms, số nguyên không âm.
-   - Nhịp đọc (chỉ engine aivis): {tempo=1.2} nhấn nhá nhanh hơn, {tempo=0.8} chậm rãi hơn (0.5..2.0).
-   - Accent (chỉ engine aivis): {accent=2/0} đặt vị trí accent cho từng cụm của câu. Chỉ dùng khi giáo viên đưa
-     sẵn giá trị (lấy từ panel Accent trên giao diện); không tự đoán vì số cụm phải khớp đúng với engine.
-   - Ngập ngừng tự nhiên viết thẳng vào lời: えーと、あの…、うーん。 Câu cảm thán ngắn (はい、へえ、そうですか) giúp sống động.
-   - Cảnh: dòng [bgm=quan-ca-phe] đổi âm nền từ chỗ đó (nhiều lớp: [bgm=mua+duong-pho@-26], tắt: [bgm=off]).
-   - Hiệu ứng: [sfx=chuong-cua] chiếm thời gian riêng; [sfx=dien-thoai-reo, overlay, vol=-6] chồng lên câu kế tiếp.
-   - Bản dịch: thêm " // bản dịch tiếng Việt" cuối mỗi câu (dùng cho bản song ngữ và phiếu học tập).
+4. Bối cảnh & hiệu ứng: gọi textts_list_sounds (kèm 'query') để chọn nhạc nền (bgm) hoặc hiệu ứng ([sfx=<ref>]).
+5. Đạo diễn tự nhiên: {emotion=happy}, {speed=slow}, {fx=phone|whisper|far|radio|echo}, {vol=-6}, {overlap=400},
+   {pre=300}, {post=800}, {tempo=1.2}, {accent=2/0}.
 6. Trình độ: đặt level (N5..N1) để chỉnh tốc độ/khoảng nghỉ; textts_levels cho gợi ý viết theo trình độ.
-7. Nhân vật cố định của giáo trình: textts_list_characters; dùng roles {"1": {"character": "Minh"}} để mọi bài
-   cùng nhân vật giữ nguyên giọng.
-8. textts_check_script (tùy chọn): kiểm tra cú pháp và gợi ý furigana trước khi tạo.
-9. Tạo: textts_create_audio (một bài nghe) hoặc textts_create_lesson (trọn bộ: bài nghe, bản chậm, shadowing,
-   đóng vai, từ vựng, câu hỏi nghe hiểu + đáp án, phiếu in). Khi người dùng muốn "bài học"/"giáo án", dùng lesson
-   và tự soạn vocab (5-12 từ) + questions (2-4 câu kiểu JLPT 聴解).
-10. Sau khi tạo, gọi textts_check_audio để nghe lại; câu đáng ngờ thì thêm chú âm 漢字{かな} rồi tạo lại."""
+7. Nhân vật cố định của giáo trình: textts_list_characters / textts_save_character / textts_delete_character.
+8. Tạo nội dung:
+   - textts_create_audio: một bài nghe hội thoại
+   - textts_create_lesson: trọn bộ bài học (hội thoại, bản chậm, shadowing, đóng vai, từ vựng, câu hỏi, phiếu in)
+   - textts_create_exam: đề thi nghe JLPT hoàn chỉnh theo Mondai (tiếng chuông, hướng dẫn, câu hỏi, hội thoại, khoảng lặng suy nghĩ, phiếu đáp án)
+   - textts_assemble: ghép tự do nhiều đoạn speech / audio / pause
+9. Quản lý bài đã tạo: textts_list_outputs, textts_get_output, textts_rename_output, textts_delete_output.
+10. Kiểm tra & sửa phát âm: gọi textts_check_audio để nghe lại; sửa cách đọc cố định bằng textts_add_reading."""
 
 TOOLS = [
     {
         "name": "textts_status",
-        "description": "Kiểm tra textts API và các engine giọng nói (VOICEVOX, AivisSpeech) có đang chạy không. "
-        "Tự khởi động textts API nếu chưa chạy.",
+        "description": "Kiểm tra textts API và AivisSpeech Engine có đang chạy không. "
+        "Tự khởi động textts API và AivisSpeech Engine (nếu đã cài) khi chưa chạy.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
         "name": "textts_list_voices",
-        "description": "Liệt kê các giọng của một engine. Trường 'value' là mã giọng dùng trong 'roles' của "
-        "textts_create_audio (VOICEVOX/AivisSpeech: mã style dạng số; Edge: tên giọng như ja-JP-NanamiNeural).",
+        "description": "Liệt kê các giọng của AivisSpeech. Trường 'value' là mã giọng dùng trong 'roles'.",
         "inputSchema": {
             "type": "object",
-            "properties": {"engine": {"type": "string", "enum": ENGINES, "default": "voicevox"}},
+            "properties": {"engine": {"type": "string", "enum": ENGINES, "default": "aivis"}},
             "additionalProperties": False,
         },
     },
@@ -162,7 +140,7 @@ TOOLS = [
                     "description": "Kịch bản tiếng Nhật, mỗi câu thoại một dòng bắt đầu bằng số vai: "
                     "'[1] すみません。'. Chú âm: 漢字{かな}. Khoảng lặng thêm: '[pause=1500]'.",
                 },
-                "engine": {"type": "string", "enum": ENGINES, "default": "voicevox"},
+                "engine": {"type": "string", "enum": ENGINES, "default": "aivis"},
                 "roles": {
                     "type": "object",
                     "description": "Cấu hình từng vai theo số vai ('1', '2', ...). Bỏ trống để dùng giọng mặc định.",
@@ -200,8 +178,6 @@ TOOLS = [
                 },
                 "level": {"type": "string", "enum": ["N5", "N4", "N3", "N2", "N1"],
                           "description": "Trình độ người học: chỉnh tốc độ đọc và khoảng nghỉ"},
-                "bilingual": {"type": "boolean", "default": False,
-                              "description": "Đọc bản dịch tiếng Việt (phần sau ' // ' mỗi câu) ngay sau câu đó"},
                 "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
                 "slow": {"type": "boolean", "default": True, "description": "Xuất thêm bản chậm 0.8x"},
                 "srt": {"type": "boolean", "default": True, "description": "Xuất phụ đề .srt"},
@@ -290,6 +266,164 @@ TOOLS += [
         "name": "textts_levels",
         "description": "Gợi ý soạn kịch bản theo trình độ JLPT (N5-N1): độ dài câu, ngữ pháp, tốc độ đọc.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "textts_create_exam",
+        "description": "Tạo đề thi nghe JLPT hoàn chỉnh theo từng Mondai: tự đánh số câu (1番, 2番...), "
+        "chèn tiếng chuông thông báo, đọc hướng dẫn Mondai, hội thoại, lặp lại câu hỏi, khoảng lặng suy nghĩ "
+        "và xuất file MP3 + SRT + timeline + phiếu đề thi & đáp án HTML có furigana.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Tên đề thi, vd. 'Đề thi thử JLPT N5 - Đề 1'"},
+                "filename": {"type": "string", "description": "Tên thư mục/file xuất"},
+                "level": {"type": "string", "enum": ["N5", "N4", "N3", "N2", "N1"]},
+                "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
+                "bell": {"type": "boolean", "default": True, "description": "Chèn tiếng chuông đầu và cuối đề"},
+                "roles": _AUDIO["inputSchema"]["properties"]["roles"],
+                "mondai": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Ví dụ '問題1'"},
+                            "instruction": {"type": "string", "description": "Lời hướng dẫn đầu Mondai"},
+                            "questions": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "number": {"type": "integer", "description": "Số thứ tự câu (bỏ trống tự đánh)"},
+                                        "intro": {"type": "string", "description": "Câu hỏi mở đầu trước hội thoại"},
+                                        "script": {"type": "string", "description": "Kịch bản hội thoại [1]... [2]..."},
+                                        "question": {"type": "string", "description": "Câu hỏi nhắc lại sau hội thoại"},
+                                        "choices": {"type": "array", "items": {"type": "string"}},
+                                        "repeat_question": {"type": "boolean", "default": True},
+                                        "think_ms": {"type": "integer", "default": 5000},
+                                        "answer": {"type": "integer", "description": "Đáp án đúng (1-based)"},
+                                        "explanation": {"type": "string", "description": "Giải thích tiếng Việt"},
+                                    },
+                                },
+                            },
+                        },
+                        "required": ["questions"],
+                    },
+                },
+            },
+            "required": ["title", "mondai"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_list_outputs",
+        "description": "Liệt kê các bài nghe và đề thi đã tạo trong thư mục xuất (output_dir).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "Lọc theo tên thư mục"}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_get_output",
+        "description": "Xem chi tiết danh sách file và timeline của một bài nghe/đề thi đã tạo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "Tên thư mục bài nghe"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_rename_output",
+        "description": "Đổi tên thư mục của một bài nghe/đề thi đã tạo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Tên hiện tại"},
+                "new_name": {"type": "string", "description": "Tên mới"},
+            },
+            "required": ["name", "new_name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_delete_output",
+        "description": "Xóa thư mục bài nghe/đề thi khỏi thư mục xuất.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "Tên thư mục cần xóa"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_update_voice_note",
+        "description": "Thêm hoặc cập nhật ghi chú cho một giọng AivisSpeech trong Ngân hàng giọng (biệt danh, giới tính, tuổi, chất giọng, yêu thích ★).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "voice": {"type": "string", "description": "Mã giọng AivisSpeech"},
+                "label": {"type": "string"},
+                "nickname": {"type": "string"},
+                "gender": {"type": "string", "enum": ["nam", "nữ", ""]},
+                "age": {"type": "integer", "minimum": 1, "maximum": 120},
+                "styles": {"type": "array", "items": {"type": "string"}},
+                "personality": {"type": "array", "items": {"type": "string"}},
+                "description": {"type": "string"},
+                "favorite": {"type": "boolean"},
+                "hidden": {"type": "boolean"},
+            },
+            "required": ["voice"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_save_character",
+        "description": "Tạo hoặc cập nhật nhân vật cố định của giáo trình (Minh, Yui...) để dùng lại giọng giữa các bài.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "voice": {"type": "string"},
+                "emotion": {"type": "string", "enum": ["neutral", "happy", "sad", "angry", "surprised"]},
+                "speed": {"type": "string", "enum": ["slow", "normal", "fast"]},
+                "pitch": {"type": "integer", "minimum": -50, "maximum": 50},
+                "description": {"type": "string"},
+            },
+            "required": ["name", "voice"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_delete_character",
+        "description": "Xóa nhân vật cố định khỏi giáo trình.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "textts_list_readings",
+        "description": "Xem từ điển cách đọc chữ Hán (readings.yaml và aivis_dict.yaml).",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "textts_add_reading",
+        "description": "Thêm hoặc sửa cách đọc chữ Hán trong readings.yaml (và aivis_dict.yaml nếu có accent).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "word": {"type": "string", "description": "Từ chữ Hán, vd. '日本'"},
+                "reading": {"type": "string", "description": "Cách đọc kana, vd. 'にほん'"},
+                "accent": {"type": "integer", "minimum": 0, "maximum": 20, "description": "Vị trí accent (tùy chọn)"},
+            },
+            "required": ["word", "reading"],
+            "additionalProperties": False,
+        },
     },
 ]
 
@@ -387,19 +521,68 @@ def call_api(method: str, path: str, body: dict | None = None, timeout: float = 
 
 # --- Công cụ -------------------------------------------------------------------------------
 
+def _find_aivis_exe() -> Path | None:
+    env_exe = os.environ.get("AIVIS_EXE")
+    if env_exe and Path(env_exe).is_file():
+        return Path(env_exe)
+    appdata = Path(os.environ.get("APPDATA", "")) if os.environ.get("APPDATA") else None
+    candidates = []
+    if appdata:
+        candidates += [appdata / "textts-gui" / "aivis", appdata / "textts" / "aivis"]
+    for base in candidates:
+        if base.is_dir():
+            found = next(base.rglob("run.exe"), None)
+            if found:
+                return found
+    return None
+
+
+def _ensure_aivis_running() -> bool:
+    """Thử bật AivisSpeech Engine nếu chưa chạy và tìm thấy run.exe trên máy."""
+    exe = _find_aivis_exe()
+    if not exe:
+        return False
+    aivis_url = os.environ.get("AIVIS_URL") or "http://127.0.0.1:10101"
+    port = urllib.parse.urlparse(aivis_url).port or 10101
+    log(f"Khởi động AivisSpeech Engine: {exe}")
+    subprocess.Popen(
+        [str(exe), "--host", "127.0.0.1", "--port", str(port)],
+        cwd=str(exe.parent),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"{aivis_url.rstrip('/')}/version", timeout=1.5) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.8)
+    return False
+
+
 def tool_status(_args: dict) -> str:
     h = call_api("GET", "/api/v1/health")
-    yes = lambda ok: "đang chạy" if ok else "chưa bật (bật trong app textts: Engine giọng)"  # noqa: E731
+    aivis_ok = bool(h.get("aivis_connected"))
+    started_note = ""
+    if not aivis_ok and not os.environ.get("TEXTTS_NO_AUTOSTART"):
+        if _ensure_aivis_running():
+            aivis_ok = True
+        elif _find_aivis_exe():
+            started_note = " (đang khởi động nền, vui lòng thử lại sau vài giây)"
+    status_str = "đang chạy" if aivis_ok else f"chưa bật{started_note}"
     return (
         f"textts API {h.get('version', '')} tại {API_URL}: đang chạy\n"
-        f"- VOICEVOX ({h.get('voicevox_url')}): {yes(h.get('voicevox_connected'))}\n"
-        f"- AivisSpeech ({h.get('aivis_url')}): {yes(h.get('aivis_connected'))}\n"
-        f"- Edge TTS: dùng được khi có Internet"
+        f"- Engine mặc định: aivis\n"
+        f"- AivisSpeech ({h.get('aivis_url')}): {status_str}"
     )
 
 
 def tool_list_voices(args: dict) -> str:
-    engine = args.get("engine") or "voicevox"
+    engine = args.get("engine") or "aivis"
     if engine not in ENGINES:
         raise ToolError(f"engine phải là một trong {', '.join(ENGINES)}")
     res = call_api("GET", f"/api/v1/speakers?engine={engine}")
@@ -433,7 +616,7 @@ def _dialogue_body(args: dict) -> dict:
     script = str(args.get("script") or "").strip()
     if not script:
         raise ToolError("script trống")
-    engine = args.get("engine") or "voicevox"
+    engine = args.get("engine") or "aivis"
     if engine not in ENGINES:
         raise ToolError(f"engine phải là một trong {', '.join(ENGINES)}")
     body: dict = {
@@ -449,7 +632,6 @@ def _dialogue_body(args: dict) -> dict:
             **({"bgm": _bgm_layers(args["bgm"])} if args.get("bgm") else {}),
             **({"bgm_db": float(args["bgm_db"])} if args.get("bgm_db") is not None else {}),
             **({"level": args["level"]} if args.get("level") else {}),
-            **({"bilingual": True} if args.get("bilingual") else {}),
         },
     }
     if args.get("roles"):
@@ -614,6 +796,106 @@ def tool_list_sounds(args: dict) -> str:
     return "\n".join(lines)
 
 
+def tool_create_exam(args: dict) -> str:
+    body: dict = {
+        "title": str(args.get("title") or "JLPT 聴解"),
+        **({"filename": str(args["filename"])} if args.get("filename") else {}),
+        "engine": "aivis",
+        **({"level": args["level"]} if args.get("level") else {}),
+        "format": args.get("format") or "mp3",
+        "bell": bool(args.get("bell", True)),
+        "mondai": args.get("mondai") or [],
+    }
+    if args.get("roles"):
+        body["roles"] = {str(k): {kk: vv for kk, vv in v.items() if vv is not None} for k, v in args["roles"].items()}
+    res = call_api("POST", "/api/v1/exam", body, timeout=1800)
+    files = res.get("files", {})
+    return (
+        f"Đã tạo đề thi nghe '{res.get('title')}' ({res.get('mondai_count')} Mondai, {res.get('question_count')} câu, "
+        f"{res.get('duration_s')} giây). Thư mục: {res.get('folder')}\n"
+        f"- Âm thanh đề thi: {files.get('audio')}\n"
+        f"- Phụ đề SRT: {files.get('srt')}\n"
+        f"- Phiếu đề & đáp án HTML: {files.get('worksheet_html')}\n"
+        f"- Timeline: {files.get('timeline_json')}"
+    )
+
+
+def tool_list_outputs(args: dict) -> str:
+    q = f"?q={urllib.parse.quote(str(args['query']))}" if args.get("query") else ""
+    res = call_api("GET", f"/api/v1/outputs{q}")
+    items = res.get("items") or []
+    if not items:
+        return f"Thư mục xuất ({res.get('output_dir')}) chưa có bài nghe nào."
+    lines = [f"{len(items)} bài nghe trong {res.get('output_dir')}:"]
+    for it in items:
+        lines.append(f"- {it['name']} ({it['size_kb']} KB): {', '.join(it['files'])}")
+    return "\n".join(lines)
+
+
+def tool_get_output(args: dict) -> str:
+    name = urllib.parse.quote(str(args["name"]), safe="")
+    res = call_api("GET", f"/api/v1/outputs/{name}")
+    lines = [f"Bài nghe '{res['name']}' tại {res['folder']}:"]
+    for fname, fpath in (res.get("files") or {}).items():
+        lines.append(f"- {fname}: {fpath}")
+    if res.get("timeline"):
+        tl = res["timeline"]
+        lines.append(f"Thời lượng: {round((tl.get('duration_ms') or 0) / 1000, 2)} giây")
+    return "\n".join(lines)
+
+
+def tool_rename_output(args: dict) -> str:
+    name = urllib.parse.quote(str(args["name"]), safe="")
+    res = call_api("PATCH", f"/api/v1/outputs/{name}", {"new_name": args["new_name"]})
+    return f"Đã đổi tên '{res['old_name']}' thành '{res['name']}' ({res['folder']})."
+
+
+def tool_delete_output(args: dict) -> str:
+    name = urllib.parse.quote(str(args["name"]), safe="")
+    res = call_api("DELETE", f"/api/v1/outputs/{name}")
+    return f"Đã xóa bài nghe '{res['deleted']}'."
+
+
+def tool_update_voice_note(args: dict) -> str:
+    body = {k: v for k, v in args.items() if v is not None}
+    body["engine"] = "aivis"
+    res = call_api("POST", "/api/v1/voice-bank", body)
+    return f"Đã cập nhật ghi chú cho giọng {res['item'].get('key')}."
+
+
+def tool_save_character(args: dict) -> str:
+    body = {k: v for k, v in args.items() if v is not None}
+    body["engine"] = "aivis"
+    res = call_api("POST", "/api/v1/characters", body)
+    c = res["item"]
+    return f"Đã lưu nhân vật '{c['name']}' (voice={c['voice']}, {c['emotion']}, {c['speed']})."
+
+
+def tool_delete_character(args: dict) -> str:
+    name = urllib.parse.quote(str(args["name"]), safe="")
+    res = call_api("DELETE", f"/api/v1/characters/{name}")
+    return f"Đã xóa nhân vật '{res['deleted']}'."
+
+
+def tool_list_readings(_args: dict) -> str:
+    res = call_api("GET", "/api/v1/readings")
+    r = res.get("readings") or {}
+    a = res.get("aivis_dict") or []
+    lines = [f"Từ điển readings.yaml ({len(r)} từ):"]
+    lines += [f"- {k} -> {v}" for k, v in list(r.items())[:50]]
+    if a:
+        lines.append(f"Từ điển Aivis ({len(a)} từ):")
+        lines += [f"- {it.get('surface')} -> {it.get('pronunciation')} (accent={it.get('accent_type')})" for it in a[:30]]
+    return "\n".join(lines)
+
+
+def tool_add_reading(args: dict) -> str:
+    body = {k: v for k, v in args.items() if v is not None}
+    res = call_api("POST", "/api/v1/readings", body)
+    sync_msg = " và đã đồng bộ lên AivisSpeech" if res.get("aivis_synced") else ""
+    return f"Đã lưu cách đọc: {res['word']} -> {res['reading']}{sync_msg}."
+
+
 HANDLERS = {
     "textts_status": tool_status,
     "textts_list_sounds": tool_list_sounds,
@@ -622,9 +904,19 @@ HANDLERS = {
     "textts_check_script": tool_check_script,
     "textts_create_audio": tool_create_audio,
     "textts_create_lesson": tool_create_lesson,
+    "textts_create_exam": tool_create_exam,
     "textts_check_audio": tool_check_audio,
     "textts_assemble": tool_assemble,
     "textts_list_characters": tool_list_characters,
+    "textts_save_character": tool_save_character,
+    "textts_delete_character": tool_delete_character,
+    "textts_update_voice_note": tool_update_voice_note,
+    "textts_list_outputs": tool_list_outputs,
+    "textts_get_output": tool_get_output,
+    "textts_rename_output": tool_rename_output,
+    "textts_delete_output": tool_delete_output,
+    "textts_list_readings": tool_list_readings,
+    "textts_add_reading": tool_add_reading,
     "textts_levels": tool_levels,
 }
 

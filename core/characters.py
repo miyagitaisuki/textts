@@ -41,3 +41,52 @@ def find_character(name: str, engine: str | None = None, path: Path | None = Non
         if slug(c["name"]) == key:
             return c
     return None
+
+
+def save_character(char: dict, path: Path | None = None) -> dict:
+    """Tạo mới hoặc cập nhật nhân vật cố định theo tên trong presets.json."""
+    target = path or characters_path()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            data = []
+    except (OSError, ValueError):
+        data = []
+    key = slug(char["name"])
+    entry = {
+        "name": str(char["name"]).strip(),
+        "engine": char.get("engine") or "aivis",
+        "voice": str(char["voice"]),
+        "emotion": char.get("emotion") or "neutral",
+        "speed": char.get("speed") or "normal",
+        "pitch": int(char.get("pitch") or 0),
+        "description": char.get("description") or "",
+    }
+    updated = False
+    for i, item in enumerate(data):
+        if isinstance(item, dict) and slug(item.get("name", "")) == key:
+            data[i] = entry
+            updated = True
+            break
+    if not updated:
+        data.append(entry)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return entry
+
+
+def delete_character(name: str, path: Path | None = None) -> bool:
+    """Xóa nhân vật cố định theo tên khỏi presets.json. Trả về True nếu có xóa."""
+    target = path or characters_path()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            return False
+    except (OSError, ValueError):
+        return False
+    key = slug(name)
+    kept = [c for c in data if not (isinstance(c, dict) and slug(c.get("name", "")) == key)]
+    if len(kept) == len(data):
+        return False
+    target.write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
+    return True

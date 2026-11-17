@@ -6,7 +6,7 @@ import RolePanel from "./RolePanel.jsx";
 afterEach(cleanup);
 
 const ROLES = {
-  1: { name: "A", voice: "ja-JP-KeitaNeural", emotion: "neutral", speed: "normal", pitch: 0, gain_db: 0 },
+  1: { name: "A", voice: "1431611904", emotion: "neutral", speed: "normal", pitch: 0, gain_db: 0 },
 };
 
 function renderPanel(library, voices = []) {
@@ -17,28 +17,13 @@ function renderPanel(library, voices = []) {
 
 describe("RolePanel voices", () => {
   it("uses the engine voice list when provided", () => {
-    renderPanel(undefined, [{ value: "3", label: "ずんだもん (ノーマル)" }]);
-    expect(screen.getByRole("option", { name: "ずんだもん (ノーマル)" })).toBeTruthy();
+    renderPanel(undefined, [{ value: "1431611904", label: "まい (ノーマル)" }]);
+    expect(screen.getByRole("option", { name: "まい (ノーマル)" })).toBeTruthy();
   });
 
-  it("falls back to the Edge voices when no list is given", () => {
-    renderPanel(undefined, []);
-    expect(screen.getByRole("option", { name: "ja-JP-NanamiNeural" })).toBeTruthy();
-  });
-
-  it("does not offer Edge voices for VOICEVOX when its list is empty", () => {
-    render(<RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} engine="voicevox" />);
-    expect(screen.queryByRole("option", { name: "ja-JP-NanamiNeural" })).toBeNull();
-    expect(screen.getByText(/Chưa lấy được danh sách giọng của VOICEVOX/)).toBeTruthy();
-  });
-
-  it("switches engine from the selector", () => {
-    const onChangeEngine = vi.fn();
-    render(
-      <RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} engine="edge" onChangeEngine={onChangeEngine} />,
-    );
-    fireEvent.change(screen.getByLabelText("Engine đọc"), { target: { value: "voicevox" } });
-    expect(onChangeEngine).toHaveBeenCalledWith("voicevox");
+  it("shows waiting notice for AivisSpeech when its list is empty", () => {
+    render(<RolePanel roles={ROLES} onChange={() => {}} disabled={false} voices={[]} engine="aivis" />);
+    expect(screen.getByText(/Chưa lấy được danh sách giọng của AivisSpeech/)).toBeTruthy();
   });
 });
 
@@ -48,7 +33,7 @@ describe("RolePanel preset library", () => {
     renderPanel({ presets: [], onSave, onApply: () => {}, onRemove: () => {} });
     fireEvent.change(screen.getByPlaceholderText("Tên nhân vật (vd. Minh)"), { target: { value: "Vui" } });
     fireEvent.click(screen.getByRole("button", { name: "Lưu nhân vật" }));
-    expect(onSave).toHaveBeenCalledWith("Vui", ROLES[1], { engine: "edge", description: "" });
+    expect(onSave).toHaveBeenCalledWith("Vui", ROLES[1], { engine: "aivis", description: "" });
   });
 
   it("shows the validation error from an empty name", () => {

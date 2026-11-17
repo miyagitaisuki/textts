@@ -18,7 +18,8 @@ def test_health_endpoint():
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
-    assert "voicevox_connected" in data
+    assert data["default_engine"] == "aivis"
+    assert "aivis_connected" in data
     assert "version" in data
 
 
@@ -40,31 +41,32 @@ def test_preview_script_invalid():
     assert res.status_code == 400
 
 
-@patch("server.list_speakers", new_callable=AsyncMock)
+@patch("server.aivis_list_speakers", new_callable=AsyncMock)
 def test_speakers_endpoint_success(mock_list):
-    mock_list.return_value = [{"value": "3", "label": "ずんだもん (ノーマル)"}]
+    mock_list.return_value = [{"value": "1431611904", "label": "まい (ノーマル)"}]
     res = client.get("/api/v1/speakers")
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is True
+    assert data["engine"] == "aivis"
     assert len(data["speakers"]) == 1
 
 
-@patch("server.list_speakers", new_callable=AsyncMock)
+@patch("server.aivis_list_speakers", new_callable=AsyncMock)
 def test_speakers_endpoint_unavailable(mock_list):
     mock_list.side_effect = Exception("Connection refused")
     res = client.get("/api/v1/speakers")
     assert res.status_code == 503
-    assert "VOICEVOX Engine" in res.json()["detail"]
+    assert "AivisSpeech Engine" in res.json()["detail"]
 
 
 @patch("server.synth_all", new_callable=AsyncMock)
-@patch("server.check_voicevox_alive", new_callable=AsyncMock)
-def test_generate_dialogue_mocked(mock_vv_alive, mock_synth, tmp_path):
+@patch("server.check_aivis_alive", new_callable=AsyncMock)
+def test_generate_dialogue_mocked(mock_aivis_alive, mock_synth, tmp_path):
     from pydub import AudioSegment
     import server
 
-    mock_vv_alive.return_value = True
+    mock_aivis_alive.return_value = True
 
     # Giả lập synth_all thành công
     async def fake_synth(project, provider, cache_dir):
@@ -80,7 +82,7 @@ def test_generate_dialogue_mocked(mock_vv_alive, mock_synth, tmp_path):
     payload = {
         "title": "Bai_Test_API",
         "script": "[1] こんにちは。\n[2] おはようございます。",
-        "engine": "voicevox",
+        "engine": "aivis",
         "options": {
             "format": "wav",
             "slow": True,
@@ -149,7 +151,7 @@ def test_generate_dialogue_invalid_role_play():
     payload = {
         "title": "Bai_Test_Role_Play",
         "script": "[1] こんにちは。\n[2] おはようございます。",
-        "engine": "edge",
+        "engine": "aivis",
         "options": {"role_play": "99"},
     }
     res = client.post("/api/v1/dialogue", json=payload)
@@ -158,28 +160,23 @@ def test_generate_dialogue_invalid_role_play():
 
 
 @patch("server.aivis_list_speakers", new_callable=AsyncMock)
-def test_speakers_endpoint_aivis_and_edge(mock_aivis_speakers):
+def test_speakers_endpoint_aivis(mock_aivis_speakers):
     mock_aivis_speakers.return_value = [{"value": "888753760", "label": "jvnv-F1 (ノーマル)"}]
     res_aivis = client.get("/api/v1/speakers?engine=aivis")
     assert res_aivis.status_code == 200
     assert res_aivis.json()["engine"] == "aivis"
     assert len(res_aivis.json()["speakers"]) == 1
 
-    res_edge = client.get("/api/v1/speakers?engine=edge")
-    assert res_edge.status_code == 200
-    assert res_edge.json()["engine"] == "edge"
-    assert len(res_edge.json()["speakers"]) > 0
-
 
 
 @patch("server.synth_all", new_callable=AsyncMock)
-@patch("server.check_voicevox_alive", new_callable=AsyncMock)
-def test_dialogue_stacks_background_layers_from_the_library(mock_vv_alive, mock_synth, tmp_path, monkeypatch):
+@patch("server.check_aivis_alive", new_callable=AsyncMock)
+def test_dialogue_stacks_background_layers_from_the_library(mock_aivis_alive, mock_synth, tmp_path, monkeypatch):
     from pydub import AudioSegment
     from pydub.generators import Sine
     import server
 
-    mock_vv_alive.return_value = True
+    mock_aivis_alive.return_value = True
     lib = tmp_path / "lib"
     (lib / "my" / "bgm").mkdir(parents=True)
     Sine(300).to_audio_segment(800).export(lib / "my" / "bgm" / "mua.wav", format="wav")
@@ -228,8 +225,8 @@ def test_voice_bank_endpoint_ranks_voices_for_a_role(tmp_path, monkeypatch):
 
 
 @patch("server.synth_cached", new_callable=AsyncMock)
-@patch("server.check_voicevox_alive", new_callable=AsyncMock)
-def test_assemble_joins_speech_files_and_pauses(mock_vv_alive, mock_synth, tmp_path):
+@patch("server.check_aivis_alive", new_callable=AsyncMock)
+def test_assemble_joins_speech_files_and_pauses(mock_aivis_alive, mock_synth, tmp_path):
     """Ghép đề nghe: lời đọc (engine), file gửi kèm (base64) và khoảng lặng theo đúng thứ tự."""
     import base64
     import io
@@ -237,7 +234,7 @@ def test_assemble_joins_speech_files_and_pauses(mock_vv_alive, mock_synth, tmp_p
     from pydub.generators import Sine
     import server
 
-    mock_vv_alive.return_value = True
+    mock_aivis_alive.return_value = True
     spoken = tmp_path / "spoken.wav"
     Sine(440).to_audio_segment(duration=700).export(spoken, format="wav")
     mock_synth.return_value = spoken
