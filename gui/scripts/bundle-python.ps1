@@ -98,7 +98,7 @@ Copy-Item (Join-Path $SzDir "x64\7za.exe") (Join-Path $SzOut "7za.exe")
 if (-not (Test-Path (Join-Path $SzOut "7za.exe"))) { throw "Thiếu 7za.exe sau khi giải nén" }
 
 # 6. Kiểm tra nhanh: import được các module chính và ffmpeg chạy được
-& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, edge_tts, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
+& (Join-Path $PyDir "python.exe") -c "import yaml, pydantic, pydub, numpy, pyloudnorm, tenacity, pyopenjtalk, aiohttp, fastapi, uvicorn; print('imports OK')"
 if ($LASTEXITCODE -ne 0) { throw "Kiểm tra import thất bại" }
 # Chạy hết lệnh rồi mới lấy dòng đầu: "| Select-Object -First 1" cắt luồng giữa chừng,
 # tiến trình bị dừng và $LASTEXITCODE khác 0 dù chương trình chạy được.
