@@ -16,7 +16,6 @@ sys.path.insert(0, str(ROOT))
 
 from core.audio import loudness_normalize, time_stretch  # noqa: E402
 from providers.base import SynthRequest  # noqa: E402
-from providers.voicevox import VoicevoxProvider  # noqa: E402
 import tts  # noqa: E402
 from core.models import LineItem, Project  # noqa: E402
 
@@ -35,59 +34,6 @@ def _wav_bytes(seg: AudioSegment) -> bytes:
     buf = io.BytesIO()
     seg.export(buf, format="wav")
     return buf.getvalue()
-
-
-# ---------- VOICEVOX ----------
-
-def test_voicevox_calls_audio_query_then_synthesis_with_scales(tmp_path):
-    seen = {}
-    wav = _wav_bytes(_tone(300))
-
-    async def audio_query(request):
-        seen["query_params"] = dict(request.query)
-        return web.json_response({"text": request.query["text"], "speedScale": 1.0, "pitchScale": 0.0})
-
-    async def synthesis(request):
-        seen["synth_params"] = dict(request.query)
-        seen["body"] = await request.json()
-        return web.Response(body=wav, content_type="audio/wav")
-
-    async def run():
-        app = web.Application()
-        app.router.add_post("/audio_query", audio_query)
-        app.router.add_post("/synthesis", synthesis)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "127.0.0.1", 0)
-        await site.start()
-        port = site._server.sockets[0].getsockname()[1]
-        try:
-            out = tmp_path / "x.wav"
-            provider = VoicevoxProvider(base_url=f"http://127.0.0.1:{port}")
-            await provider.synthesize(
-                SynthRequest(text="はい", voice="3", speed="slow", pitch=-50), str(out)
-            )
-            return out
-        finally:
-            await runner.cleanup()
-
-    out = asyncio.run(run())
-    assert out.read_bytes() == wav
-    assert seen["query_params"] == {"text": "はい", "speaker": "3"}
-    assert seen["synth_params"] == {"speaker": "3"}
-    assert seen["body"]["speedScale"] == 0.85
-    assert seen["body"]["pitchScale"] == -0.15  # bị chặn trong khoảng ±0.15
-
-
-def test_voicevox_ext_is_wav_and_registered():
-    assert VoicevoxProvider.ext == "wav"
-    assert tts.PROVIDERS["voicevox"] is VoicevoxProvider
-
-
-def test_voicevox_rejects_unknown_speed(tmp_path):
-    with pytest.raises(ValueError):
-        asyncio.run(VoicevoxProvider("http://127.0.0.1:1").synthesize(
-            SynthRequest(text="はい", voice="3", speed="turbo"), str(tmp_path / "x.wav")))
 
 
 # ---------- chậm và LUFS ----------

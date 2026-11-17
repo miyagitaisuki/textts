@@ -57,8 +57,8 @@ export default function TimingPanel({ timing = {}, onChange, disabled }) {
           </span>
         </label>
       ))}
-      <label className="timing-row" title="Kéo dài chỗ ngắt ở dấu 、 (chỉ VOICEVOX/AivisSpeech; 1.0 = như engine)">
-        <span>Ngắt ở 、 (VOICEVOX/Aivis)</span>
+      <label className="timing-row" title="Kéo dài chỗ ngắt ở dấu 、 (chỉ AivisSpeech; 1.0 = như engine)">
+        <span>Ngắt ở 、 (AivisSpeech)</span>
         <span className="timing-input">
           <input
             type="number"

@@ -228,7 +228,7 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
                   <li>Trong Claude Desktop, mở <strong>Settings → Developer → Edit Config</strong> (file <code>claude_desktop_config.json</code>).</li>
                   <li>Dán cấu hình dưới đây (đã điền đường dẫn trên máy này). Nếu file đã có <code>mcpServers</code>, chỉ thêm mục <code>"textts"</code>.</li>
                   <li>Lưu file rồi thoát hẳn và mở lại Claude Desktop. Công cụ <strong>textts</strong> sẽ xuất hiện trong khung chat.</li>
-                  <li>Bật VOICEVOX hoặc AivisSpeech trong textts nếu muốn dùng các engine này (Edge TTS chỉ cần Internet).</li>
+                  <li>Bật AivisSpeech trong textts nếu chưa tự chạy.</li>
                 </ol>
                 <div className="code-block">
                   <pre>{mcpConfig}</pre>
@@ -262,10 +262,10 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
                     <code>POST /api/v1/preview-script</code>: Phân tích kịch bản và tự động gợi ý chú âm Furigana thông minh cho giáo viên duyệt trước khi tạo audio.
                   </li>
                   <li>
-                    <code>GET /api/v1/speakers?engine=voicevox|aivis|edge</code>: Lấy danh sách giọng đọc của từng engine.
+                    <code>GET /api/v1/speakers?engine=aivis</code>: Lấy danh sách giọng đọc của AivisSpeech.
                   </li>
                   <li>
-                    <code>GET /api/v1/health</code>: Kiểm tra trạng thái server và kết nối VOICEVOX / AivisSpeech.
+                    <code>GET /api/v1/health</code>: Kiểm tra trạng thái server và kết nối AivisSpeech.
                   </li>
                 </ul>
               </div>
@@ -337,32 +337,12 @@ python tts.py kịch_bản.txt -o output/bai_hoc.mp3 --srt`}
                   <li><strong>Backend & Xử lý âm thanh:</strong> Python 3.11, Pydantic v2, PyDub, PyOpenJTalk (Offline NLP), PyLoudNorm (ITU-R BS.1770-4 LUFS)</li>
                   <li><strong>Hỗ trợ Engine:</strong>
                     <ul style={{ marginTop: 4 }}>
-                      <li><strong>Edge-TTS:</strong> Miễn phí, trực tuyến, giọng đọc tự nhiên của Microsoft.</li>
-                      <li><strong>VOICEVOX:</strong> Chạy offline hoàn toàn trên máy tính, kho giọng nhân vật phong phú (Zundamon, Shikoku Metan...).</li>
+                      <li><strong>AivisSpeech:</strong> Chạy offline hoàn toàn trên máy tính bằng GPU/CPU với chất lượng tự nhiên cao.</li>
                       <li><strong>AivisSpeech:</strong> Chạy offline bằng CPU, model Style-BERT-VITS2 (bộ giọng JVNV chất lượng studio với 5 sắc thái cảm xúc).</li>
                     </ul>
                   </li>
                   <li><strong>Giấy phép:</strong> MIT License — Hoàn toàn miễn phí, dành cho giáo dục và sử dụng cá nhân phi thương mại.</li>
                 </ul>
-              </div>
-
-              <div className="guide-section">
-                <h4>Ghi công VOICEVOX</h4>
-                <p>
-                  textts có nút tải <strong>VOICEVOX ENGINE</strong> phiên bản 0.26.1 (bản CPU cho Windows, tải theo yêu cầu) và tự khởi động engine khi đã cài. Engine dùng giấy phép LGPL v3 hoặc giấy phép riêng, mã nguồn tại{" "}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.textts?.openExternalUrl?.("https://github.com/VOICEVOX/voicevox_engine");
-                    }}
-                  >
-                    github.com/VOICEVOX/voicevox_engine
-                  </a>.
-                </p>
-                <p>
-                  Khi đăng tải hoặc phát hành âm thanh do VOICEVOX tạo, hãy ghi credit theo dạng <code>VOICEVOX:&lt;tên nhân vật&gt;</code> (ví dụ <code>VOICEVOX:ずんだもん</code>) và tuân theo điều khoản sử dụng riêng của từng giọng.
-                </p>
               </div>
 
               <div className="guide-section">

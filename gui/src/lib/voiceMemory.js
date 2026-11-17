@@ -6,14 +6,14 @@ export const MEMORY_KEY = "textts.voiceMemory";
 const FIELDS = ["voice", "emotion", "speed", "pitch"];
 
 export function emptyMemory() {
-  return { engine: "edge", roles: {} };
+  return { engine: "aivis", roles: {} };
 }
 
 export function loadMemory(storage) {
   try {
     const m = JSON.parse(storage.getItem(MEMORY_KEY) || "null");
     if (m && typeof m === "object" && m.roles && typeof m.roles === "object") {
-      return { engine: typeof m.engine === "string" ? m.engine : "edge", roles: m.roles };
+      return { engine: "aivis", roles: m.roles };
     }
   } catch {
     // dữ liệu hỏng: dùng bộ nhớ rỗng
@@ -40,7 +40,7 @@ function keysOf(id, role) {
 /** Ghi nhớ engine và cấu hình giọng của mọi vai trong dự án. Trả về bộ nhớ mới (không sửa bản cũ). */
 export function rememberProject(memory, project) {
   if (!project?.roles) return memory;
-  const engine = project.engine || "edge";
+  const engine = project.engine || "aivis";
   const forEngine = { ...(memory.roles[engine] || {}) };
   for (const [id, role] of Object.entries(project.roles)) {
     const value = pick(role);

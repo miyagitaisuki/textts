@@ -43,9 +43,6 @@ from core.models import (
 from core.parser import ScriptError, parse_script
 from core.worksheet import worksheet_html
 from providers.base import SynthRequest, TTSProvider
-from providers.edge import VOICES as EDGE_VOICES
-from providers.edge import EdgeProvider
-from providers.voicevox import VoicevoxProvider, list_speakers
 from providers.aivis import AivisProvider, list_speakers as aivis_list_speakers, sync_user_dict as aivis_sync_user_dict
 
 ROOT = Path(__file__).resolve().parent
@@ -53,8 +50,6 @@ ROLE_FIELDS = ("voice", "emotion", "speed", "pitch")
 MAX_CONCURRENCY = 3
 
 PROVIDERS: dict[str, type[TTSProvider]] = {
-    EdgeProvider.name: EdgeProvider,
-    VoicevoxProvider.name: VoicevoxProvider,
     AivisProvider.name: AivisProvider,
 }
 
@@ -233,25 +228,6 @@ async def sample_voice(provider: TTSProvider, req: SynthRequest, cache_dir: Path
     AudioSegment.from_file(cached).export(output, format=output.suffix.lstrip(".").lower() or "mp3")
 
 
-async def add_translations(project: Project, build_items: list[dict], voice: str, cache_dir: Path) -> list[dict]:
-    """Chèn bản dịch (đọc bằng Edge) sau mỗi câu có '// bản dịch'."""
-    lines = [it for it in project.items if isinstance(it, LineItem) and it.translation]
-    if not lines:
-        raise RuntimeError("chưa có bản dịch: viết sau mỗi câu ' // bản dịch tiếng Việt'")
-    edge = PROVIDERS["edge"]()
-    paths = await asyncio.gather(*(synth_cached(edge, SynthRequest(text=it.translation, voice=voice), cache_dir)
-                                   for it in lines))
-    by_id = {it.id: str(p) for it, p in zip(lines, paths)}
-    out = []
-    for it in build_items:
-        out.append(it)
-        if it.get("type") == "line" and it["id"] in by_id:
-            out += [{"type": "pause", "ms": 450},
-                    {"type": "sfx", "id": f"{it['id']}-vi", "path": by_id[it["id"]], "translation": True},
-                    {"type": "pause", "ms": 600}]
-    return out
-
-
 def run_check(project: Project, cache_dir: Path) -> int:
     """--check: tổng hợp (có cache) rồi nghe lại từng câu, in JSON kết quả. Mã thoát 1 nếu có câu đáng ngờ."""
     from core import qc
@@ -385,14 +361,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--roles", type=Path, default=ROOT / "roles.yaml")
     ap.add_argument("--sample", choices=sorted(PROVIDERS), metavar="ENGINE",
                     help="đọc thử một câu mẫu bằng giọng --voice của engine rồi ghi ra -o (chọn nhanh giọng)")
-    ap.add_argument("--voice", help="giọng cho --sample (tên giọng Edge hoặc mã style VOICEVOX/AivisSpeech)")
+    ap.add_argument("--voice", help="giọng cho --sample (mã style AivisSpeech)")
     ap.add_argument("--emotion", default="neutral", choices=["neutral", "happy", "sad", "angry", "surprised"],
                     help="cảm xúc cho --sample")
     ap.add_argument("--speed", default="normal", choices=["slow", "normal", "fast"], help="tốc độ cho --sample")
     ap.add_argument("--pitch", type=int, default=0, help="cao độ (Hz) cho --sample")
     ap.add_argument("--sample-text", default=SAMPLE_TEXT, help="câu đọc mẫu cho --sample")
     ap.add_argument("--list-voices", choices=sorted(PROVIDERS), metavar="ENGINE",
-                    help="in danh sách giọng của engine dạng JSON (edge, voicevox, aivis) rồi thoát")
+                    help="in danh sách giọng của engine dạng JSON (aivis) rồi thoát")
     ap.add_argument("--batch", type=Path, metavar="DIR",
                     help="xử lý mọi file .txt trong thư mục (cần --outdir)")
     ap.add_argument("--outdir", type=Path, metavar="DIR", help="thư mục đầu ra cho --batch")
@@ -422,9 +398,6 @@ def main(argv: list[str] | None = None) -> int:
                     help="khoảng lặng thêm sau mỗi câu khi dùng --shadow (mặc định 1500 ms)")
     ap.add_argument("--level", choices=["N5", "N4", "N3", "N2", "N1"],
                     help="nhịp đọc theo trình độ: N5 chậm và nghỉ lâu ... N1 gần tự nhiên")
-    ap.add_argument("--bilingual", action="store_true",
-                    help="bản song ngữ: đọc bản dịch (sau '//' của mỗi câu) ngay sau câu đó, giọng Edge (cần Internet)")
-    ap.add_argument("--translation-voice", default="vi-VN-HoaiMyNeural", help="giọng Edge đọc bản dịch")
     ap.add_argument("--check", action="store_true",
                     help="tự kiểm tra phát âm: nghe lại từng câu (Whisper), in JSON các câu đáng ngờ rồi thoát")
     ap.add_argument("--worksheet", type=Path, metavar="FILE.html",
@@ -460,12 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Đã đồng bộ {n} từ vào từ điển của AivisSpeech")
         return 0
     if args.list_voices:
-        if args.list_voices == "voicevox":
-            voices = asyncio.run(list_speakers())
-        elif args.list_voices == "aivis":
-            voices = asyncio.run(aivis_list_speakers(only_normal=True))
-        else:
-            voices = [{"value": v, "label": v} for v in EDGE_VOICES]
+        voices = asyncio.run(aivis_list_speakers(only_normal=True))
         print(json.dumps(voices, ensure_ascii=False))
         return 0
     if args.batch:
@@ -573,12 +541,6 @@ def main(argv: list[str] | None = None) -> int:
     build_items = build_items_for(project, base)
     gains = {k: r.gain_db for k, r in project.roles.items()}
     timing = project.timing.model_dump()
-    if args.bilingual:
-        try:
-            build_items = asyncio.run(add_translations(project, build_items, args.translation_voice, args.cache_dir))
-        except (RuntimeError, OSError) as exc:
-            print(f"Lỗi bản song ngữ: {exc}", file=sys.stderr)
-            return 2
     markers: list[dict] = []
     audio, placed = build(build_items, timing, role_gains=gains, markers=markers)
     if args.role_play or args.shadow:

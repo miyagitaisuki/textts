@@ -11,7 +11,6 @@ import Inspector from "./components/Inspector.jsx";
 import Recorder from "./components/Recorder.jsx";
 import LineTable from "./components/LineTable.jsx";
 import AivisButton from "./components/AivisButton.jsx";
-import VoicevoxButton from "./components/VoicevoxButton.jsx";
 import Timeline from "./components/Timeline.jsx";
 import AccentPanel from "./components/AccentPanel.jsx";
 import TransportBar from "./components/TransportBar.jsx";
@@ -52,7 +51,7 @@ import {
 import Ribbon, { RibbonButton, RibbonGroup } from "./components/Ribbon.jsx";
 import { applyMemory, fillMissingVoices, loadMemory, rememberProject, saveMemory } from "./lib/voiceMemory.js";
 
-const ENGINE_LABELS = { edge: "Edge TTS", voicevox: "VOICEVOX", aivis: "AivisSpeech" };
+const ENGINE_LABELS = { aivis: "AivisSpeech" };
 // "Xuất tất cả": bản chính + phụ đề + bản chậm + phiếu học tập + từng câu riêng.
 const EXPORT_ALL = { srt: true, slow: true, worksheet: true, exportLines: true };
 const SHORTCUTS = [
@@ -110,7 +109,7 @@ export default function App() {
   const [samplingId, setSamplingId] = useState(null);
   const sampleAudioRef = useRef(null);
   const sampleReqRef = useRef(0); // tăng mỗi lần bấm/dừng: kết quả đến muộn của lần trước bị bỏ qua
-  const [pasteEngine, setPasteEngine] = useState(() => memoryRef.current.engine || "edge");
+  const [pasteEngine, setPasteEngine] = useState("aivis");
   // Dự án vừa nạp từ đĩa: không ghi nhớ giọng cho tới khi người dùng sửa.
   const loadedRef = useRef(null);
   const [showExport, setShowExport] = useState(false);
@@ -129,7 +128,7 @@ export default function App() {
     port: 8000,
     docsUrl: "http://127.0.0.1:8000/docs",
   });
-  const [voicevoxOk, setVoicevoxOk] = useState(false);
+  const [aivisOk, setAivisOk] = useState(false);
   const [outputRoot, setOutputRoot] = useState("");
 
   // Timeline & Playback
@@ -252,15 +251,15 @@ export default function App() {
     if (window.textts?.getApiServerStatus) {
       window.textts.getApiServerStatus().then((s) => s && setApiServer(s));
     }
-    if (window.textts?.getVoicevoxStatus) {
-      window.textts.getVoicevoxStatus().then((res) => setVoicevoxOk(Boolean(res?.ok)));
+    if (window.textts?.getAivisStatus) {
+      window.textts.getAivisStatus().then((res) => setAivisOk(Boolean(res?.running)));
     }
     window.textts?.getOutputRoot?.().then(setOutputRoot);
 
     const unsubAbout = window.textts?.onShowAbout?.(() => setShowAbout(true));
     const interval = setInterval(() => {
       window.textts?.getApiServerStatus?.().then((s) => s && setApiServer(s));
-      window.textts?.getVoicevoxStatus?.().then((res) => setVoicevoxOk(Boolean(res?.ok)));
+      window.textts?.getAivisStatus?.().then((res) => setAivisOk(Boolean(res?.running)));
     }, 5000);
     return () => {
       clearInterval(interval);
@@ -323,11 +322,11 @@ export default function App() {
   const items = project?.items ?? [];
   const lineCount = useMemo(() => items.filter((it) => it.type === "line").length, [items]);
 
-  // Tải lại danh sách giọng khi mở dự án, đổi engine (kể cả hoàn tác) hoặc VOICEVOX vừa bật.
-  const projectEngine = project?.engine || "edge";
+  // Tải lại danh sách giọng khi mở dự án hoặc AivisSpeech vừa bật.
+  const projectEngine = "aivis";
   useEffect(() => {
     if (filePath) loadVoices(projectEngine);
-  }, [filePath, projectEngine, voicevoxOk]);
+  }, [filePath, projectEngine, aivisOk]);
 
   // Ghi nhớ engine và giọng mỗi khi người dùng đổi cấu hình vai, để lần nhập kịch bản sau tự gán lại.
   useEffect(() => {
@@ -498,19 +497,12 @@ export default function App() {
 
   // Dự án vừa tạo từ kịch bản: dùng engine và giọng đã nhớ cho từng nhân vật, rồi ghi lại file.
   // engineChoice: engine người dùng chọn lúc nhập (mặc định engine dùng lần trước).
-  async function prepareImport(res, engineChoice) {
-    let engine = engineChoice || memoryRef.current.engine || "edge";
-    let fallback = "";
-    let values = [];
-    if (engine !== "edge") {
-      values = ((await window.textts?.listVoices?.(engine)) ?? []).map((v) => v.value);
-      if (!values.length) {
-        fallback = `${ENGINE_LABELS[engine] ?? engine} chưa bật nên tạm dùng Edge TTS`;
-        engine = "edge";
-      }
-    }
+  async function prepareImport(res) {
+    const engine = "aivis";
+    const values = ((await window.textts?.listVoices?.(engine)) ?? []).map((v) => v.value);
+    const fallback = values.length ? "" : "AivisSpeech chưa bật";
     const { project, applied } = applyMemory(res.data, memoryRef.current, engine);
-    const data = engine === "edge" ? project : fillMissingVoices(project, values);
+    const data = fillMissingVoices(project, values);
     if (JSON.stringify(data) !== JSON.stringify(res.data)) {
       await window.textts?.saveProject?.(res.filePath, data);
     }
@@ -617,11 +609,10 @@ export default function App() {
     loadOutputFor(res.filePath, exportOpts.format, res.data?.output_name || "");
   }
 
-  // Lấy danh sách giọng của engine (Edge/VOICEVOX/AivisSpeech) qua tts.py --list-voices.
-  async function loadVoices(engine) {
-    const list = (await window.textts?.listVoices?.(engine || "edge")) ?? [];
-    // Bỏ qua kết quả trễ nếu người dùng đã đổi sang engine khác trong lúc chờ.
-    if ((projectRef.current?.engine || "edge") === (engine || "edge")) setVoices(list);
+  // Lấy danh sách giọng của AivisSpeech qua tts.py --list-voices.
+  async function loadVoices() {
+    const list = (await window.textts?.listVoices?.("aivis")) ?? [];
+    setVoices(list);
     return list;
   }
 
@@ -641,7 +632,7 @@ export default function App() {
     stopSample();
     const reqId = sampleReqRef.current;
     setSamplingId(roleId);
-    const engine = proj.engine || "edge";
+    const engine = "aivis";
     const res = await window.textts?.sampleVoice?.({
       engine,
       voice: String(role.voice),
@@ -663,20 +654,17 @@ export default function App() {
     audio.play().catch(() => stopSample());
   }
 
-  // Đổi engine của dự án; giọng của vai không có trong engine mới được gán lần lượt theo danh sách giọng mới.
-  async function changeEngine(engine) {
-    if (!projectRef.current || (projectRef.current.engine || "edge") === engine) return;
-    const list = (await window.textts?.listVoices?.(engine)) ?? [];
-    if (engine !== "edge" && !list.length) {
-      const name = engine === "voicevox" ? "VOICEVOX" : "AivisSpeech";
-      addToast(`Không lấy được danh sách giọng của ${name}. Hãy bật ${name} trước.`, "error");
+  // Đồng bộ danh sách giọng AivisSpeech.
+  async function changeEngine() {
+    if (!projectRef.current) return;
+    const list = (await window.textts?.listVoices?.("aivis")) ?? [];
+    if (!list.length) {
+      addToast("Không lấy được danh sách giọng của AivisSpeech. Hãy bật AivisSpeech trước.", "error");
       return;
     }
     const values = list.map((v) => v.value);
-    // Giọng đã nhớ cho engine này được dùng trước; vai còn lại nhận giọng có trong engine.
-    edit((p) => fillMissingVoices(applyMemory(p, memoryRef.current, engine).project, values));
+    edit((p) => fillMissingVoices(applyMemory(p, memoryRef.current, "aivis").project, values));
     setVoices(list);
-    addToast(`Đã chuyển sang ${ENGINE_LABELS[engine] ?? engine}`, "success");
   }
 
   // targetPath: đường dẫn dự án (mặc định dự án đang mở). Khi gọi từ onClick, tham số là sự kiện nên bỏ qua.
@@ -1237,17 +1225,14 @@ export default function App() {
                     title="Đặt biệt danh, giới tính, tuổi, chất giọng cho từng giọng để chọn vai nhanh và để AI chọn đúng"
                     onClick={() => setShowVoiceBank(true)} />
                 </RibbonGroup>
-                <RibbonGroup label="VOICEVOX">
+                <RibbonGroup label="AivisSpeech">
                   <span
                     className="status-pill"
-                    title={voicevoxOk ? "VOICEVOX Engine đang chạy (port 50021)" : "VOICEVOX Engine chưa bật"}
+                    title={aivisOk ? "AivisSpeech Engine đang chạy (port 10101)" : "AivisSpeech Engine chưa bật"}
                   >
-                    <span className={`status-dot ${voicevoxOk ? "dot-green" : "dot-yellow"}`} />
-                    <span>{voicevoxOk ? "Đang chạy" : "Chưa bật"}</span>
+                    <span className={`status-dot ${aivisOk ? "dot-green" : "dot-yellow"}`} />
+                    <span>{aivisOk ? "Đang chạy" : "Chưa bật"}</span>
                   </span>
-                  <VoicevoxButton />
-                </RibbonGroup>
-                <RibbonGroup label="AivisSpeech">
                   <AivisButton />
                 </RibbonGroup>
                 <RibbonGroup label="Kết nối AI">
@@ -1387,7 +1372,7 @@ export default function App() {
           </div>
           <h1 className="empty-title">Chào mừng đến với textts Studio</h1>
           <p className="empty-subtitle">
-            Phần mềm tạo hội thoại âm thanh tiếng Nhật chuyên nghiệp với VOICEVOX, AivisSpeech, chú âm Furigana tự động và
+            Phần mềm tạo hội thoại âm thanh tiếng Nhật chuyên nghiệp với AivisSpeech, chú âm Furigana tự động và
             xuất phiếu bài tập HTML.
           </p>
           <div className="empty-actions-row">
@@ -1479,7 +1464,7 @@ export default function App() {
                     onPatchSelectedItem={(patch) => selectedId && patchItem(selectedId, patch)}
                     disabled={busy}
                     voices={voices}
-                    engine={project.engine || "edge"}
+                    engine="aivis"
                     onChangeEngine={changeEngine}
                     onSampleVoice={sampleVoice}
                     sampling={samplingId}
@@ -1628,8 +1613,8 @@ export default function App() {
         lineCount={lineCount}
         durationMs={output?.timeline?.duration_ms}
         isPreview={Boolean(output) && !outputPath}
-        engineLabel={project ? ENGINE_LABELS[project.engine] || project.engine : ""}
-        engineOk={project?.engine === "edge" ? true : project?.engine === "voicevox" ? voicevoxOk : undefined}
+        engineLabel="AivisSpeech"
+        engineOk={aivisOk}
         outputRoot={outputRoot}
         onOpenPalette={() => setPaletteOpen(true)}
         onChooseOutputRoot={chooseOutputRoot}
@@ -1637,9 +1622,9 @@ export default function App() {
 
       {showVoiceBank && (
         <VoiceBankDialog
-          initialEngine={project?.engine && project.engine !== "edge" ? project.engine : "voicevox"}
+          initialEngine="aivis"
           onClose={() => setShowVoiceBank(false)}
-          onChanged={() => project && loadVoices(project.engine || "edge")}
+          onChanged={() => project && loadVoices("aivis")}
         />
       )}
 

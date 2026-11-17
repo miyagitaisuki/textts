@@ -99,3 +99,32 @@ def search_voices(query: str, engine: str | None = None, path: Path | None = Non
         if score > 0:
             results.append({**v, "score": round(score, 2), "why": why})
     return sorted(results, key=lambda r: -r["score"])
+
+
+def upsert_voice_note(
+    voice: str,
+    engine: str = "aivis",
+    updates: dict | None = None,
+    path: Path | None = None,
+) -> dict:
+    """Thêm hoặc cập nhật ghi chú cho một giọng trong voice-bank.json."""
+    target = path or bank_path()
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raw = {}
+    except (OSError, ValueError):
+        raw = {}
+    voices = raw.get("voices")
+    if not isinstance(voices, dict):
+        voices = {}
+    key = f"{engine}:{voice}"
+    entry = dict(voices.get(key) or {})
+    for k, val in (updates or {}).items():
+        if val is not None:
+            entry[k] = val
+    voices[key] = entry
+    raw["voices"] = voices
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"key": key, **entry}

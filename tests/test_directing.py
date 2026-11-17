@@ -105,7 +105,7 @@ def api(tmp_path, monkeypatch):
     import tts
 
     monkeypatch.setattr(tts, "synth_cached", fake_cached)
-    monkeypatch.setattr(server, "check_voicevox_alive", AsyncMock(return_value=True))
+    monkeypatch.setattr(server, "check_aivis_alive", AsyncMock(return_value=True))
     monkeypatch.setattr(server, "output_dir", tmp_path / "out")
     return TestClient(server.app), tmp_path
 
@@ -113,7 +113,7 @@ def api(tmp_path, monkeypatch):
 def test_characters_fill_roles(api):
     client, tmp = api
     (tmp / "ud" / "presets.json").write_text(json.dumps([
-        {"name": "Minh", "engine": "voicevox", "voice": "13", "emotion": "happy", "speed": "normal", "pitch": 2,
+        {"name": "Minh", "engine": "aivis", "voice": "1431611904", "emotion": "happy", "speed": "normal", "pitch": 2,
          "description": "nam sinh viên Việt Nam 20 tuổi"},
     ], ensure_ascii=False), encoding="utf-8")
     assert client.get("/api/v1/characters").json()["items"][0]["name"] == "Minh"
@@ -125,15 +125,13 @@ def test_characters_fill_roles(api):
     assert bad.status_code == 400 and "Minh" in bad.json()["detail"]
 
 
-def test_bilingual_and_level(api):
+def test_level_adjusts_timing(api):
     client, _ = api
     body = {"title": "t", "filename": "1-01", "script": "[1] はい。 // Vâng.\n[2] どうも。 // Cảm ơn.",
-            "options": {"slow": False, "srt": False, "worksheet": True, "format": "wav", "bilingual": True, "level": "N5"}}
+            "options": {"slow": False, "srt": False, "worksheet": True, "format": "wav", "level": "N5"}}
     data = client.post("/api/v1/dialogue", json=body).json()
     html = Path(data["files"]["worksheet_html"]).read_text(encoding="utf-8")
     assert "Vâng." in html and "Dịch" in html
-    tl = json.loads(Path(data["files"]["timeline_json"]).read_text(encoding="utf-8"))
-    assert len(tl["sfx"]) == 2  # 2 câu dịch được chèn
 
 
 def test_lesson_pack_exports_everything(api):

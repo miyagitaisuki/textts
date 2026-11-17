@@ -11,7 +11,8 @@ const logger = require("./logger.cjs");
 const { friendlyPythonError } = require("./python-errors.cjs");
 const { resolvePython, buildChildEnv } = require("./runtime.cjs");
 const { buildMenu } = require("./menu.cjs");
-const { startEngine, stopEngine } = require("./voicevox-engine.cjs");
+const { startEngine, stopEngine } = require("./engine-runner.cjs");
+const aivisStartup = require("./aivis-startup.cjs");
 
 logger.installCrashHandlers();
 
@@ -659,8 +660,8 @@ ipcMain.handle("mcp:config", async () => {
   return JSON.stringify(config, null, 2);
 });
 
-// Nghe thử một giọng (chọn nhanh giọng cho vai): tts.py --sample <engine> --voice ... đọc một câu mẫu ngắn.
-const SAMPLE_ENGINES = new Set(["edge", "voicevox", "aivis"]);
+// Nghe thử một giọng (chọn nhanh giọng cho vai): tts.py --sample aivis --voice ... đọc một câu mẫu ngắn.
+const SAMPLE_ENGINES = new Set(["aivis"]);
 const SAMPLE_EMOTIONS = new Set(["neutral", "happy", "sad", "angry", "surprised"]);
 const SAMPLE_SPEEDS = new Set(["slow", "normal", "fast"]);
 
@@ -739,11 +740,10 @@ ipcMain.handle("output:load", async (_evt, { audioPath }) => {
   return { timeline, dataUrl };
 });
 
-// --- Quản lý API Server & VOICEVOX ---
+// --- Quản lý API Server & AivisSpeech ---
 let apiServerProcess = null;
 const API_PORT = 8000;
 const API_URL = `http://127.0.0.1:${API_PORT}`;
-const VOICEVOX_URL = process.env.VOICEVOX_URL || "http://127.0.0.1:50021";
 
 async function pingUrl(url, timeoutMs = 1500) {
   try {
@@ -757,100 +757,8 @@ async function pingUrl(url, timeoutMs = 1500) {
   }
 }
 
-// --- VOICEVOX: tải theo yêu cầu (không đóng gói trong bộ cài, xem voicevox-install.cjs) ---
-const voicevoxCfg = require("./voicevox-config.cjs");
-const { voicevoxInstalled, installVoicevox } = require("./voicevox-install.cjs");
-const { findFile } = require("./aivis-install.cjs");
-const VOICEVOX_DIR = path.join(app.getPath("userData"), "voicevox");
-const VOICEVOX_DOWNLOAD_DIR = path.join(app.getPath("userData"), "voicevox-download");
 // 7za.exe đi kèm bộ cài để giải nén engine tải theo yêu cầu. TEXTTS_7Z chỉ dùng khi chạy từ mã nguồn.
 const SEVEN_ZIP = process.env.TEXTTS_7Z || path.join(process.resourcesPath, "7z", "7za.exe");
-let voicevoxEngine = null;
-let voicevoxBoot = null;
-let voicevoxBusy = false;
-
-// Nếu VOICEVOX đã được cài trước đó thì tự khởi động khi mở app; chưa cài thì chỉ kiểm tra cổng.
-function bootVoicevox() {
-  const exe = findFile(VOICEVOX_DIR, "run.exe");
-  voicevoxBoot = startEngine({
-    url: VOICEVOX_URL,
-    exe,
-    ping: (u) => pingUrl(u),
-    spawn,
-    log: (level, msg) => logger.log(level, msg),
-    onSpawn: (child) => {
-      voicevoxEngine = { ready: false, managed: true, child };
-    },
-  })
-    .then((engine) => {
-      voicevoxEngine = engine;
-      return engine.ready;
-    })
-    .catch((err) => {
-      logger.log("ERROR", `[VOICEVOX] Khởi động thất bại: ${err?.stack ?? err}`);
-      return false;
-    });
-  return voicevoxBoot;
-}
-
-async function voicevoxState() {
-  const ok = await pingUrl(`${VOICEVOX_URL}/version`);
-  return {
-    ok,
-    running: ok,
-    configured: true,
-    installed: voicevoxInstalled(VOICEVOX_DIR),
-    url: VOICEVOX_URL,
-    managed: Boolean(voicevoxEngine?.managed),
-    busy: voicevoxBusy,
-    version: voicevoxCfg.version,
-  };
-}
-
-ipcMain.handle("voicevox:status", async () => {
-  if (voicevoxBoot) await voicevoxBoot;
-  return voicevoxState();
-});
-
-ipcMain.handle("voicevox:install", async () => {
-  if (voicevoxBusy) return { ok: false, error: "Đang tải, vui lòng chờ" };
-  voicevoxBusy = true;
-  try {
-    await installVoicevox({
-      cfg: voicevoxCfg,
-      installDir: VOICEVOX_DIR,
-      downloadDir: VOICEVOX_DOWNLOAD_DIR,
-      sevenZip: SEVEN_ZIP,
-      spawnFn: spawn,
-      log: (level, msg) => logger.log(level, msg),
-    });
-    return { ok: true, state: await voicevoxState() };
-  } catch (err) {
-    logger.log("ERROR", `[VOICEVOX] Cài đặt thất bại: ${err?.message ?? err}`);
-    return { ok: false, error: err?.message ?? String(err) };
-  } finally {
-    voicevoxBusy = false;
-  }
-});
-
-ipcMain.handle("voicevox:start", async () => {
-  if (await pingUrl(`${VOICEVOX_URL}/version`)) return { ok: true, state: await voicevoxState() };
-  const exe = findFile(VOICEVOX_DIR, "run.exe");
-  if (!exe) return { ok: false, error: "Chưa tải VOICEVOX" };
-  if (voicevoxBoot) await voicevoxBoot; // lần tự khởi động khi mở app có thể chưa xong
-  if (await pingUrl(`${VOICEVOX_URL}/version`)) return { ok: true, state: await voicevoxState() };
-  voicevoxEngine = await startEngine({
-    url: VOICEVOX_URL,
-    exe,
-    ping: (u) => pingUrl(u),
-    spawn,
-    log: (level, msg) => logger.log(level, msg),
-    onSpawn: (child) => {
-      voicevoxEngine = { ready: false, managed: true, child };
-    },
-  });
-  return { ok: voicevoxEngine.ready, error: engineError(voicevoxEngine), state: await voicevoxState() };
-});
 
 // Engine do textts khởi động và tiến trình vẫn còn chạy.
 function engineAlive(engine) {
@@ -898,10 +806,21 @@ async function aivisState() {
     url: aivisCfg.AIVIS_URL,
     busy: aivisBusy,
     progress: aivisBusy ? aivisProgress : "",
+    startupEnabled: aivisStartup.readStartupEnabled(USER_DATA),
   };
 }
 
 ipcMain.handle("aivis:status", async () => aivisState());
+ipcMain.handle("aivis:getStartup", async () => ({ enabled: aivisStartup.readStartupEnabled(USER_DATA) }));
+ipcMain.handle("aivis:setStartup", async (_e, enabled) => {
+  const exe = aivisInstall.findFile(AIVIS_DIR, "run.exe");
+  return aivisStartup.setStartup({
+    userDataDir: USER_DATA,
+    exePath: exe,
+    port: aivisCfg.AIVIS_PORT,
+    enabled: Boolean(enabled),
+  });
+});
 ipcMain.handle("aivis:accentPhrases", async (_e, { text, speaker, emotion }) =>
   require("./aivis-accent.cjs").fetchAccentPhrases({ url: aivisCfg.AIVIS_URL, text, speaker, emotion }),
 );
@@ -923,6 +842,8 @@ ipcMain.handle("aivis:install", async () => {
         mainWindow?.webContents.send("tts:log", `${msg}\n`);
       },
     });
+    const exe = aivisInstall.findFile(AIVIS_DIR, "run.exe");
+    aivisStartup.syncStartupOnBoot({ userDataDir: USER_DATA, exePath: exe, port: aivisCfg.AIVIS_PORT });
     const state = await aivisState();
     if (result.failed.length) {
       return { ok: false, error: `${result.failed.length} giọng tải lỗi, bấm tải lại để thử tiếp`, state };
@@ -939,6 +860,37 @@ ipcMain.handle("aivis:install", async () => {
 // AivisSpeech nạp BERT và các model .aivmx khi khởi động: lần đầu có thể mất vài phút.
 const AIVIS_READY_TIMEOUT_MS = 5 * 60_000;
 let aivisStarting = null;
+
+// Tự khởi động AivisSpeech khi mở app (nếu đã cài) và đồng bộ cấu hình tự chạy cùng Windows.
+function bootAivis() {
+  const exe = aivisInstall.findFile(AIVIS_DIR, "run.exe");
+  aivisStartup.syncStartupOnBoot({ userDataDir: USER_DATA, exePath: exe, port: aivisCfg.AIVIS_PORT });
+  if (!exe) return Promise.resolve(false);
+  aivisStarting = startEngine({
+    url: aivisCfg.AIVIS_URL,
+    exe,
+    name: "AivisSpeech",
+    timeoutMs: AIVIS_READY_TIMEOUT_MS,
+    ping: (u) => pingUrl(u),
+    spawn,
+    log: (level, msg) => logger.log(level, msg),
+    onSpawn: (child) => {
+      aivisEngine = { ready: false, managed: true, child };
+    },
+  })
+    .then((engine) => {
+      if (engine.child || !aivisEngine) aivisEngine = engine;
+      return Boolean(engine.ready);
+    })
+    .catch((err) => {
+      logger.log("ERROR", `[AivisSpeech] Khởi động thất bại: ${err?.stack ?? err}`);
+      return false;
+    })
+    .finally(() => {
+      aivisStarting = null;
+    });
+  return aivisStarting;
+}
 
 ipcMain.handle("aivis:start", async () => {
   if (await pingUrl(`${aivisCfg.AIVIS_URL}/version`)) return { ok: true, state: await aivisState() };
@@ -1038,16 +990,14 @@ app.on("before-quit", () => {
     }
     apiServerProcess = null;
   }
-  // Chỉ tắt VOICEVOX do textts khởi động; engine người dùng tự mở từ trước được giữ nguyên.
-  stopEngine(voicevoxEngine);
-  voicevoxEngine = null;
+  // Chỉ tắt AivisSpeech do textts khởi động; engine người dùng hoặc Windows tự mở từ trước được giữ nguyên.
   stopEngine(aivisEngine);
   aivisEngine = null;
 });
 
 app.whenReady().then(() => {
   logger.log("INFO", `Khởi động textts ${app.getVersion()} trên ${process.platform}`);
-  bootVoicevox();
+  bootAivis();
   const win = createWindow();
   mainWindow = win;
   buildMenu({

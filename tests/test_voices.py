@@ -3,7 +3,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from providers.voicevox import list_speakers
+from providers.aivis import list_speakers
 
 SPEAKERS = [
     {"name": "四国めたん", "styles": [{"name": "ノーマル", "id": 2}, {"name": "あまあま", "id": 0}]},

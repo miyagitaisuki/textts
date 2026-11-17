@@ -44,9 +44,7 @@ export function MultiPick({ label, options, values = [], onChange, disabled }) {
 }
 
 const ENGINES = [
-  ["voicevox", "VOICEVOX"],
   ["aivis", "AivisSpeech"],
-  ["edge", "Edge TTS"],
 ];
 
 function rowsFor(engine, data) {
@@ -60,7 +58,7 @@ function rowsFor(engine, data) {
   return voices.map((v) => ({ ...v, meta: bank[`${engine}:${v.value}`] || {} }));
 }
 
-export default function VoiceBankDialog({ api = window.textts, initialEngine = "voicevox", onClose, onChanged }) {
+export default function VoiceBankDialog({ api = window.textts, initialEngine = "aivis", onClose, onChanged }) {
   const [engine, setEngine] = useState(initialEngine);
   const [data, setData] = useState(null);
   const [query, setQuery] = useState("");

@@ -10,7 +10,7 @@ const {
   startEngine,
   stopEngine,
   DEFAULT_PORT,
-} = require("../electron/voicevox-engine.cjs");
+} = require("../electron/engine-runner.cjs");
 
 const URL_ = "http://127.0.0.1:50021";
 const noSleep = async () => {};

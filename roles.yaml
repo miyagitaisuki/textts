@@ -1,6 +1,6 @@
 # Cấu hình engine và vai nhân vật.
 # Giá trị ở câu (ví dụ [2]{emotion=happy}) luôn đè lên giá trị ở đây.
-engine: edge
+engine: aivis
 
 # Nhịp đọc (ms). Mặc định gần hội thoại tự nhiên; cần chỗ chờ cho học viên thì dùng chế độ shadow.
 timing:
@@ -9,25 +9,25 @@ timing:
   same_speaker_gap_ms: 400 # cùng người nói, sang câu thoại mới
   question_gap_ms: 200     # chờ thêm sau câu hỏi
   sentence_pause_ms: 500   # trong một câu thoại: dừng sau 。！？ (0 = đọc liền)
-  comma_pause_scale: 1.5   # kéo dài chỗ ngắt ở 、 (VOICEVOX/AivisSpeech; 1.0 = như engine)
+  comma_pause_scale: 1.5   # kéo dài chỗ ngắt ở 、 (AivisSpeech; 1.0 = như engine)
   tail_ms: 2000            # lặng cuối bài (tránh bị cắt mất câu cuối)
 
 roles:
   "1":
     name: 学生
-    voice: ja-JP-KeitaNeural
+    voice: "1431611904"
     emotion: neutral
     speed: normal
     pitch: 0
   "2":
     name: 駅員
-    voice: ja-JP-NanamiNeural
+    voice: "1937616896"
     emotion: neutral
     speed: normal
     pitch: 0
   "3":
     name: 田中
-    voice: ja-JP-NanamiNeural   # Edge chỉ có 2 giọng ja-JP; vai 3 tạm đổi pitch
+    voice: "38453056"
     emotion: neutral
     speed: normal
-    pitch: -8
+    pitch: 0
